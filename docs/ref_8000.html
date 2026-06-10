@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Low Traffic · AI That Makes Every Vehicle Pass Faster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- -- Nav -- -->
+<nav>
+  <div class="nav-logo">Low Traffic<span>.ai</span></div>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#solution">Solution</a></li>
+    <li><a href="#modes">Modes</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#monetisation">Model</a></li>
+    <li><a href="#tech">Tech</a></li>
+  </ul>
+  <a href="#cta" class="nav-cta">Request Pilot</a>
+</nav>
+
+<!-- -- Hero -- -->
+<section id="hero">
+  <div class="container">
+    <p class="hero-eyebrow">lowtraffic.ai &nbsp;·&nbsp; Hyderabad, Telangana</p>
+    <h1 class="hero-title">
+      AI That Makes<br/>
+      Every Vehicle<br/>
+      <span class="muted">Pass Faster</span>
+    </h1>
+    <p class="hero-sub">
+      We plug into your existing CCTV infrastructure, study intersection behaviour
+      for days, and deliver either actionable redesign recommendations or a fully
+      adaptive signal control engine — paid only from proven time saved.
+    </p>
+    <div class="hero-actions">
+      <a href="#cta" class="btn-primary">Request a Pilot</a>
+      <a href="#solution" class="btn-secondary">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-num">35–55%</span>
+        <span class="stat-label">Reduction in avg crossing time</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">8,000+</span>
+        <span class="stat-label">Vehicle-hours saved / intersection / yr</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">?0</span>
+        <span class="stat-label">Upfront cost to government</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">30 days</span>
+        <span class="stat-label">To a live, measured pilot</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Problem -- -->
+<section id="problem">
+  <div class="container">
+    <span class="label">The Problem</span>
+    <h2 style="font-size:clamp(2rem,4vw,3rem); letter-spacing:-0.03em;">
+      Cities Are Choking
+    </h2>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="card-num">4–8 min</div>
+        <p class="card-desc">Average time to cross a single intersection in Indian cities during peak hours.</p>
+      </div>
+      <div class="problem-card">
+        <div class="card-num">2.1 Bn</div>
+        <p class="card-desc">Vehicle-hours wasted annually in India due to signal mismanagement and poor road design.</p>
+      </div>
+      <div class="problem-card">
+        <div class="card-num">12–18%</div>
+        <p class="card-desc">Urban GDP lost to congestion delays — a figure growing every year without intervention.</p>
+      </div>
+      <div class="problem-card">
+        <div class="card-num">31%</div>
+        <p class="card-desc">Higher CO2 emissions from vehicles sitting idle in slow-moving, mismanaged traffic.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Solution -- -->
+<section id="solution">
+  <div class="container">
+    <div class="section-header">
+      <span class="label">Our Solution</span>
+      <h2>24-Hour Feed Ingestion &amp; Continuous Analysis</h2>
+      <p>
+        No new hardware. No disruption. We connect to any existing CCTV or IP
+        camera feed and begin studying the intersection immediately.
+      </p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h4>Capture</h4>
+        <p>Plug any existing CCTV or IP camera into the Low Traffic pipeline. RTSP stream accepted. No new hardware needed.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h4>Analyse</h4>
+        <p>AI studies 24 hrs of footage over multiple days. YOLOv8 counts vehicles, classifies types, tracks lanes and queue depths.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h4>Calculate</h4>
+        <p>Derives exact average crossing time per vehicle, peak patterns, bottleneck lanes, and signal waste per phase.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <h4>Optimise</h4>
+        <p>Delivers two action modes — intelligent redesign recommendations or a fully adaptive RL-driven signal engine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Modes -- -->
+<section id="modes">
+  <div class="container">
+    <div class="section-header">
+      <span class="label">Phase 2 · Two Powerful Modes</span>
+      <h2>Choose Your Level of Intervention</h2>
+      <p>Start with recommendations and upgrade to full adaptive control — or deploy both.</p>
+    </div>
+    <div class="modes-grid">
+      <!-- Mode 01 -->
+      <div class="mode-card">
+        <div class="mode-tag">Mode 01</div>
+        <h3>Intelligent Recommendations</h3>
+        <p>
+          Human-readable, actionable suggestions derived from analysis data.
+          No infrastructure change required. Delivered as a PDF report and
+          live dashboard. Implementable by the municipality independently.
+        </p>
+        <ul class="mode-features">
+          <li>Blocked lane ? sub-lane creation (-48 sec/vehicle)</li>
+          <li>Remove peak-hour kerbside parking</li>
+          <li>Right-turn slip lane addition (-35 sec/vehicle)</li>
+          <li>Rebalance signal phase splits to volume ratio</li>
+          <li>Pedestrian phase adjustment at off-peak hours</li>
+          <li>Bus stop relocation to clear merge zones</li>
+        </ul>
+      </div>
+      <!-- Mode 02 -->
+      <div class="mode-card featured">
+        <div class="mode-tag">Mode 02</div>
+        <h3>Optimized Signal Engine</h3>
+        <p>
+          Full adaptive signal control using Reinforcement Learning and SUMO
+          simulation. Runs 24/7 and adjusts every cycle in real time based
+          on live queue depth data from the camera feed.
+        </p>
+        <ul class="mode-features">
+          <li>Dynamic phase sequencing each cycle</li>
+          <li>Queue-based green extension</li>
+          <li>Bus &amp; emergency vehicle priority</li>
+          <li>Coordinated corridor green wave</li>
+          <li>Self-learning — retrains nightly on new footage</li>
+          <li>SUMO simulation validated before live deployment</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Results -- -->
+<section id="results">
+  <div class="container">
+    <div class="section-header">
+      <span class="label">Projected Results</span>
+      <h2>35–55% Reduction in Average Crossing Time</h2>
+      <p>Especially significant during peak hours. Verified against SUMO simulations before any live deployment.</p>
+    </div>
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="big-num">35–55%</div>
+        <p class="result-label">Reduction in avg crossing time (peak hours)</p>
+      </div>
+      <div class="result-card">
+        <div class="big-num">2.4 min</div>
+        <p class="result-label">Time saved per vehicle per crossing</p>
+      </div>
+      <div class="result-card">
+        <div class="big-num">8,000+</div>
+        <p class="result-label">Vehicle-hours saved per intersection per year</p>
+      </div>
+      <div class="result-card">
+        <div class="big-num">18%</div>
+        <p class="result-label">CO2 reduction from smoother traffic flow</p>
+      </div>
+      <div class="result-card">
+        <div class="big-num">20–40%</div>
+        <p class="result-label">Faster emergency vehicle response via signal priority</p>
+      </div>
+      <div class="result-card">
+        <div class="big-num">0.3 L</div>
+        <p class="result-label">Avg fuel saved per vehicle per crossing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Monetisation -- -->
+<section id="monetisation">
+  <div class="container">
+    <div class="section-header">
+      <span class="label">Monetisation Strategy</span>
+      <h2>We Get Paid Only When You Save Time</h2>
+      <p>A pure performance contract. No upfront cost, no integration risk, no budget commitment from the government.</p>
+    </div>
+    <div class="mono-model">
+      <div class="mono-col">
+        <h4>Government</h4>
+        <p>Provides CCTV access and intersection data. Approves the pilot. Zero upfront cost or financial commitment.</p>
+      </div>
+      <div class="mono-col highlight">
+        <h4>Low Traffic</h4>
+        <p>Deploys the AI system at our cost. Monitors 24/7. Delivers measurable time savings. Bears all technical risk.</p>
+      </div>
+      <div class="mono-col">
+        <h4>Revenue Share</h4>
+        <p>Paid per verified minute saved × vehicles per month. Revenue is calculated from auditable crossing-time data.</p>
+      </div>
+      <div class="mono-col">
+        <h4>Scale</h4>
+        <p>Revenue funds the next intersection rollout. City-wide deployment becomes self-financing.</p>
+      </div>
+    </div>
+    <div class="mono-example">
+      Example: 1 intersection × 50,000 vehicles/month × 2 min avg saved × ?0.50/min = <strong>?50,000/month</strong>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- Tech -- -->
+<section id="tech">
+  <div class="container">
+    <div class="section-header">
+      <span class="label">Technology &amp; Roadmap</span>
+      <h2>Built on Proven Infrastructure</h2>
+      <p>Flask prototype running now. 6-week MVP target for a live Hyderabad pilot.</p>
+    </div>
+    <div class="tech-stack">
+      <div class="tech-row">
+        <h4>Computer Vision</h4>
+        <p>YOLOv8 · OpenCV · ByteTrack</p>
+      </div>
+      <div class="tech-row">
+        <h4>Backend</h4>
+        <p>Python · Flask · PostgreSQL</p>
+      </div>
+      <div class="tech-row">
+        <h4>RL Engine</h4>
+        <p>Stable-Baselines3 · PPO · Gym</p>
+      </div>
+      <div class="tech-row">
+        <h4>Simulation</h4>
+        <p>SUMO · TraCI · OSMnx</p>
+      </div>
+      <div class="tech-row">
+        <h4>Infrastructure</h4>
+        <p>AWS / GCP · Docker · RTSP stream</p>
+      </div>
+      <div class="tech-row">
+        <h4>Dashboard</h4>
+        <p>React · Tailwind · Recharts</p>
+      </div>
+    </div>
+    <div class="roadmap" style="margin-top:64px;">
+      <div class="roadmap-item">
+        <div class="roadmap-wk">Week 1–2</div>
+        <h4>Camera integration &amp; YOLO pipeline</h4>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-wk">Week 3</div>
+        <h4>Data collection &amp; analysis engine</h4>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-wk">Week 4</div>
+        <h4>RL agent training on SUMO sim</h4>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-wk">Week 5</div>
+        <h4>Dashboard &amp; recommendations UI</h4>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-wk">Week 6</div>
+        <h4>Hyderabad pilot demo ready</h4>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- -- CTA -- -->
+<section id="cta">
+  <div class="container">
+    <span class="label">Call to Action</span>
+    <h2>Ready to Pilot<br/>in Hyderabad</h2>
+    <p>
+      We are seeking one government intersection to run a 30-day live pilot —
+      fully funded by Low Traffic. Zero cost, zero risk. Pure proof of concept.
+    </p>
+    <div class="hero-actions" style="justify-content:center;">
+      <a href="mailto:pilot@lowtraffic.ai" class="btn-primary">Request Your Pilot</a>
+      <a href="mailto:pilot@lowtraffic.ai" class="btn-secondary">pilot@lowtraffic.ai</a>
+    </div>
+    <div class="cta-contacts">
+      <div>
+        <div class="cta-contact-label">Website</div>
+        <div class="cta-contact-value">lowtraffic.ai</div>
+      </div>
+      <div>
+        <div class="cta-contact-label">Email</div>
+        <div class="cta-contact-value">pilot@lowtraffic.ai</div>
+      </div>
+      <div>
+        <div class="cta-contact-label">Location</div>
+        <div class="cta-contact-value">Hyderabad, Telangana</div>
+      </div>
+    </div>
+    <p style="margin-top:64px; font-style:italic; color:#555; font-size:1.1rem;">
+      "We only win when you save time."
+    </p>
+  </div>
+</section>
+
+<!-- -- Footer -- -->
+<footer>
+  <span>© 2026 Low Traffic · lowtraffic.ai</span>
+  <span>AI Traffic Management · Hyderabad, India</span>
+</footer>
+
+</body>
+</html>
