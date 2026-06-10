@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<net version="1.9" junctionCornerDetail="5" limitTurnSpeed="5.50">
+    <location netOffset="0.00,0.00" convBoundary="-200.00,-200.00,200.00,200.00"
+              origBoundary="-200,-200,200,200" projParameter="!"/>
+    <!-- T-junction: north, east, west arms (no south) -->
+    <junction id="center" type="traffic_light" x="0.00" y="0.00"
+              incLanes="north_0 north_1 east_0 east_1 west_0 west_1"
+              intLanes=":center_0_0 :center_1_0" shape="-5,-5 5,-5 5,5 -5,5"/>
+    <tlLogic id="center" type="static" programID="0" offset="0">
+        <phase duration="30" state="GGGrrGGGrrr"/>
+        <phase duration="4"  state="yyyrryyyrr"/>
+        <phase duration="30" state="rrrGGrrrGGr"/>
+        <phase duration="4"  state="rrryyrrryyy"/>
+    </tlLogic>
+</net>

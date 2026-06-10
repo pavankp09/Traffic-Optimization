@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<net version="1.9" junctionCornerDetail="5" limitTurnSpeed="5.50">
+    <location netOffset="0.00,0.00" convBoundary="-200.00,-200.00,200.00,200.00"
+              origBoundary="-200,-200,200,200" projParameter="!"/>
+    <!-- 6-arm complex intersection: N, NE, SE, S, SW, NW -->
+    <junction id="center" type="traffic_light" x="0.00" y="0.00"
+              incLanes="north_0 north_east_0 south_east_0 south_0 south_west_0 north_west_0"
+              intLanes=":center_0_0 :center_1_0 :center_2_0" shape="-5,-5 5,-5 5,5 -5,5"/>
+    <tlLogic id="center" type="static" programID="0" offset="0">
+        <phase duration="20" state="GGrrrrGGrrrr"/>
+        <phase duration="4"  state="yyrrrryyrrrrr"/>
+        <phase duration="20" state="rrGGrrrrGGrr"/>
+        <phase duration="4"  state="rryyyyrryyyy"/>
+        <phase duration="20" state="rrrrGGrrrrGG"/>
+        <phase duration="4"  state="rrrryyrrrryyy"/>
+    </tlLogic>
+</net>

@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Low Traffic Analyzer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface:  '#111111',
+            surface2: '#1a1a1a',
+            surface3: '#222222',
+            border:   '#2a2a2a',
+            accent:   '#ffffff',
+            muted:    '#666666',
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0a0a0a; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    .light-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block; margin-right: 4px;
+    }
+    .light-red    { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    .light-green  { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .light-yellow { background: #eab308; box-shadow: 0 0 6px #eab308; }
+    .light-off    { background: #333; }
+
+    .arm-bar-wrap { height: 80px; display: flex; align-items: flex-end; gap: 4px; position: relative; }
+    .arm-bar-outer { flex: 1; height: 80px; display: flex; align-items: flex-end; position: relative; }
+    .arm-bar {
+      width: 100%; border-radius: 4px 4px 0 0; transition: height 0.3s ease;
+      min-height: 4px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    .arm-bar-N { background: #60a5fa; }
+    .arm-bar-S { background: #f472b6; }
+    .arm-bar-E { background: #34d399; }
+    .arm-bar-W { background: #fb923c; }
+    .arm-bar-label {
+      font-size: 11px; font-weight: 700; color: white;
+      pointer-events: none; line-height: 1; white-space: nowrap;
+    }
+
+    .stat-card {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat-val { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+    .stat-lbl { font-size: 0.7rem; color: #666; text-transform: uppercase;
+                letter-spacing: 0.06em; margin-top: 4px; }
+
+    #sample-slider::-webkit-slider-thumb { accent-color: white; }
+    .sample-tick {
+      font-size: 9px; color: #555; transition: color 0.15s;
+      text-align: center; line-height: 1;
+    }
+    .sample-tick.active { color: #ffffff; font-weight: 600; }
+
+    .rec-item {
+      padding: 10px 14px; border-radius: 8px;
+      border-left: 3px solid #3b82f6;
+      background: #1a1a1a; font-size: 0.8rem; line-height: 1.5; color: #ccc;
+    }
+
+    .claude-toggle {
+      position: relative; display: inline-flex; align-items: center;
+      gap: 10px; cursor: pointer;
+    }
+    .claude-toggle input { display: none; }
+    .claude-toggle-track {
+      width: 36px; height: 20px; background: #333; border-radius: 10px;
+      transition: background 0.2s; position: relative;
+    }
+    .claude-toggle input:checked + .claude-toggle-track { background: #8b5cf6; }
+    .claude-toggle-thumb {
+      position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%; background: #fff;
+      transition: left 0.2s;
+    }
+    .claude-toggle input:checked ~ .claude-toggle-thumb { left: 18px; }
+
+    #report-panel {
+      background: #111; border: 1px solid #2a2a2a; border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .report-section-title {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #555; margin-bottom: 10px; margin-top: 18px;
+    }
+    .report-section-title:first-child { margin-top: 0; }
+
+    #status-bar {
+      font-size: 0.72rem; color: #555;
+    }
+    #status-bar .status-live { color: #22c55e; }
+    #status-bar .status-err  { color: #ef4444; }
+    #status-bar .status-done { color: #60a5fa; }
+  </style>
+</head>
+<body class="text-white font-sans min-h-screen flex flex-col">
+
+<!-- Nav -->
+<nav class="border-b border-border bg-surface sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
+    <a href="http://localhost:8001" target="_blank" class="flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full bg-white"></div>
+      <span class="font-semibold text-sm tracking-tight">Low Traffic Analyzer</span>
+      <span class="text-muted text-xs hidden sm:block">· Phase 02: Analyse</span>
+    </a>
+    <div class="flex items-center gap-5 text-xs text-muted">
+      <a href="http://localhost:8001" target="_blank" class="hover:text-white transition-colors">? Simulator ?</a>
+      <a href="http://localhost:8765" target="_blank" class="hover:text-white transition-colors">MadDashboard ?</a>
+      <span id="status-bar">Ready — enter a Sim ID and click Start</span>
+    </div>
+  </div>
+</nav>
+
+<main class="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+
+  <!-- -- Header row -- -->
+  <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">Intersection Analyzer</h1>
+      <p class="text-xs text-muted mt-1" id="sim-label">
+        No simulation selected
+      </p>
+    </div>
+
+    <!-- Controls row -->
+    <div class="flex flex-wrap items-center gap-4">
+
+      <!-- Sim ID input (if not pre-set) -->
+      <div class="flex items-center gap-2 bg-surface2 border border-border rounded-lg px-3 py-2">
+        <span class="text-xs text-muted">Sim ID</span>
+        <input id="sim-id-input" type="number" min="1" value=""
+               placeholder="e.g. 42"
+               class="bg-transparent text-white text-sm w-20 outline-none text-center"/>
+      </div>
+
+      <!-- Poll interval slider -->
+      <div class="bg-surface2 border border-border rounded-lg px-3 pt-2 pb-1">
+        <span class="text-xs text-muted block mb-1">Poll Interval</span>
+        <input id="sample-slider" type="range" min="0" max="3" step="1" value="0"
+               style="width:130px;accent-color:white" oninput="onSampleSlider(this.value)"/>
+        <div style="display:flex;justify-content:space-between;width:130px;margin-top:2px">
+          <span class="sample-tick" id="stk-0">2s</span>
+          <span class="sample-tick" id="stk-1">5s</span>
+          <span class="sample-tick" id="stk-2">10s</span>
+          <span class="sample-tick" id="stk-3">15s</span>
+        </div>
+      </div>
+
+      <!-- Claude API toggle (dummy) -->
+      <div class="flex items-center gap-2 bg-surface2 border border-border rounded-lg px-3 py-2"
+           title="Claude API reasoning — coming soon">
+        <label class="claude-toggle">
+          <input type="checkbox" id="claude-toggle-cb" onchange="onClaudeToggle(this.checked)" disabled/>
+          <div class="claude-toggle-track">
+            <div class="claude-toggle-thumb"></div>
+          </div>
+          <span class="text-xs text-muted">Claude API</span>
+        </label>
+        <span id="token-counter" class="text-xs text-muted hidden">0 tokens</span>
+        <span class="text-xs" style="color:#6d28d9;font-size:9px;">COMING SOON</span>
+      </div>
+
+      <!-- Start / Report / Debug buttons -->
+      <button id="start-btn" onclick="startAnalysis()"
+              class="px-4 py-2 rounded-lg bg-white text-black text-xs font-semibold hover:bg-gray-200 transition-colors">
+        Start Analysis
+      </button>
+      <button id="report-btn" onclick="requestReport()" disabled
+              class="px-4 py-2 rounded-lg border border-border text-xs text-muted
+                     hover:border-white hover:text-white transition-colors disabled:opacity-30">
+        Generate Report
+      </button>
+      <button id="calc-btn" onclick="runCalculate()" disabled
+              data-tip="Simulation must be complete"
+              class="px-4 py-2 rounded-lg border border-border text-xs text-muted
+                     hover:border-white hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+        Calculate Key Metrics
+      </button>
+      <button id="debug-btn" onclick="showDebug()" disabled
+              class="px-4 py-2 rounded-lg border border-border text-xs text-muted
+                     hover:border-white hover:text-white transition-colors disabled:opacity-30">
+        Show Debug Info
+      </button>
+    </div>
+  </div>
+
+  <!-- -- Main grid -- -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- Left: Live metrics -->
+    <div class="lg:col-span-2 flex flex-col gap-4">
+
+      <!-- Stat cards row -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="stat-card">
+          <div class="stat-val" id="st-active">—</div>
+          <div class="stat-lbl">Active Vehicles</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="st-exited">—</div>
+          <div class="stat-lbl">Exited</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="st-wait">—</div>
+          <div class="stat-lbl">Avg Wait (s)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="st-throughput">—</div>
+          <div class="stat-lbl">Throughput (vph)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="st-time">—</div>
+          <div class="stat-lbl">Sim Time</div>
+        </div>
+      </div>
+
+      <!-- Queue depth bars + lights -->
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-muted uppercase tracking-widest">Queue Depth per Arm</span>
+          <div class="flex items-center gap-3 text-xs text-muted">
+            <span><span class="light-dot light-off" id="ldot-N"></span>N</span>
+            <span><span class="light-dot light-off" id="ldot-S"></span>S</span>
+            <span><span class="light-dot light-off" id="ldot-E"></span>E</span>
+            <span><span class="light-dot light-off" id="ldot-W"></span>W</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-3 text-center">
+          <div>
+            <div class="arm-bar-wrap justify-center">
+              <div class="arm-bar-outer">
+                <div class="arm-bar arm-bar-N" id="bar-N" style="height:4px">
+                  <span class="arm-bar-label" id="q-N"></span>
+                </div>
+              </div>
+            </div>
+            <div class="text-xs text-muted mt-1">N ?</div>
+          </div>
+          <div>
+            <div class="arm-bar-wrap justify-center">
+              <div class="arm-bar-outer">
+                <div class="arm-bar arm-bar-S" id="bar-S" style="height:4px">
+                  <span class="arm-bar-label" id="q-S"></span>
+                </div>
+              </div>
+            </div>
+            <div class="text-xs text-muted mt-1">S ?</div>
+          </div>
+          <div>
+            <div class="arm-bar-wrap justify-center">
+              <div class="arm-bar-outer">
+                <div class="arm-bar arm-bar-E" id="bar-E" style="height:4px">
+                  <span class="arm-bar-label" id="q-E"></span>
+                </div>
+              </div>
+            </div>
+            <div class="text-xs text-muted mt-1">E ?</div>
+          </div>
+          <div>
+            <div class="arm-bar-wrap justify-center">
+              <div class="arm-bar-outer">
+                <div class="arm-bar arm-bar-W" id="bar-W" style="height:4px">
+                  <span class="arm-bar-label" id="q-W"></span>
+                </div>
+              </div>
+            </div>
+            <div class="text-xs text-muted mt-1">W ?</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue history chart -->
+      <div class="stat-card">
+        <div class="text-xs font-semibold text-muted uppercase tracking-widest mb-3">Queue History</div>
+        <canvas id="queue-chart" height="120"></canvas>
+      </div>
+
+      <!-- Vehicle type distribution -->
+      <div class="stat-card">
+        <div class="text-xs font-semibold text-muted uppercase tracking-widest mb-3">Vehicle Type Distribution</div>
+        <div class="flex items-center gap-6">
+          <canvas id="type-chart" width="120" height="120"></canvas>
+          <div id="type-legend" class="flex flex-col gap-1 text-xs text-muted"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Report panel -->
+    <div class="flex flex-col gap-4">
+      <div id="report-panel">
+        <div class="text-xs font-semibold text-muted uppercase tracking-widest mb-4">Analysis Report</div>
+        <div id="report-placeholder" class="text-xs text-muted leading-relaxed">
+          Start an analysis session and click <strong class="text-white">Generate Report</strong>
+          to see the full algorithmic analysis here.
+        </div>
+        <div id="report-content" class="hidden">
+
+          <div class="report-section-title">Summary</div>
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <div class="stat-card p-2">
+              <div class="stat-val text-lg" id="rpt-exited">—</div>
+              <div class="stat-lbl">Exited</div>
+            </div>
+            <div class="stat-card p-2">
+              <div class="stat-val text-lg" id="rpt-wait">—</div>
+              <div class="stat-lbl">Avg Wait (s)</div>
+            </div>
+            <div class="stat-card p-2">
+              <div class="stat-val text-lg" id="rpt-tput">—</div>
+              <div class="stat-lbl">Throughput vph</div>
+            </div>
+            <div class="stat-card p-2">
+              <div class="stat-val text-lg" id="rpt-bottleneck">—</div>
+              <div class="stat-lbl">Bottleneck Arm</div>
+            </div>
+          </div>
+
+          <div class="report-section-title">Avg Queue per Arm</div>
+          <div id="rpt-arm-queue" class="grid grid-cols-4 gap-2 text-center mb-3">
+          </div>
+
+          <div class="report-section-title">Recommendations</div>
+          <div id="rpt-recs" class="flex flex-col gap-2"></div>
+
+          <div class="report-section-title">Signal Waste Events</div>
+          <div id="rpt-waste" class="text-xs text-muted"></div>
+
+        </div>
+      </div>
+
+      <!-- Phase 03 Calculate results panel -->
+      <div id="calc-panel" class="hidden">
+        <div class="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
+          Phase 03 · Key Metrics
+        </div>
+
+        <!-- Saturation (v/c) per arm -->
+        <div class="report-section-title">Degree of Saturation (v/c)</div>
+        <div class="grid grid-cols-4 gap-2 text-center mb-3" id="calc-sat">
+        </div>
+
+        <!-- Gini + Pressure -->
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="stat-card p-2">
+            <div class="stat-val text-lg" id="calc-gini">—</div>
+            <div class="stat-lbl">Gini Fairness</div>
+          </div>
+          <div class="stat-card p-2">
+            <div class="stat-val text-lg" id="calc-pressure">—</div>
+            <div class="stat-lbl">Avg Pressure (NS-EW)</div>
+          </div>
+        </div>
+
+        <!-- Discharge Rate per arm -->
+        <div class="report-section-title">Queue Discharge Rate (veh/s)</div>
+        <div class="grid grid-cols-4 gap-2 text-center mb-3" id="calc-discharge">
+        </div>
+
+        <!-- Time to Starvation per arm -->
+        <div class="report-section-title">Time-to-Starvation (s)</div>
+        <div class="grid grid-cols-4 gap-2 text-center mb-3" id="calc-tts">
+        </div>
+
+        <!-- Trajectory rows -->
+        <div class="text-[9px] text-muted mt-1" id="calc-meta"></div>
+      </div>
+
+      <!-- Claude API placeholder -->
+      <div class="stat-card border-dashed" style="border-color:#3b0764;opacity:0.6">
+        <div class="text-xs font-semibold mb-1" style="color:#8b5cf6">Claude API Reasoning</div>
+        <div class="text-xs text-muted leading-relaxed">
+          When enabled, Claude will receive the algorithmic metrics and return
+          natural-language analysis, signal timing recommendations, and redesign suggestions.
+          Token consumption will be shown here in real-time.
+        </div>
+        <div class="mt-3 text-xs" style="color:#6d28d9">· Not yet implemented ·</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="border-t border-border py-4 px-6 flex justify-between items-center text-xs text-muted">
+  <span>Low Traffic Analyzer · Phase 02 of the Capture ? Analyse ? Calculate ? Optimise pipeline · <span class="text-white font-semibold">v2</span></span>
+  <span>DB-only · no simulator connection required</span>
+</footer>
+
+<script>
+// -- Config --------------------------------------------------------------------
+const SAMPLE_LABELS    = ['Every 2s', 'Every 5s', 'Every 10s', 'Every 15s'];
+const SAMPLE_INTERVALS = [2000, 5000, 10000, 15000];   // milliseconds
+const ARMS             = ['N', 'S', 'E', 'W'];
+const TYPE_COLORS      = {
+  bike:  '#60a5fa', car: '#f472b6', auto: '#34d399',
+  bus:   '#fb923c', truck: '#a78bfa', unknown: '#6b7280',
+};
+// Per-arm physical capacity (approach length × lanes)
+const ARM_CAP = { N: 200, S: 200, E: 300, W: 300 };
+
+let _simId       = null;
+let _pollHandle  = null;      // setInterval handle
+let _pollMs      = 2000;      // current poll interval in ms
+let _running     = false;
+
+// -- Charts --------------------------------------------------------------------
+const qCtx   = document.getElementById('queue-chart').getContext('2d');
+const typeCtx = document.getElementById('type-chart').getContext('2d');
+
+const _qChart = new Chart(qCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'N', data: [], borderColor: '#60a5fa', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+      { label: 'S', data: [], borderColor: '#f472b6', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+      { label: 'E', data: [], borderColor: '#34d399', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+      { label: 'W', data: [], borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+    ]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    plugins: { legend: { labels: { color: '#666', font: { size: 10 } } } },
+    scales: {
+      x: { ticks: { color: '#555', font: { size: 9 }, maxTicksLimit: 8 },
+           grid: { color: '#1a1a1a' } },
+      y: { ticks: { color: '#555', font: { size: 9 } },
+           grid: { color: '#1a1a1a' }, min: 0 }
+    }
+  }
+});
+
+const _typeChart = new Chart(typeCtx, {
+  type: 'doughnut',
+  data: { labels: [], datasets: [{ data: [], backgroundColor: [] }] },
+  options: {
+    animation: false,
+    plugins: { legend: { display: false } },
+    cutout: '65%',
+  }
+});
+
+// -- UI helpers ----------------------------------------------------------------
+function setStatus(msg, cls='') {
+  const el = document.getElementById('status-bar');
+  el.innerHTML = `<span class="${cls ? 'status-' + cls : ''}">${msg}</span>`;
+}
+
+function getSimId() {
+  return parseInt(document.getElementById('sim-id-input').value) || _simId;
+}
+
+function fmtTime(secs) {
+  const t  = Math.floor(secs || 0);
+  const mm = String(Math.floor(t / 60)).padStart(2, '0');
+  const ss = String(t % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+function onSampleSlider(val) {
+  const i = parseInt(val);
+  _pollMs = SAMPLE_INTERVALS[i];
+  for (let j = 0; j <= 3; j++) {
+    const el = document.getElementById(`stk-${j}`);
+    if (el) el.classList.toggle('active', j === i);
+  }
+  // Restart poll with new interval if currently running
+  if (_running && _pollHandle) {
+    clearInterval(_pollHandle);
+    _pollHandle = setInterval(_doPoll, _pollMs);
+  }
+}
+
+function onClaudeToggle(checked) {
+  document.getElementById('token-counter').classList.toggle('hidden', !checked);
+}
+
+// -- Poll loop -----------------------------------------------------------------
+function startAnalysis() {
+  _simId = getSimId();
+  if (!_simId) { alert('Enter a Sim ID first.'); return; }
+
+  // Stop any existing poll
+  if (_pollHandle) clearInterval(_pollHandle);
+
+  document.getElementById('sim-label').textContent = `Sim #${_simId} · loading…`;
+  document.getElementById('start-btn').textContent  = 'Restart';
+  document.getElementById('report-btn').disabled    = false;
+  document.getElementById('debug-btn').disabled     = false;
+  _running = true;
+  checkCalculated();
+
+  // Fire immediately, then on interval
+  _doPoll();
+  _pollHandle = setInterval(_doPoll, _pollMs);
+}
+
+function _doPoll() {
+  if (!_simId) return;
+  fetch(`/api/status/${_simId}`)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+      onUpdate(d);
+    })
+    .catch(e => setStatus(`Poll error: ${e.message}`, 'err'));
+}
+
+// -- Report & Debug ------------------------------------------------------------
+function requestReport() {
+  if (!_simId) return;
+  const btn = document.getElementById('report-btn');
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+  fetch(`/api/report/${_simId}`)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      renderReport(data);
+      document.getElementById('report-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })
+    .catch(e => setStatus('Report: ' + e.message, 'err'))
+    .finally(() => {
+      btn.textContent = 'Generate Report';
+      btn.disabled = false;
+    });
+}
+
+function showDebug() {
+  if (!_simId) return;
+  const btn = document.getElementById('debug-btn');
+  btn.textContent = 'Loading…';
+  btn.disabled = true;
+  fetch(`/api/debug/${_simId}`)
+    .then(r => r.json())
+    .then(data => {
+      const win = window.open('', '_blank', 'width=700,height=500,scrollbars=yes');
+      win.document.write(`<pre style="background:#111;color:#eee;padding:20px;font-size:12px;font-family:monospace;white-space:pre-wrap">${JSON.stringify(data, null, 2)}</pre>`);
+      win.document.close();
+    })
+    .catch(e => alert('Debug fetch failed: ' + e.message))
+    .finally(() => {
+      btn.textContent = 'Show Debug Info';
+      btn.disabled = false;
+    });
+}
+
+// -- Phase 03 Calculate -------------------------------------------------------
+const CALC_URL = 'http://localhost:5005';
+
+async function checkCalculated() {
+  if (!_simId) return;
+  try {
+    const res = await fetch(`${CALC_URL}/calculate/${_simId}`);
+    const btn = document.getElementById('calc-btn');
+    if (res.ok) {
+      const data = await res.json();
+      btn.textContent = 'View Results';
+      btn.removeAttribute('data-tip');
+      showCalcResults(data);
+    } else {
+      btn.textContent = 'Calculate Key Metrics';
+      btn.removeAttribute('data-tip');
+    }
+  } catch(e) {
+    // Calculator not reachable — keep button disabled with tooltip
+  }
+}
+
+async function runCalculate() {
+  if (!_simId) return;
+  const btn = document.getElementById('calc-btn');
+  const isView = btn.textContent.trim() === 'View Results';
+
+  if (isView) {
+    // Re-fetch and re-show existing results
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${CALC_URL}/calculate/${_simId}`);
+      if (res.ok) showCalcResults(await res.json());
+    } catch(e) { alert('Calculator not reachable at ' + CALC_URL); }
+    btn.textContent = 'View Results';
+    btn.disabled = false;
+    return;
+  }
+
+  // Run fresh calculation
+  btn.textContent = 'Calculating…';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${CALC_URL}/calculate/${_simId}`, { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      showCalcResults(data);
+      btn.textContent = 'View Results';
+    } else {
+      const err = await res.json();
+      alert('Calculate failed: ' + (err.error || res.status));
+      btn.textContent = 'Calculate Key Metrics';
+    }
+  } catch(e) {
+    alert('Could not reach LowTrafficCalculator at ' + CALC_URL + '\nMake sure it is running on port 5005.');
+    btn.textContent = 'Calculate Key Metrics';
+  }
+  btn.disabled = false;
+}
+
+function showCalcResults(data) {
+  const ARMS = ['N', 'S', 'E', 'W'];
+
+  // Saturation
+  const satEl = document.getElementById('calc-sat');
+  satEl.innerHTML = ARMS.map(arm => {
+    const val = data.saturation?.[arm] ?? '—';
+    const numVal = parseFloat(val);
+    const color = numVal >= 1.0 ? '#f87171'    // red — oversaturated
+                : numVal >= 0.85 ? '#fb923c'   // orange — near capacity
+                : numVal >= 0.70 ? '#facc15'   // yellow — approaching
+                : '#4ade80';                   // green — OK
+    return `<div class="stat-card p-2">
+      <div class="text-base font-bold leading-tight" style="color:${color}">${isNaN(numVal) ? '—' : numVal.toFixed(2)}</div>
+      <div class="stat-lbl">${arm}</div>
+    </div>`;
+  }).join('');
+
+  // Gini
+  const gini = data.gini ?? '—';
+  const giniNum = parseFloat(gini);
+  const giniColor = giniNum > 0.5 ? '#f87171' : giniNum > 0.35 ? '#fb923c' : '#4ade80';
+  const giniEl = document.getElementById('calc-gini');
+  giniEl.textContent = isNaN(giniNum) ? '—' : giniNum.toFixed(3);
+  giniEl.style.color = giniColor;
+
+  // Pressure
+  const pMean = data.pressure_mean ?? '—';
+  const pNum = parseFloat(pMean);
+  document.getElementById('calc-pressure').textContent =
+    isNaN(pNum) ? '—' : (pNum > 0 ? '+' : '') + pNum.toFixed(1);
+
+  // Discharge rate
+  const dischEl = document.getElementById('calc-discharge');
+  dischEl.innerHTML = ARMS.map(arm => {
+    const val = data.discharge_rate?.[arm] ?? '—';
+    const numVal = parseFloat(val);
+    return `<div class="stat-card p-2">
+      <div class="text-base font-bold leading-tight text-white">${isNaN(numVal) ? '—' : numVal.toFixed(2)}</div>
+      <div class="stat-lbl">${arm}</div>
+    </div>`;
+  }).join('');
+
+  // Time to starvation
+  const ttsEl = document.getElementById('calc-tts');
+  ttsEl.innerHTML = ARMS.map(arm => {
+    const val = data.time_to_starvation?.[arm] ?? '—';
+    const numVal = parseFloat(val);
+    // If val equals cycle length (e.g. 60), flag it
+    const isSentinel = numVal >= 55;
+    const color = isSentinel ? '#f87171' : '#4ade80';
+    const display = isNaN(numVal) ? '—' : (isSentinel ? '? ' + numVal.toFixed(0) + 's' : numVal.toFixed(1) + 's');
+    return `<div class="stat-card p-2">
+      <div class="text-base font-bold leading-tight" style="color:${color}">${display}</div>
+      <div class="stat-lbl">${arm}</div>
+    </div>`;
+  }).join('');
+
+  // Meta
+  document.getElementById('calc-meta').textContent =
+    `${data.trajectory_rows ?? '—'} trajectory rows · Parquet exported`;
+
+  // Show panel
+  document.getElementById('calc-panel').classList.remove('hidden');
+}
+
+// -- Update UI from poll response ----------------------------------------------
+function onUpdate(d) {
+  // Status bar
+  const isDone = d.sim_status === 'done';
+  if (isDone) {
+    setStatus(`Done · Sim #${_simId}`, 'done');
+    if (_pollHandle) { clearInterval(_pollHandle); _pollHandle = null; }
+    const calcBtn = document.getElementById('calc-btn');
+    if (calcBtn.disabled) {
+      calcBtn.disabled = false;
+      calcBtn.removeAttribute('data-tip');
+      checkCalculated();
+    }
+  } else {
+    setStatus(`Live · Sim #${_simId} · polling every ${_pollMs/1000}s`, 'live');
+  }
+
+  // Sim label
+  const durationStr = d.sim_duration_min ? ` / ${String(d.sim_duration_min).padStart(2,'0')}:00` : '';
+  document.getElementById('sim-label').textContent =
+    `Sim #${_simId} · ${isDone ? 'completed' : 'running'} · ${fmtTime(d.sim_time)}${durationStr}`;
+
+  // Stat cards
+  document.getElementById('st-active').textContent     = d.active ?? '—';
+  document.getElementById('st-exited').textContent     = d.exited ?? '—';
+  document.getElementById('st-wait').textContent       = d.avg_wait ?? '—';
+  document.getElementById('st-throughput').textContent = d.throughput != null
+    ? d.throughput.toLocaleString() : '—';
+  document.getElementById('st-time').textContent       = fmtTime(d.sim_time);
+
+  // Queue bars
+  ARMS.forEach(arm => {
+    const q      = d.queue?.[arm] ?? 0;
+    const pct    = Math.min(q / ARM_CAP[arm], 1);
+    const hpx    = Math.max(4, pct * 76);
+    const barEl  = document.getElementById(`bar-${arm}`);
+    const lblEl  = document.getElementById(`q-${arm}`);
+    barEl.style.height      = hpx + 'px';
+    lblEl.textContent       = q > 0 ? q : '';
+    lblEl.style.visibility  = hpx >= 18 ? 'visible' : 'hidden';
+  });
+
+  // Light dots
+  if (d.lights) {
+    ARMS.forEach(arm => {
+      const dot = document.getElementById(`ldot-${arm}`);
+      dot.className = `light-dot light-${d.lights[arm] || 'off'}`;
+    });
+  }
+
+  // Queue chart — replace with full history from DB (always accurate from sim start)
+  if (d.queue_history && d.queue_history.length) {
+    const hist = d.queue_history;
+    _qChart.data.labels          = hist.map(h => fmtTime(h.t));
+    _qChart.data.datasets[0].data = hist.map(h => h.N);
+    _qChart.data.datasets[1].data = hist.map(h => h.S);
+    _qChart.data.datasets[2].data = hist.map(h => h.E);
+    _qChart.data.datasets[3].data = hist.map(h => h.W);
+    _qChart.update('none');
+  }
+
+  // Type distribution
+  if (d.type_dist && Object.keys(d.type_dist).length) {
+    const types  = Object.keys(d.type_dist);
+    const counts = types.map(t => d.type_dist[t]);
+    const colors = types.map(t => TYPE_COLORS[t] || '#6b7280');
+    _typeChart.data.labels                        = types;
+    _typeChart.data.datasets[0].data              = counts;
+    _typeChart.data.datasets[0].backgroundColor   = colors;
+    _typeChart.update('none');
+
+    const total = counts.reduce((a, b) => a + b, 0);
+    document.getElementById('type-legend').innerHTML = types.map((t, i) =>
+      `<div class="flex items-center gap-2">
+         <span style="width:8px;height:8px;border-radius:50%;background:${colors[i]};display:inline-block"></span>
+         <span>${t}: ${counts[i]} (${total ? Math.round(counts[i]/total*100) : 0}%)</span>
+       </div>`
+    ).join('');
+  }
+}
+
+function renderReport(r) {
+  document.getElementById('report-placeholder').classList.add('hidden');
+  document.getElementById('report-content').classList.remove('hidden');
+
+  document.getElementById('rpt-exited').textContent     = r.total_exited ?? '—';
+  document.getElementById('rpt-wait').textContent       = r.avg_wait_sec ?? '—';
+  document.getElementById('rpt-tput').textContent       = r.throughput_vph ?? '—';
+  document.getElementById('rpt-bottleneck').textContent = r.bottleneck_arm ?? '—';
+
+  const armQ = r.arm_avg_queue || {};
+  document.getElementById('rpt-arm-queue').innerHTML = ARMS.map(arm =>
+    `<div class="stat-card p-2">
+       <div class="font-bold text-sm">${armQ[arm] ?? '—'}</div>
+       <div class="stat-lbl">${arm}</div>
+     </div>`
+  ).join('');
+
+  const recs = r.recommendations || [];
+  document.getElementById('rpt-recs').innerHTML = recs.map(rec =>
+    `<div class="rec-item">${rec}</div>`
+  ).join('');
+
+  const waste = r.signal_waste_phases || [];
+  document.getElementById('rpt-waste').textContent = waste.length
+    ? `${waste.length} waste event(s) detected across arm(s): ${[...new Set(waste.map(w => w.arm))].join(', ')}`
+    : 'No signal waste detected.';
+}
+
+// -- Init ----------------------------------------------------------------------
+window.addEventListener('load', () => {
+  onSampleSlider(0);  // highlight "2s" tick on load
+  if (_simId) setTimeout(startAnalysis, 300);
+});
+</script>
+</body>
+</html>
