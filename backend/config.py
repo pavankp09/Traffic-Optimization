@@ -2,8 +2,42 @@
 Central configuration for Traffic Signal Optimizer.
 All defaults calibrated for Hyderabad, India (GHMC standards).
 """
+import os
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _default_cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    origins = [
+        "http://localhost:8005",
+        "http://127.0.0.1:8005",
+        "http://localhost:3000",
+    ]
+    frontend_origin = os.getenv("FRONTEND_ORIGIN", "").strip()
+    if frontend_origin:
+        origins.append(frontend_origin)
+    return origins
 
 
 @dataclass
@@ -175,15 +209,12 @@ class AdverseConfig:
 
 @dataclass
 class AppConfig:
-    host: str = "0.0.0.0"
-    port: int = 5050
-    debug: bool = True
+    host: str = field(default_factory=lambda: os.getenv("BACKEND_HOST", "0.0.0.0"))
+    port: int = field(default_factory=lambda: _env_int("BACKEND_PORT", 8004))
+    debug: bool = field(default_factory=lambda: _env_bool("FLASK_DEBUG", True))
     secret_key: str = "tso-dev-secret-2026"
-    database_url: str = "sqlite:///backend/db/tso.db"
-    cors_origins: list = field(default_factory=lambda: [
-        "http://localhost:5174",  # Vite dev server
-        "http://localhost:3000",  # fallback / alternate port
-    ])
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///backend/db/tso.db"))
+    cors_origins: list = field(default_factory=_default_cors_origins)
 
     # Hyderabad economic reference values
     petrol_price_inr_per_l: float = 106.0
