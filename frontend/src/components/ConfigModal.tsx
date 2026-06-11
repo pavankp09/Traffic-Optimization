@@ -16,15 +16,6 @@ const NAV_GROUPS = [
     ],
   },
   {
-    id: 'core',
-    label: 'Core Setup',
-    sections: [
-      { id: 'A', label: 'Road Layout', hint: 'Intersection geometry & lanes', icon: '🛣️' },
-      { id: 'B', label: 'Traffic Demand', hint: 'Volume, pattern & arrivals', icon: '🚗' },
-      { id: 'C', label: 'Vehicle Mix', hint: 'Fleet type percentages', icon: '🚌' },
-    ],
-  },
-  {
     id: 'control',
     label: 'Control Logic',
     sections: [
@@ -53,16 +44,16 @@ const NAV_GROUPS = [
 const ALL_SECTIONS = NAV_GROUPS.flatMap((g) => g.sections)
 
 const QUICK_PRESETS = [
-  { id: 'vp_offpeak', scale: 'Very Light', name: 'Very Light - Off Peak', vehicles: 2000, durationMin: 60, pattern: 'uniform', canvas: 'regular' },
-  { id: 'l_bike', scale: 'Light', name: 'Light - Bike City', vehicles: 5000, durationMin: 60, pattern: 'uniform', canvas: 'regular' },
-  { id: 'l_mixed', scale: 'Light', name: 'Light - Mixed', vehicles: 5000, durationMin: 60, pattern: 'uniform', canvas: 'regular' },
-  { id: 'm_standard', scale: 'Medium', name: 'Medium - Standard', vehicles: 10000, durationMin: 60, pattern: 'uniform', canvas: 'regular' },
-  { id: 'm_car', scale: 'Medium', name: 'Medium - Car Heavy', vehicles: 10000, durationMin: 60, pattern: 'uniform', canvas: 'regular' },
-  { id: 'm_commercial', scale: 'Medium', name: 'Medium - Commercial', vehicles: 8000, durationMin: 60, pattern: 'bidirectional', canvas: 'regular' },
-  { id: 'h_peak', scale: 'Heavy', name: 'Heavy - Peak Hour', vehicles: 15000, durationMin: 60, pattern: 'morning_peak', canvas: 'large' },
-  { id: 'h_tw', scale: 'Heavy', name: 'Heavy - Two-Wheeler Surge', vehicles: 15000, durationMin: 60, pattern: 'evening_peak', canvas: 'large' },
-  { id: 'h_commercial', scale: 'Heavy', name: 'Heavy - Commercial Rush', vehicles: 15000, durationMin: 60, pattern: 'bidirectional', canvas: 'large' },
-  { id: 'x_max', scale: 'Extreme', name: 'Extreme - Max Load', vehicles: 15000, durationMin: 60, pattern: 'random', canvas: 'large' },
+  { id: 'vp_offpeak', scale: 'Very Light', name: 'Very Light - Off Peak', vehicles: 2000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 4.0, car: 3.0, auto: 2.0, bus: 1.5, truck: 1.0 } },
+  { id: 'l_bike', scale: 'Light', name: 'Light - Bike City', vehicles: 5000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 8.0, car: 2.0, auto: 2.0, bus: 1.0, truck: 0.5 } },
+  { id: 'l_mixed', scale: 'Light', name: 'Light - Mixed', vehicles: 5000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 4.0, car: 3.0, auto: 2.0, bus: 1.5, truck: 1.0 } },
+  { id: 'm_standard', scale: 'Medium', name: 'Medium - Standard', vehicles: 10000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 4.0, car: 3.0, auto: 2.0, bus: 1.5, truck: 1.0 } },
+  { id: 'm_car', scale: 'Medium', name: 'Medium - Car Heavy', vehicles: 10000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 2.0, car: 7.0, auto: 1.5, bus: 1.0, truck: 0.5 } },
+  { id: 'm_commercial', scale: 'Medium', name: 'Medium - Commercial', vehicles: 8000, durationMin: 60, pattern: 'bidirectional', canvas: 'regular', multipliers: { bike: 1.5, car: 2.0, auto: 1.0, bus: 4.0, truck: 5.0 } },
+  { id: 'h_peak', scale: 'Heavy', name: 'Heavy - Peak Hour', vehicles: 15000, durationMin: 60, pattern: 'morning_peak', canvas: 'large', multipliers: { bike: 5.0, car: 6.0, auto: 3.0, bus: 2.0, truck: 1.0 } },
+  { id: 'h_tw', scale: 'Heavy', name: 'Heavy - Two-Wheeler Surge', vehicles: 15000, durationMin: 60, pattern: 'evening_peak', canvas: 'large', multipliers: { bike: 9.0, car: 3.0, auto: 2.0, bus: 1.0, truck: 0.5 } },
+  { id: 'h_commercial', scale: 'Heavy', name: 'Heavy - Commercial Rush', vehicles: 15000, durationMin: 60, pattern: 'bidirectional', canvas: 'large', multipliers: { bike: 2.0, car: 2.0, auto: 1.0, bus: 5.0, truck: 7.0 } },
+  { id: 'x_max', scale: 'Extreme', name: 'Extreme - Max Load', vehicles: 15000, durationMin: 60, pattern: 'random', canvas: 'large', multipliers: { bike: 4.0, car: 3.0, auto: 2.0, bus: 1.5, truck: 1.0 } },
 ] as const
 
 // ─── Shared Primitives ────────────────────────────────────────────────────────
@@ -152,60 +143,6 @@ function SliderRow({ label, help, value, onChange, min, max, step, display, acce
 }
 
 // ─── Section Content Components ───────────────────────────────────────────────
-function SectionA({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-5">
-      <FormRow label="Intersection Type" help="Road geometry — 4-way cross is most common in Hyderabad" required>
-        <SelectInput value={simConfig.intersection_type} onChange={(v) => updateSimConfig({ intersection_type: v as SimConfig['intersection_type'] })}
-          options={[
-            { value: 'four_way', label: '4-Way Cross' },
-            { value: 'four_way_free_left', label: '4-Way (Free Left)' },
-            { value: 't_junction', label: 'T-Junction' },
-            { value: 't_junction_free_left', label: 'T-Junction (Free Left)' },
-            { value: 'y_junction', label: 'Y-Junction' },
-            { value: 'six_arm', label: '6-Arm Complex' },
-            { value: 'roundabout', label: 'Roundabout' },
-            { value: 'roundabout_free_left', label: 'Roundabout (Free Left)' },
-          ]} />
-      </FormRow>
-      <FormRow label="Lanes per Arm" help="Number of lanes per approach (1-5). Hyderabad major roads: 3-4 lanes" required>
-        <NumberInput value={simConfig.n_lanes} onChange={(v) => updateSimConfig({ n_lanes: v })} min={1} max={5} />
-      </FormRow>
-    </div>
-  )
-}
-
-function SectionB({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-5">
-      <FormRow label="Total Volume (vph)" help="Total vehicles per hour entering the intersection. Hyderabad peak: 1500–2500 vph" required>
-        <NumberInput value={simConfig.total_vph} onChange={(v) => updateSimConfig({ total_vph: v })} min={50} max={5000} />
-      </FormRow>
-      <FormRow label="Traffic Pattern" help="How demand is distributed over the simulation period. Morning/evening peaks reflect Hyderabad commute patterns">
-        <SelectInput value={simConfig.traffic_pattern} onChange={(v) => updateSimConfig({ traffic_pattern: v as SimConfig['traffic_pattern'] })}
-          options={[
-            { value: 'uniform', label: 'Uniform' },
-            { value: 'morning_peak', label: 'Morning Peak (8–10 AM)' },
-            { value: 'evening_peak', label: 'Evening Peak (6–9 PM)' },
-            { value: 'bidirectional', label: 'Bidirectional' },
-            { value: 'random', label: 'Random' },
-          ]} />
-      </FormRow>
-      <FormRow label="Arrival Distribution" help="Statistical model for vehicle arrival times. Poisson is most realistic for urban traffic">
-        <SelectInput value={simConfig.arrival_distribution} onChange={(v) => updateSimConfig({ arrival_distribution: v as SimConfig['arrival_distribution'] })}
-          options={[
-            { value: 'poisson', label: 'Poisson (Recommended)' },
-            { value: 'weibull', label: 'Weibull' },
-            { value: 'uniform', label: 'Uniform' },
-          ]} />
-      </FormRow>
-      <FormRow label="Simulation Duration (s)" help="How long each episode runs in simulated time. 3600s = 1 hour is standard" required>
-        <NumberInput value={simConfig.simulation_duration_s} onChange={(v) => updateSimConfig({ simulation_duration_s: v })} min={60} max={7200} step={60} />
-      </FormRow>
-    </div>
-  )
-}
-
 const VEHICLE_MIX_FIELDS: Array<[keyof SimConfig, string, string]> = [
   ['pct_car', 'Cars', 'Standard passenger cars — most common in Hyderabad urban areas'],
   ['pct_two_wheeler', 'Two-Wheelers', 'Motorcycles and scooters — 40–50% of Hyderabad traffic'],
@@ -218,46 +155,6 @@ const VEHICLE_MIX_FIELDS: Array<[keyof SimConfig, string, string]> = [
   ['pct_school_bus', 'School Buses', 'School/college buses — spike 8–9 AM, 4–5 PM'],
   ['pct_truck', 'Trucks', 'Heavy goods vehicles — restricted hours in city core'],
 ]
-
-function SectionC({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
-  const total = VEHICLE_MIX_FIELDS.reduce((s, [k]) => s + ((simConfig[k] as number) ?? 0), 0)
-  const isOver = total > 100
-  const isUnder = total < 100
-  return (
-    <div className="space-y-5">
-      <div className={`flex items-center justify-between text-xs rounded-xl px-4 py-2.5 border transition-all duration-300 ${
-        total === 100
-          ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
-          : 'bg-amber-500/5 border-amber-500/20 text-amber-400'
-      }`}>
-        <span className="font-mono font-bold tracking-wide flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${total === 100 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-          {isOver ? `Over by ${total - 100}%` : isUnder ? `Under by ${100 - total}% remaining` : '✓ Total allocation is perfect'}
-        </span>
-        <span className="font-mono font-black tabular-nums text-xl">{total}%</span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-        {VEHICLE_MIX_FIELDS.map(([key, label, help]) => (
-          <div key={key as string} className="space-y-2 group">
-            <div className="flex justify-between items-center">
-              <span className="text-[11.5px] text-slate-400 font-semibold flex items-center gap-1 group-hover:text-slate-300 transition-colors">
-                {label}<HelpPopover text={help} />
-              </span>
-              <span className="font-mono font-bold text-[#8fb8ce] text-[12.5px]">{simConfig[key] as number}%</span>
-            </div>
-            <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
-              <div className="absolute inset-y-0 left-0 rounded-full transition-all bg-[#8fb8ce]"
-                style={{ width: `${Math.min(100, (simConfig[key] as number))}%` }} />
-              <input type="range" className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
-                min={0} max={100} step={1} value={simConfig[key] as number}
-                onChange={(e) => updateSimConfig({ [key]: Number(e.target.value) } as Partial<SimConfig>)} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function SectionD({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
   return (
@@ -463,87 +360,35 @@ function SectionI({ adverseConfig, updateAdverseConfig }: { adverseConfig: Adver
   )
 }
 
-function SectionJ() {
-  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig } = useConfigStore()
+const PRESET_METADATA: Record<string, { icon: string; tagline: string }> = {
+  vp_offpeak: { icon: '🌙', tagline: 'Minimal traffic density, ideal for baseline calibration.' },
+  l_bike: { icon: '🚲', tagline: 'High two-wheeler share, tests lane filtering dynamics.' },
+  l_mixed: { icon: '🚗', tagline: 'Standard light flow with balanced fleet distribution.' },
+  m_standard: { icon: '🏢', tagline: 'Balanced commuter load, typical urban baseline workload.' },
+  m_car: { icon: '🏎️', tagline: 'High private vehicle density, tests queue accumulation.' },
+  m_commercial: { icon: '🚛', tagline: 'Heavy delivery truck flows, checks bidirectional bottlenecks.' },
+  h_peak: { icon: '🚨', tagline: 'Severe commuter rush, tests green duration limit boundaries.' },
+  h_tw: { icon: '🛵', tagline: 'Massive motorcycle rush-hour surge, dense lane splitting.' },
+  h_commercial: { icon: '🚚', tagline: 'Heavy transport logistics flow, tests truck priority lanes.' },
+  x_max: { icon: '🌋', tagline: 'Unregulated peak overload, validates failure resistance.' },
+}
+
+function SectionJ({ isBaseline }: { isBaseline: boolean }) {
+  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, tabConfigs } = useConfigStore()
   const [presetScale, setPresetScale] = useState<'All' | 'Very Light' | 'Light' | 'Medium' | 'Heavy' | 'Extreme' | 'Custom'>('All')
   const [activeQuickPresetId, setActiveQuickPresetId] = useState<string>('m_standard')
 
-  // Intersection Choice logic
-  const intersectionChoice = simConfig.intersection_type === 'six_arm'
-    ? '5-road'
-    : simConfig.intersection_type === 'custom'
-    ? 'custom-json'
-    : '4-road'
-
-  const setIntersectionChoice = (choice: '4-road' | '5-road' | 'custom-json') => {
-    if (choice === '5-road') {
-      updateSimConfig({ intersection_type: 'six_arm', n_lanes: Math.max(3, Number(simConfig.n_lanes ?? 3)) })
-    } else if (choice === '4-road') {
-      updateSimConfig({ intersection_type: 'four_way' })
-    } else {
-      updateSimConfig({ intersection_type: 'custom' })
-    }
-  }
-
-  // Traffic Volume logic
-  const trafficVolume = Number(simConfig.total_vph ?? 10000)
-  const setTrafficVolume = (vol: number) => {
-    updateSimConfig({ total_vph: vol })
-  }
-
-  // Spawn Multipliers logic
-  const spawnMultipliers: Record<'bike' | 'car' | 'auto' | 'bus' | 'truck', number> = {
-    bike: Number(simConfig.spawn_mult_bike ?? 4),
-    car: Number(simConfig.spawn_mult_car ?? 3),
-    auto: Number(simConfig.spawn_mult_auto ?? 2),
-    bus: Number(simConfig.spawn_mult_bus ?? 1.5),
-    truck: Number(simConfig.spawn_mult_truck ?? 1),
-  }
-
-  const handleMultiplierChange = (key: 'bike' | 'car' | 'auto' | 'bus' | 'truck', value: number) => {
-    const nextMults = {
-      ...spawnMultipliers,
-      [key]: value
-    }
-    const multiplierMap = {
-      pct_two_wheeler: nextMults.bike,
-      pct_car: nextMults.car,
-      pct_auto_rickshaw: nextMults.auto,
-      pct_tsrtc_bus: nextMults.bus,
-      pct_truck: nextMults.truck,
-    }
-    const bases = {
-      pct_two_wheeler: 40,
-      pct_car: 30,
-      pct_auto_rickshaw: 15,
-      pct_tsrtc_bus: 10,
-      pct_truck: 5,
-    }
-    const weighted = Object.entries(multiplierMap).map(([k, mult]) => {
-      const base = bases[k as keyof typeof bases]
-      return { key: k, value: Math.max(0.01, base * mult) }
-    })
-    const sum = weighted.reduce((acc, item) => acc + item.value, 0)
-    const normalized = weighted.reduce<Record<string, number>>((acc, item) => {
-      acc[item.key] = Number(((item.value / sum) * 100).toFixed(1))
-      return acc
-    }, {})
-
-    updateSimConfig({
-      ...normalized,
-      spawn_mult_bike: nextMults.bike,
-      spawn_mult_car: nextMults.car,
-      spawn_mult_auto: nextMults.auto,
-      spawn_mult_bus: nextMults.bus,
-      spawn_mult_truck: nextMults.truck,
-    })
-  }
+  // When Same as Baseline is active on RL, read values from baselineConfig
+  const baselineConfig = tabConfigs.baseline || simConfig
+  const isSyncActive = !isBaseline && !!simConfig.same_as_baseline
+  const activeConfig = isSyncActive ? baselineConfig : simConfig
 
   // Duration Choice logic
-  const durationSec = simConfig.simulation_duration_s ?? 3600
+  const durationSec = activeConfig.simulation_duration_s ?? 3600
   const durationChoice = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
-  
+
   const setDurationChoice = (choice: '30' | '60' | '90' | 'custom') => {
+    if (isSyncActive) return
     if (choice === '30') updateSimConfig({ simulation_duration_s: 1800 })
     else if (choice === '60') updateSimConfig({ simulation_duration_s: 3600 })
     else if (choice === '90') updateSimConfig({ simulation_duration_s: 5400 })
@@ -551,24 +396,27 @@ function SectionJ() {
 
   const customDurationMin = Math.round(durationSec / 60)
   const setCustomDurationMin = (min: number) => {
+    if (isSyncActive) return
     updateSimConfig({ simulation_duration_s: Math.max(5, min) * 60 })
   }
 
   // Driving Behavior logic
-  const drivingBehavior = simConfig.driver_behavior ?? 'medium'
+  const drivingBehavior = activeConfig.driver_behavior ?? 'medium'
   const setDrivingBehavior = (behavior: 'safe' | 'medium' | 'aggressive' | 'very_aggressive') => {
+    if (isSyncActive) return
     updateSimConfig({ driver_behavior: behavior })
     updateAdverseConfig({
       rear_end_risk_factor:
         behavior === 'safe' ? 0.05 :
-        behavior === 'medium' ? 0.1 :
-        behavior === 'aggressive' ? 0.2 : 0.3,
+          behavior === 'medium' ? 0.1 :
+            behavior === 'aggressive' ? 0.2 : 0.3,
     })
   }
 
   // Canvas Size logic
-  const canvasSize = simConfig.canvas_size ?? 'large'
+  const canvasSize = activeConfig.canvas_size ?? 'large'
   const setCanvasSize = (size: 'regular' | 'large') => {
+    if (isSyncActive) return
     updateSimConfig({
       canvas_size: size,
       canvas_width: size === 'large' ? 1600 : 1110,
@@ -579,6 +427,7 @@ function SectionJ() {
   // Custom JSON override
   const [customJsonText, setCustomJsonText] = useState('{}')
   const handleJsonChange = (text: string) => {
+    if (isSyncActive) return
     setCustomJsonText(text)
     try {
       const parsed = JSON.parse(text)
@@ -590,27 +439,82 @@ function SectionJ() {
     }
   }
 
+  const getNormalizedMix = (mults: { bike: number; car: number; auto: number; bus: number; truck: number }) => {
+    const bases = {
+      pct_two_wheeler: 40,
+      pct_car: 30,
+      pct_auto_rickshaw: 15,
+      pct_tsrtc_bus: 10,
+      pct_truck: 5,
+    }
+    const weighted = [
+      { key: 'pct_two_wheeler', value: Math.max(0.01, bases.pct_two_wheeler * mults.bike) },
+      { key: 'pct_car', value: Math.max(0.01, bases.pct_car * mults.car) },
+      { key: 'pct_auto_rickshaw', value: Math.max(0.01, bases.pct_auto_rickshaw * mults.auto) },
+      { key: 'pct_tsrtc_bus', value: Math.max(0.01, bases.pct_tsrtc_bus * mults.bus) },
+      { key: 'pct_truck', value: Math.max(0.01, bases.pct_truck * mults.truck) },
+    ]
+    const sum = weighted.reduce((acc, item) => acc + item.value, 0)
+    const result: Record<string, number> = {
+      pct_car: 0,
+      pct_two_wheeler: 0,
+      pct_ev_scooter: 0,
+      pct_auto_rickshaw: 0,
+      pct_e_rickshaw: 0,
+      pct_cab: 0,
+      pct_delivery_bike: 0,
+      pct_tsrtc_bus: 0,
+      pct_school_bus: 0,
+      pct_truck: 0,
+    }
+    weighted.forEach((item) => {
+      result[item.key] = Number(((item.value / sum) * 100).toFixed(1))
+    })
+    const currentSum = Object.values(result).reduce((a, b) => a + b, 0)
+    if (currentSum !== 100) {
+      result['pct_two_wheeler'] = Number((result['pct_two_wheeler'] + (100 - currentSum)).toFixed(1))
+    }
+    return result
+  }
+
   // Quick Preset application
   const applyQuickPreset = (presetId: string) => {
+    if (isSyncActive) return
     const preset = QUICK_PRESETS.find((item) => item.id === presetId)
     if (!preset) return
     setActiveQuickPresetId(presetId)
-    
+
+    const mix = getNormalizedMix(preset.multipliers)
     updateSimConfig({
+      ...mix,
       total_vph: preset.vehicles,
       simulation_duration_s: preset.durationMin * 60,
       canvas_size: preset.canvas,
       canvas_width: preset.canvas === 'large' ? 1600 : 1110,
       canvas_height: preset.canvas === 'large' ? 1000 : 800,
       traffic_pattern: preset.pattern as SimConfig['traffic_pattern'],
+      spawn_mult_bike: preset.multipliers.bike,
+      spawn_mult_car: preset.multipliers.car,
+      spawn_mult_auto: preset.multipliers.auto,
+      spawn_mult_bus: preset.multipliers.bus,
+      spawn_mult_truck: preset.multipliers.truck,
     })
+  }
+
+  const vehicleMixTotal = VEHICLE_MIX_FIELDS.reduce((s, [k]) => s + ((activeConfig[k] as number) ?? 0), 0)
+  const isMixOver = vehicleMixTotal > 100
+  const isMixUnder = vehicleMixTotal < 100
+
+  const handleMixChange = (key: keyof SimConfig, val: number) => {
+    if (isSyncActive) return
+    updateSimConfig({ [key]: val } as Partial<SimConfig>)
   }
 
   const SCALE_COLORS: Record<string, string> = {
     'All': '#64748b',
-    'Very Light': '#4ade80',
-    'Light': '#86efac',
-    'Medium': '#facc15',
+    'Very Light': '#10b981',
+    'Light': '#34d399',
+    'Medium': '#fbbf24',
     'Heavy': '#f97316',
     'Extreme': '#ef4444',
     'Custom': '#8fb8ce',
@@ -619,317 +523,374 @@ function SectionJ() {
   const visibleQuickPresets = QUICK_PRESETS.filter((p) => presetScale === 'All' ? true : p.scale === presetScale)
 
   return (
-    <div className="space-y-5 pb-4">
-      {/* Presets card grid */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center justify-between mb-3.5">
-          <div className="flex items-center gap-2">
-            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Presets</h4>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap gap-1 mb-3.5">
-          {(['All', 'Very Light', 'Light', 'Medium', 'Heavy', 'Extreme', 'Custom'] as const).map((scale) => {
-            const isActive = presetScale === scale
-            const col = scaleColor(scale)
-            return (
-              <button
-                key={scale}
-                type="button"
-                onClick={() => setPresetScale(scale)}
-                className={`px-2.5 py-1 rounded-lg text-[9.5px] font-mono font-semibold uppercase tracking-wider transition-all border ${
-                  isActive
-                    ? 'border-white/[0.14] bg-white/[0.06] text-slate-200'
-                    : 'border-white/[0.04] text-slate-500 hover:text-slate-300 hover:border-white/[0.08]'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: isActive ? col : 'rgba(100,116,139,0.5)' }}
-                  />
-                  {scale}
+    <div className="space-y-6 pb-4">
+      {/* Same as Baseline Toggle Box (Only for RL views) */}
+      {!isBaseline && (
+        <div className={`p-4.5 bg-gradient-to-r from-blue-950/20 to-indigo-950/10 border rounded-2xl flex items-center justify-between gap-4 transition-all duration-300 ${simConfig.same_as_baseline
+            ? 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] bg-blue-950/25'
+            : 'border-white/[0.06] hover:border-white/[0.12]'
+          }`}>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-[12px] ${simConfig.same_as_baseline ? 'text-blue-400' : 'text-slate-400'}`}>🔗</span>
+              <p className="text-[12.5px] font-bold text-slate-200">Same as Baseline Setup</p>
+              {simConfig.same_as_baseline && (
+                <span className="text-[8.5px] font-mono font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded-md">
+                  Active & Locked
                 </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Cards */}
-        <div className="grid grid-cols-2 gap-2">
-          {visibleQuickPresets.map((preset) => {
-            const isActive = activeQuickPresetId === preset.id
-            const col = scaleColor(preset.scale)
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => applyQuickPreset(preset.id)}
-                className={`rounded-xl border px-3 py-2.5 text-left transition-all duration-200 relative overflow-hidden ${
-                  isActive
-                    ? 'border-white/[0.14] bg-white/[0.05]'
-                    : 'border-white/[0.05] bg-[#0c0e14] hover:border-white/[0.10] hover:bg-white/[0.035]'
-                }`}
-              >
-                <div
-                  className="absolute top-0 left-0 w-0.5 h-full rounded-full"
-                  style={{ backgroundColor: isActive ? col : 'transparent' }}
-                />
-                <div className="pl-1.5">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span
-                      className="text-[8px] font-mono font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md"
-                      style={{
-                        color: col,
-                        backgroundColor: `${col}15`,
-                        border: `1px solid ${col}30`,
-                      }}
-                    >
-                      {preset.scale}
-                    </span>
-                  </div>
-                  <div className={`text-[11px] font-semibold leading-tight ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>
-                    {preset.name.split(' - ').slice(1).join(' - ') || preset.name}
-                  </div>
-                  <div className="text-[9px] text-slate-500 font-mono mt-1 tabular-nums">
-                    {preset.vehicles.toLocaleString()} veh &middot; {preset.durationMin}min &middot; {preset.canvas}
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Intersection Type */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center gap-2 mb-3.5">
-          <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Intersection Type</h4>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { id: '4-road', title: '4-Road', sub: 'Standard cross' },
-            { id: '5-road', title: '5-Road', sub: 'Complex arm' },
-            { id: 'custom-json', title: 'Custom', sub: 'JSON config' },
-          ].map((opt) => {
-            const isActive = intersectionChoice === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setIntersectionChoice(opt.id as any)}
-                className={`rounded-xl border p-3 text-left transition-all duration-200 ${
-                  isActive
-                    ? 'border-white/20 bg-white/[0.06]'
-                    : 'border-white/[0.05] bg-[#0c0e14] hover:border-white/[0.12]'
-                }`}
-              >
-                <div className={`text-[11.5px] font-semibold ${isActive ? 'text-slate-100' : 'text-slate-400'}`}>{opt.title}</div>
-                <div className="text-[9px] text-slate-500 font-mono mt-0.5">{opt.sub}</div>
-              </button>
-            )
-          })}
-        </div>
-        {intersectionChoice === 'custom-json' && (
-          <textarea
-            className="w-full mt-2.5 bg-black/35 border border-white/[0.08] rounded-xl p-3 text-[11px] text-slate-300 focus:outline-none focus:border-[#8fb8ce]/50 font-mono"
-            rows={3}
-            value={customJsonText}
-            onChange={(e) => handleJsonChange(e.target.value)}
-          />
-        )}
-      </div>
-
-      {/* Traffic Volume */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center justify-between mb-3.5">
-          <div className="flex items-center gap-2">
-            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Traffic Volume</h4>
-          </div>
-          <span className="text-sm font-bold font-mono text-slate-200 tabular-nums">
-            {Math.round(trafficVolume).toLocaleString()} <span className="text-[9.5px] text-slate-500">veh/hr</span>
-          </span>
-        </div>
-        <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
-          <div className="absolute inset-y-0 left-0 bg-[#8fb8ce] rounded-full"
-            style={{ width: `${((trafficVolume - 100) / 49900) * 100}%` }} />
-          <input
-            type="range"
-            min={100}
-            max={50000}
-            step={100}
-            value={trafficVolume}
-            onChange={(e) => setTrafficVolume(Number(e.target.value))}
-            className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
-          />
-        </div>
-        <div className="flex justify-between text-[9px] text-slate-600 font-mono mt-1.5 select-none">
-          <span>100</span>
-          <span>50,000</span>
-        </div>
-      </div>
-
-      {/* Vehicle Spawn Rate Multipliers */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center justify-between mb-3.5">
-          <div className="flex items-center gap-2">
-            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Vehicle Spawn Rate Multipliers</h4>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 leading-normal max-w-lg">
+              Locks all layout, demand volumes, durations, driving behaviors, and mix parameters to exactly mirror the Baseline tab configuration.
+            </p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              updateSimConfig({
-                spawn_mult_bike: 4,
-                spawn_mult_car: 3,
-                spawn_mult_auto: 2,
-                spawn_mult_bus: 1.5,
-                spawn_mult_truck: 1,
-              })
-            }}
-            className="text-[9px] font-mono text-slate-600 hover:text-slate-400 border border-white/[0.06] rounded-md px-2 py-0.5 transition-colors"
+            onClick={() => updateSimConfig({ same_as_baseline: !simConfig.same_as_baseline })}
+            className={`relative w-11 h-6.5 rounded-full transition-all duration-300 p-0.5 border flex-shrink-0 ${simConfig.same_as_baseline
+                ? 'bg-blue-500 border-blue-400/30'
+                : 'bg-[#070b15] border-white/[0.06]'
+              }`}
           >
-            Reset
+            <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${simConfig.same_as_baseline ? 'translate-x-4.5' : 'translate-x-0'
+              }`} />
           </button>
         </div>
-        <div className="space-y-2.5">
-          {([
-            { key: 'bike', label: 'Bike' },
-            { key: 'car', label: 'Car' },
-            { key: 'auto', label: 'Auto' },
-            { key: 'bus', label: 'Bus' },
-            { key: 'truck', label: 'Truck' },
-          ] as const).map((row) => (
-            <div key={row.key} className="grid grid-cols-[60px_1fr_40px] items-center gap-3">
-              <span className="text-[10.5px] text-slate-500 font-mono">{row.label}</span>
-              <div className="relative h-1.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
-                <div className="absolute inset-y-0 left-0 bg-[#8fb8ce] rounded-full"
-                  style={{ width: `${(spawnMultipliers[row.key] / 10) * 100}%` }} />
-                <input
-                  type="range"
-                  min={0}
-                  max={10}
-                  step={0.5}
-                  value={spawnMultipliers[row.key]}
-                  onChange={(e) => handleMultiplierChange(row.key, Number(e.target.value))}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+      )}
+
+      {/* Main configuration container */}
+      <div className={`space-y-6 transition-all duration-300 ${isSyncActive ? 'opacity-40 pointer-events-none filter blur-[0.2px]' : ''}`}>
+
+        {/* Presets card grid */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Scenario Packs</h4>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-1.5 mb-4 bg-black/20 p-1 rounded-xl border border-white/[0.04]">
+            {(['All', 'Very Light', 'Light', 'Medium', 'Heavy', 'Extreme', 'Custom'] as const).map((scale) => {
+              const isActive = presetScale === scale
+              const col = scaleColor(scale)
+              return (
+                <button
+                  key={scale}
+                  type="button"
+                  onClick={() => setPresetScale(scale)}
+                  className={`relative px-3 py-1.5 rounded-lg text-[9.5px] font-mono font-semibold uppercase tracking-wider transition-all ${isActive
+                      ? 'text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] bg-white/[0.05]'
+                      : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  <span className="relative z-10 inline-flex items-center gap-1.5">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: col }}
+                    />
+                    {scale}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {visibleQuickPresets.map((preset) => {
+              const isActive = activeQuickPresetId === preset.id
+              const col = scaleColor(preset.scale)
+              const meta = PRESET_METADATA[preset.id] || { icon: '🗺️', tagline: 'Preconfigured scenario pack.' }
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyQuickPreset(preset.id)}
+                  className={`group rounded-xl border p-3.5 text-left transition-all duration-200 relative overflow-hidden bg-gradient-to-b ${isActive
+                      ? 'border-white/[0.14] bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_16px_rgba(0,0,0,0.4)]'
+                      : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-white/[0.10] hover:bg-[#0c0e14]/80'
+                    }`}
+                >
+                  <div
+                    className="absolute top-0 left-0 w-0.5 h-full rounded-full transition-transform duration-300"
+                    style={{ backgroundColor: isActive ? col : 'transparent' }}
+                  />
+                  <div className="pl-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span
+                        className="text-[8px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-md"
+                        style={{
+                          color: col,
+                          backgroundColor: `${col}12`,
+                          border: `1px solid ${col}25`,
+                        }}
+                      >
+                        {preset.scale}
+                      </span>
+                    </div>
+                    <div className={`text-[11.5px] font-bold leading-tight ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>
+                      {preset.name.split(' - ').slice(1).join(' - ') || preset.name}
+                    </div>
+                    <div className="text-[9.5px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                      {meta.tagline}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/[0.03] text-[9px] font-mono text-slate-500 font-medium select-none uppercase">
+                      <span>Vol: {preset.vehicles.toLocaleString()}</span>
+                      <span>Size: {preset.canvas}</span>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Road Layout */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Road Layout</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-5">
+            <FormRow label="Intersection Type" help="Road geometry — 4-way cross is most common in Hyderabad" required>
+              <SelectInput value={activeConfig.intersection_type} onChange={(v) => updateSimConfig({ intersection_type: v as SimConfig['intersection_type'] })}
+                options={[
+                  { value: 'four_way', label: '4-Way Cross' },
+                  { value: 'four_way_free_left', label: '4-Way (Free Left)' },
+                  { value: 't_junction', label: 'T-Junction' },
+                  { value: 't_junction_free_left', label: 'T-Junction (Free Left)' },
+                  { value: 'y_junction', label: 'Y-Junction' },
+                  { value: 'six_arm', label: '6-Arm Complex' },
+                  { value: 'roundabout', label: 'Roundabout' },
+                  { value: 'roundabout_free_left', label: 'Roundabout (Free Left)' },
+                  { value: 'custom', label: 'Custom Config (JSON)' },
+                ]} />
+            </FormRow>
+            <FormRow label="Lanes per Arm" help="Number of lanes per approach (1-5). Hyderabad major roads: 3-4 lanes" required>
+              <NumberInput value={activeConfig.n_lanes} onChange={(v) => updateSimConfig({ n_lanes: v })} min={1} max={5} />
+            </FormRow>
+            {activeConfig.intersection_type === 'custom' && (
+              <div className="col-span-2">
+                <label className="text-[11.5px] text-slate-400 font-semibold mb-1 block">Custom JSON Config</label>
+                <textarea
+                  className="w-full bg-black/40 border border-white/[0.08] rounded-xl p-3.5 text-[11px] text-slate-300 focus:outline-none focus:border-[#8fb8ce]/40 font-mono leading-relaxed"
+                  rows={3}
+                  value={customJsonText}
+                  onChange={(e) => handleJsonChange(e.target.value)}
                 />
               </div>
-              <span className="text-[10px] text-slate-300 text-right font-mono font-bold tabular-nums">
-                {spawnMultipliers[row.key]}&times;
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Simulation Duration */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center gap-2 mb-3.5">
-          <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Simulation Duration</h4>
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { id: '30', label: '30 min' },
-            { id: '60', label: '60 min' },
-            { id: '90', label: '90 min' },
-            { id: 'custom', label: 'Custom' },
-          ].map((opt) => {
-            const isActive = durationChoice === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setDurationChoice(opt.id as any)}
-                className={`rounded-xl border py-2 text-center text-[10.5px] font-mono font-semibold transition-all ${
-                  isActive
-                    ? 'border-white/20 bg-white/[0.06] text-slate-200'
-                    : 'border-white/[0.05] bg-[#0c0e14] text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-        {durationChoice === 'custom' && (
-          <div className="mt-2.5">
-            <NumberInput
-              value={customDurationMin}
-              onChange={setCustomDurationMin}
-              min={5}
-              max={1440}
-            />
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Driving Behavior */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center gap-2 mb-3.5">
-          <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Driving Behavior</h4>
+        {/* Traffic Demand */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Traffic Demand</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-5">
+            <div className="col-span-2">
+              <SliderRow
+                label="Total Volume (vph)"
+                help="Total vehicles per hour entering the intersection. Hyderabad peak: 1500–2500 vph"
+                value={Number(activeConfig.total_vph ?? 1000)}
+                onChange={(v) => updateSimConfig({ total_vph: v })}
+                min={50}
+                max={5000}
+                step={50}
+                display={`${activeConfig.total_vph ?? 1000} vph`}
+              />
+            </div>
+            <FormRow label="Traffic Pattern" help="How demand is distributed over the simulation period. Morning/evening peaks reflect Hyderabad commute patterns">
+              <SelectInput value={activeConfig.traffic_pattern} onChange={(v) => updateSimConfig({ traffic_pattern: v as SimConfig['traffic_pattern'] })}
+                options={[
+                  { value: 'uniform', label: 'Uniform' },
+                  { value: 'morning_peak', label: 'Morning Peak (8–10 AM)' },
+                  { value: 'evening_peak', label: 'Evening Peak (6–9 PM)' },
+                  { value: 'bidirectional', label: 'Bidirectional' },
+                  { value: 'random', label: 'Random' },
+                ]} />
+            </FormRow>
+            <FormRow label="Arrival Distribution" help="Statistical model for vehicle arrival times. Poisson is most realistic for urban traffic">
+              <SelectInput value={activeConfig.arrival_distribution} onChange={(v) => updateSimConfig({ arrival_distribution: v as SimConfig['arrival_distribution'] })}
+                options={[
+                  { value: 'poisson', label: 'Poisson (Recommended)' },
+                  { value: 'weibull', label: 'Weibull' },
+                  { value: 'uniform', label: 'Uniform' },
+                ]} />
+            </FormRow>
+          </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { id: 'safe', label: 'Safe' },
-            { id: 'medium', label: 'Medium' },
-            { id: 'aggressive', label: 'Aggressive' },
-            { id: 'very_aggressive', label: 'V. Aggressive' },
-          ].map((opt) => {
-            const isActive = drivingBehavior === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setDrivingBehavior(opt.id as any)}
-                className={`rounded-xl border py-2 text-[9.5px] font-mono font-semibold transition-all leading-tight ${
-                  isActive
-                    ? 'border-white/20 bg-white/[0.06] text-slate-200'
-                    : 'border-white/[0.05] bg-[#0c0e14] text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
-      {/* Canvas Size */}
-      <div className="bg-[#11131a] border border-white/[0.06] rounded-xl p-4.5">
-        <div className="flex items-center gap-2 mb-3.5">
-          <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Canvas Size</h4>
+        {/* Vehicle Mix */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Vehicle Mix</h4>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (isSyncActive) return
+                updateSimConfig({
+                  pct_car: 30,
+                  pct_two_wheeler: 40,
+                  pct_ev_scooter: 0,
+                  pct_auto_rickshaw: 15,
+                  pct_e_rickshaw: 0,
+                  pct_cab: 0,
+                  pct_delivery_bike: 0,
+                  pct_tsrtc_bus: 10,
+                  pct_school_bus: 0,
+                  pct_truck: 5,
+                })
+              }}
+              className="text-[9.5px] font-mono font-semibold text-slate-500 hover:text-slate-300 border border-white/[0.06] bg-white/[0.01] rounded-lg px-2.5 py-1 transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-5">
+            <div className={`flex items-center justify-between text-xs rounded-xl px-4 py-2.5 border transition-all duration-300 col-span-2 ${vehicleMixTotal === 100
+                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
+                : 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+              }`}>
+              <span className="font-mono font-bold tracking-wide flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${vehicleMixTotal === 100 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {isMixOver ? `Over by ${vehicleMixTotal - 100}%` : isMixUnder ? `Under by ${100 - vehicleMixTotal}% remaining` : '✓ Total allocation is perfect'}
+              </span>
+              <span className="font-mono font-black tabular-nums text-xl">{vehicleMixTotal}%</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-4 col-span-2">
+              {VEHICLE_MIX_FIELDS.map(([key, label, help]) => (
+                <div key={key as string} className="space-y-2 group">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11.5px] text-slate-400 font-semibold flex items-center gap-1 group-hover:text-slate-300 transition-colors">
+                      {label}<HelpPopover text={help} />
+                    </span>
+                    <span className="font-mono font-bold text-[#8fb8ce] text-[12.5px]">{activeConfig[key] as number}%</span>
+                  </div>
+                  <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
+                    <div className="absolute inset-y-0 left-0 rounded-full transition-all bg-[#8fb8ce]"
+                      style={{ width: `${Math.min(100, (activeConfig[key] as number) ?? 0)}%` }} />
+                    <input type="range" className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+                      min={0} max={100} step={1} value={(activeConfig[key] as number) ?? 0}
+                      onChange={(e) => handleMixChange(key, Number(e.target.value))} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { id: 'regular', label: '1110 × 800', sub: 'Regular' },
-            { id: 'large', label: '1600 × 1000', sub: 'Large' },
-          ].map((opt) => {
-            const isActive = canvasSize === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setCanvasSize(opt.id as any)}
-                className={`w-full rounded-xl border p-3.5 text-left transition-all ${
-                  isActive
-                    ? 'border-white/20 bg-white/[0.06]'
-                    : 'border-white/[0.05] bg-[#0c0e14] hover:border-white/[0.10]'
-                }`}
-              >
-                <div className={`text-[10px] font-mono font-semibold ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>{opt.label}</div>
-                <div className="text-[8.5px] text-slate-700 font-mono mt-0.5">{opt.sub}</div>
-              </button>
-            )
-          })}
+
+        {/* Simulation Duration */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Simulation Duration</h4>
+          </div>
+          <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5">
+            {[
+              { id: '30', label: '30 min' },
+              { id: '60', label: '60 min' },
+              { id: '90', label: '90 min' },
+              { id: 'custom', label: 'Custom' },
+            ].map((opt) => {
+              const isActive = durationChoice === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setDurationChoice(opt.id as any)}
+                  className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all ${isActive
+                      ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                      : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+          {durationChoice === 'custom' && (
+            <div className="mt-3 animate-fadeIn">
+              <NumberInput
+                value={customDurationMin}
+                onChange={setCustomDurationMin}
+                min={5}
+                max={1440}
+              />
+            </div>
+          )}
         </div>
+
+        {/* Driving Behavior */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Driving Behavior</h4>
+          </div>
+          <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5">
+            {[
+              { id: 'safe', label: 'Safe' },
+              { id: 'medium', label: 'Medium' },
+              { id: 'aggressive', label: 'Aggressive' },
+              { id: 'very_aggressive', label: 'V. Aggressive' },
+            ].map((opt) => {
+              const isActive = drivingBehavior === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setDrivingBehavior(opt.id as any)}
+                  className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all ${isActive
+                      ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                      : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Canvas Size */}
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Canvas Size</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { id: 'regular', label: '1110 × 800', sub: 'Standard viewport' },
+              { id: 'large', label: '1600 × 1000', sub: 'Extended simulation grid' },
+            ].map((opt) => {
+              const isActive = canvasSize === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setCanvasSize(opt.id as any)}
+                  className={`w-full rounded-xl border p-4 text-left transition-all ${isActive
+                      ? 'border-white/[0.14] bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                      : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-white/[0.10]'
+                    }`}
+                >
+                  <div className={`text-[10.5px] font-mono font-bold ${isActive ? 'text-slate-100' : 'text-slate-500'}`}>{opt.label}</div>
+                  <div className="text-[9px] text-slate-600 font-semibold font-sans mt-1 leading-normal">{opt.sub}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
       </div>
     </div>
   )
@@ -940,9 +901,10 @@ interface ConfigModalProps {
   open: boolean
   onClose: () => void
   onApply?: () => void
+  isBaselineView?: boolean
 }
 
-export default function ConfigModal({ open, onClose, onApply }: ConfigModalProps) {
+export default function ConfigModal({ open, onClose, onApply, isBaselineView = false }: ConfigModalProps) {
   const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, isDirty } = useConfigStore()
   const isRunning = useSimulationStore((s) => s.isRunning)
 
@@ -1058,11 +1020,10 @@ export default function ConfigModal({ open, onClose, onApply }: ConfigModalProps
                     <button
                       key={section.id}
                       onClick={() => setActiveSection(section.id)}
-                      className={`w-full text-left flex items-center gap-3 px-5 py-2 transition-all duration-200 relative ${
-                        isActive
+                      className={`w-full text-left flex items-center gap-3 px-5 py-2 transition-all duration-200 relative ${isActive
                           ? 'text-slate-100 font-bold bg-[#8fb8ce]/[0.08]'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.015]'
-                      }`}
+                        }`}
                     >
                       {isActive && (
                         <div className="absolute left-0 top-1 bottom-1 w-0.75 bg-[#8fb8ce] rounded-r"
@@ -1091,11 +1052,10 @@ export default function ConfigModal({ open, onClose, onApply }: ConfigModalProps
             <button
               onClick={handleRevert}
               disabled={changesCount === 0}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11.5px] font-bold transition-all duration-300 border ${
-                changesCount > 0
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11.5px] font-bold transition-all duration-300 border ${changesCount > 0
                   ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-orange-500/5 text-amber-400 hover:from-amber-500/20 hover:to-orange-500/10 hover:border-amber-500/45 hover:shadow-[0_0_12px_rgba(245,158,11,0.15)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]'
                   : 'border-white/[0.04] bg-transparent text-slate-600 cursor-not-allowed'
-              }`}
+                }`}
             >
               <span>↩</span>
               <span>
@@ -1144,16 +1104,13 @@ export default function ConfigModal({ open, onClose, onApply }: ConfigModalProps
 
           {/* Section content */}
           <div className={`flex-1 overflow-y-auto custom-scrollbar px-7 py-6 ${isRunning ? 'pointer-events-none opacity-40 select-none' : ''}`}>
-            {activeSection === 'A' && <SectionA simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'B' && <SectionB simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'C' && <SectionC simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'D' && <SectionD simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'E' && <SectionE simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'F' && <SectionF simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'G' && <SectionG simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'H' && <SectionH simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'I' && <SectionI adverseConfig={adverseConfig} updateAdverseConfig={updateAdverseConfig} />}
-            {activeSection === 'J' && <SectionJ />}
+            {activeSection === 'J' && <SectionJ isBaseline={isBaselineView} />}
           </div>
 
           {/* Footer: Apply */}
@@ -1186,11 +1143,10 @@ export default function ConfigModal({ open, onClose, onApply }: ConfigModalProps
               <button
                 onClick={handleApply}
                 disabled={isRunning}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[12px] font-bold transition-all duration-300 border shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] ${
-                  isRunning
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[12px] font-bold transition-all duration-300 border shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] ${isRunning
                     ? 'bg-white/[0.01] border-white/[0.03] text-slate-600 cursor-not-allowed'
                     : 'bg-[#8fb8ce]/[0.09] border-[#8fb8ce]/25 text-[#8fb8ce]/90 hover:bg-[#8fb8ce]/[0.15] hover:border-[#8fb8ce]/45 hover:text-[#8fb8ce] hover:shadow-[0_0_16px_rgba(143,184,206,0.15)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                }`}
+                  }`}
               >
                 <svg viewBox="0 0 14 14" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="2,7 6,11 12,3" />

@@ -11,6 +11,32 @@ export function useSimulation() {
   const { setTraining, resetSession, setActiveSession, setConverged, setTrainingPaused, setTrainingModelKey } = useSessionStore()
   const { simConfig, adverseConfig } = useConfigStore()
 
+  const getMergedConfig = useCallback((cfg: typeof simConfig, modelKey: string) => {
+    if (modelKey !== 'baseline' && cfg.same_as_baseline) {
+      const tabConfigs = useConfigStore.getState().tabConfigs
+      const baselineConfig = tabConfigs.baseline
+      if (baselineConfig) {
+        return {
+          ...baselineConfig,
+          rl_algorithm: cfg.rl_algorithm,
+          total_timesteps: cfg.total_timesteps,
+          learning_rate: cfg.learning_rate,
+          hidden_layer_size: cfg.hidden_layer_size,
+          discount_factor: cfg.discount_factor,
+          reward_wt_queue: cfg.reward_wt_queue,
+          reward_wt_wait: cfg.reward_wt_wait,
+          reward_wt_throughput: cfg.reward_wt_throughput,
+          reward_wt_collision: cfg.reward_wt_collision,
+          reward_wt_pedestrian: cfg.reward_wt_pedestrian,
+          reward_wt_emergency: cfg.reward_wt_emergency,
+          reward_wt_switch: cfg.reward_wt_switch,
+          same_as_baseline: true,
+        }
+      }
+    }
+    return cfg
+  }, [])
+
   const startSimulation = useCallback(
     (sessionIdOverride?: string, durationSeconds?: number) => {
       // Get the active model key so the backend only runs that world
@@ -43,9 +69,10 @@ export function useSimulation() {
       // In single view restrict to the active model so unused worlds don't waste CPU.
       const effectiveModelKey = viewMode === 'split' ? 'all' : modelKey
 
+      const mergedConfig = getMergedConfig(simConfig, modelKey)
       const runtimeSimConfig = {
-        ...simConfig,
-        simulation_duration_s: durationSeconds ?? simConfig.simulation_duration_s ?? 1800,
+        ...mergedConfig,
+        simulation_duration_s: durationSeconds ?? mergedConfig.simulation_duration_s ?? 1800,
         sim_speed_multiplier: START_SPEED,
       }
       emit('sim:start', {
@@ -65,7 +92,7 @@ export function useSimulation() {
         })
       }
     },
-    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed]
+    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed, getMergedConfig]
   )
 
   const startEpisodeSimulation = useCallback(
@@ -96,9 +123,10 @@ export function useSimulation() {
       const START_SPEED = 5
       setSimSpeed(START_SPEED)
 
+      const mergedConfig = getMergedConfig(simConfig, modelKey)
       const runtimeSimConfig = {
-        ...simConfig,
-        simulation_duration_s: simConfig.simulation_duration_s ?? 1800,
+        ...mergedConfig,
+        simulation_duration_s: mergedConfig.simulation_duration_s ?? 1800,
         sim_speed_multiplier: START_SPEED,
       }
 
@@ -110,7 +138,7 @@ export function useSimulation() {
         replay_episode: episodeNumber,
       })
     },
-    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed, setTraining, setTrainingPaused, setTrainingModelKey]
+    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed, setTraining, setTrainingPaused, setTrainingModelKey, getMergedConfig]
   )
 
   const stopSimulation = useCallback(() => {
@@ -158,19 +186,21 @@ export function useSimulation() {
       setTraining(true)
       setTrainingPaused(false)
       setConverged(false)
+
+      const mergedConfig = getMergedConfig(simConfig, trainingModel)
       emit('training:start', {
         session_id: sid,
         total_timesteps: totalTimesteps,
         training_mode: trainingMode,
         sim_config: {
-          ...simConfig,
+          ...mergedConfig,
           simulation_duration_s: 1800,
           sim_speed_multiplier: START_SPEED,
         },
         adverse_config: adverseConfig,
       })
     },
-    [emit, setTraining, setConverged, simConfig, adverseConfig, setSessionId, setActiveSession, resetSession, setSimSpeed, resetSimulation, setTrainingPaused, setTrainingModelKey]
+    [emit, setTraining, setConverged, simConfig, adverseConfig, setSessionId, setActiveSession, resetSession, setSimSpeed, resetSimulation, setTrainingPaused, setTrainingModelKey, getMergedConfig]
   )
 
 

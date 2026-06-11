@@ -176,9 +176,10 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
   ]
 
   // Render dynamic values based on config store when they match, otherwise default
-  const activeLr = modelKey === 'baseline' ? 0 : modelKey === selectedModelSingle ? simConfig.learning_rate : config.lrDefault
-  const activeGamma = modelKey === 'baseline' ? 0 : modelKey === selectedModelSingle ? (simConfig.discount_factor ?? 0.99) : config.gammaDefault
-  const activeLayers = modelKey === 'baseline' ? 'None' : modelKey === selectedModelSingle ? `${simConfig.hidden_layer_size ?? 64}x${simConfig.hidden_layer_size ?? 64} Nodes` : config.layersDefault
+  const isSameAsBaseline = modelKey !== 'baseline' && modelKey === selectedModelSingle && simConfig.rl_algorithm === 'Same as Baseline'
+  const activeLr = (modelKey === 'baseline' || isSameAsBaseline) ? 0 : modelKey === selectedModelSingle ? simConfig.learning_rate : config.lrDefault
+  const activeGamma = (modelKey === 'baseline' || isSameAsBaseline) ? 0 : modelKey === selectedModelSingle ? (simConfig.discount_factor ?? 0.99) : config.gammaDefault
+  const activeLayers = (modelKey === 'baseline' || isSameAsBaseline) ? 'None' : modelKey === selectedModelSingle ? `${simConfig.hidden_layer_size ?? 64}x${simConfig.hidden_layer_size ?? 64} Nodes` : config.layersDefault
 
   return (
     <div className="w-[560px] flex-shrink-0 h-[560px] bg-gradient-to-b from-[#0e131c] to-[#0a0e15] backdrop-blur-md border border-white/[0.07] rounded-2xl p-5 flex flex-col justify-start gap-3.5 shadow-2xl select-none hover:border-white/[0.12] transition-all duration-300 overflow-y-auto custom-scrollbar">
@@ -223,46 +224,6 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
         </p>
       </div>
 
-      {/* ⏱️ SIMULATION DURATION CONFIGURATION */}
-      <div className="border-t border-gray-800/60 pt-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest font-mono flex items-center gap-1">
-            Simulation Duration
-            <HelpPopover text="### Simulation Duration\nSet the run length of the traffic simulation. Longer runs collect more stable metric distributions." position="top" />
-          </h4>
-          {isRunning && (
-            <span className="text-[8.5px] font-mono text-amber-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse" />
-              Locked during run
-            </span>
-          )}
-        </div>
-
-        <div className={`space-y-1 p-3 bg-[#080c12] border border-white/[0.04] rounded-xl transition-all duration-200 ${isRunning ? 'pointer-events-none opacity-45' : ''}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-gray-500 font-mono font-medium uppercase tracking-wider">Select Duration:</span>
-            <span className="text-xs font-mono font-bold text-[#8fb8ce]">
-              {Math.round((simConfig.simulation_duration_s ?? 1800) / 60)} Minutes
-            </span>
-          </div>
-
-          <div className="relative pt-0.5 pb-0.5">
-            <input
-              type="range"
-              min="0"
-              max="120"
-              step="10"
-              value={Math.round((simConfig.simulation_duration_s ?? 1800) / 60)}
-              disabled={isRunning}
-              onChange={(e) => updateSimConfig({ simulation_duration_s: Number(e.target.value) * 60 })}
-              className="w-full h-[4px] rounded-full appearance-none cursor-pointer matte-range border border-white/[0.02]"
-              style={{
-                background: `linear-gradient(to right, #577d9a 0%, #8fb8ce ${(Math.round((simConfig.simulation_duration_s ?? 1800) / 60) / 120) * 100}%, #07090d ${(Math.round((simConfig.simulation_duration_s ?? 1800) / 60) / 120) * 100}%, #07090d 100%)`
-              }}
-            />
-          </div>
-        </div>
-      </div>
 
       {/* ⚙️ TRAINING CONFIGURATION HYPERPARAMETERS */}
       <div className="border-t border-gray-800/60 pt-3 space-y-2">
@@ -311,13 +272,19 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
           <div className="bg-gray-950/70 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-center gap-1 shadow-inner">
             <span className="text-[8px] text-gray-500 font-extrabold tracking-wider uppercase">Algorithm</span>
             <span className="text-gray-200 font-bold truncate text-[11.5px]">
-              {modelKey === 'baseline' ? (selectedController === 'websters' ? "Webster's" : 'Fixed-Time') : config.algo.split(' ')[0]}
+              {modelKey === 'baseline'
+                ? (selectedController === 'websters' ? "Webster's" : 'Fixed-Time')
+                : (simConfig.rl_algorithm === 'Same as Baseline'
+                  ? `Baseline (${selectedController === 'websters' ? "Webster's" : 'Fixed-Time'})`
+                  : config.algo.split(' ')[0])}
             </span>
           </div>
 
           <div className="bg-gray-950/70 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-center gap-1 shadow-inner">
             <span className="text-[8px] text-gray-500 font-extrabold tracking-wider uppercase">Policy Net</span>
-            <span className="text-gray-200 font-bold truncate text-[11.5px]" title={config.policyType}>{config.policyType.split(' ')[0]}</span>
+            <span className="text-gray-200 font-bold truncate text-[11.5px]" title={config.policyType}>
+              {isSameAsBaseline ? 'N/A' : config.policyType.split(' ')[0]}
+            </span>
           </div>
 
           <div className="bg-gray-950/70 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-center gap-1 shadow-inner">
@@ -332,13 +299,15 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
 
           <div className="bg-gray-950/70 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-center gap-1 shadow-inner">
             <span className="text-[8px] text-gray-500 font-extrabold tracking-wider uppercase">Layers MLP</span>
-            <span className="text-gray-200 font-bold truncate text-[11.5px]">{activeLayers.replace(' Nodes', '')}</span>
+            <span className="text-gray-200 font-bold truncate text-[11.5px]">
+              {isSameAsBaseline ? 'None' : activeLayers.replace(' Nodes', '')}
+            </span>
           </div>
 
           <div className="bg-gray-950/70 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-center gap-1 shadow-inner">
             <span className="text-[8px] text-gray-500 font-extrabold tracking-wider uppercase">Optimizer</span>
             <span className="text-gray-200 font-bold truncate text-[11.5px]">
-              {modelKey === 'baseline' ? 'N/A' : `${config.optimizer.split(' ')[0]} (${config.epochs}e)`}
+              {(modelKey === 'baseline' || isSameAsBaseline) ? 'N/A' : `${config.optimizer.split(' ')[0]} (${config.epochs}e)`}
             </span>
           </div>
         </div>
@@ -365,12 +334,12 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
             <HelpPopover text="### Optimisation Weights Split\nDefines the reward formulation weights guiding the learning agent:\n- **Reward Formula**:\n$$R_t = - ( w_q Q_t + w_w W_t + w_c C_t + w_s S_t ) + w_t T_t$$\nWhere weights $w$ balance queue penalties $Q$, delays $W$, collisions $C$, phase switches $S$, and throughput gains $T$." position="top" />
           </h4>
           <span className="text-[9px] font-mono text-cyan-400 font-bold bg-cyan-950/30 border border-cyan-800/30 px-2.5 py-0.5 rounded-lg group-hover:bg-cyan-900/40 transition-all shadow-sm">
-            {modelKey === 'baseline' ? 'None (Static)' : isWeightsOpen ? 'Hide Weights' : 'View Weights'}
+            {(modelKey === 'baseline' || isSameAsBaseline) ? 'None (Static)' : isWeightsOpen ? 'Hide Weights' : 'View Weights'}
           </span>
         </button>
 
         {isWeightsOpen && (
-          modelKey === 'baseline' ? (
+          (modelKey === 'baseline' || isSameAsBaseline) ? (
             <div className="h-24 bg-gray-950/30 border border-gray-950 rounded-2xl flex flex-col items-center justify-center text-center p-3 mt-2 shadow-inner">
               <span className="text-[10px] uppercase tracking-wider text-gray-400">Static Profile</span>
               <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed max-w-[200px] mx-auto">
