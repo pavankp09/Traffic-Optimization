@@ -47,6 +47,7 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   baseline_throughput: 440,
   baseline_green_util: 85,
   baseline_coordination: 83,
+  same_as_baseline: false,
 }
 
 const DEFAULT_ADVERSE_CONFIG: AdverseConfig = {

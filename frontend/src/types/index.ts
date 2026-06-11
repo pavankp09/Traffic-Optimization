@@ -201,6 +201,7 @@ export interface SimConfig {
   baseline_green_util?: number
   baseline_coordination?: number
   baseline_controller?: 'fixed_time' | 'websters'
+  same_as_baseline?: boolean
   [key: string]: unknown
 }
 

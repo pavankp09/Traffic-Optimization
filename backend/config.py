@@ -201,11 +201,7 @@ class AppConfig:
 # Edit here to bypass the UI without touching the frontend.
 # Set to {} to disable all overrides.
 # ---------------------------------------------------------------------------
-BACKEND_OVERRIDES: dict = {
-    "traffic_volume_vph": 10000,       # 5-6x intersection capacity → permanent saturation
-    "traffic_pattern": "uniform",      # equal load on all 4 arms
-    "lanes_per_arm": 3,
-}
+BACKEND_OVERRIDES: dict = {}
 
 # Singleton defaults
 DEFAULT_SIM_CONFIG = SimulationConfig()

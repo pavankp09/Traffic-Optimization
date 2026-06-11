@@ -398,10 +398,13 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 animate-fadeIn">
                   <button
                     className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide"
-                    onClick={() => { startSimulation(undefined, simConfig.simulation_duration_s); setBaselineRightTab('stats'); setRightColumnTab('stats'); }}
+                    onClick={() => setConfigModalOpen(true)}
                   >
-                    <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 flex-shrink-0" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg>
-                    Start Simulation
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    New Simulation
                   </button>
                 </div>
               ) : (
@@ -617,11 +620,11 @@ export default function Dashboard() {
                                   label={activeLabel}
                                   frameOverride={
                                     selectedModelSingle === 'rl1' ? rl1Frame :
-                                    selectedModelSingle === 'rl2' ? rl2Frame :
-                                    selectedModelSingle === 'rl3' ? rl3Frame :
-                                    selectedModelSingle === 'rl4' ? rl4Frame :
-                                    selectedModelSingle === 'custom' ? customFrame :
-                                    null
+                                      selectedModelSingle === 'rl2' ? rl2Frame :
+                                        selectedModelSingle === 'rl3' ? rl3Frame :
+                                          selectedModelSingle === 'rl4' ? rl4Frame :
+                                            selectedModelSingle === 'custom' ? customFrame :
+                                              null
                                   }
                                 />
                               </>
@@ -882,6 +885,7 @@ export default function Dashboard() {
         open={configModalOpen}
         onClose={() => setConfigModalOpen(false)}
         onApply={handleUpdateSim}
+        isBaselineView={selectedModelSingle === 'baseline'}
       />
 
     </div>
