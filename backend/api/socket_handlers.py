@@ -41,6 +41,8 @@ _runtime_snapshots: dict[str, dict] = {}
 # Populated by the baseline:compute event (triggered from Baseline tab).
 # Consumed by _run_real_training to avoid re-running baseline.
 _baseline_cache: dict = {}  # 'latest' -> {mean_wait, throughput, demonstrations, controller}
+_baseline_history: list[dict] = []  # List of all baseline run metrics and demonstrations
+
 
 
 def get_session_state(session_id: str) -> dict:
@@ -157,6 +159,67 @@ _PHASE_GREEN: dict[int, set] = {
 }
 _PHASE_DURATIONS = [28.0, 4.0, 28.0, 4.0, 2.0]
 
+
+def get_arm_angle(arm: str, intersection_type: str) -> float:
+    import math
+    if intersection_type in ("y_junction", "y_junction_free_left"):
+        if arm == "N": return -math.pi / 2
+        if arm == "E": return math.pi / 6      # SE
+        if arm == "W": return 5 * math.pi / 6  # SW
+    elif intersection_type in ("six_arm", "six_arm_free_left"):
+        if arm == "E": return 0
+        if arm == "S": return math.pi / 3      # SE
+        if arm == "W": return math.pi
+        if arm == "N": return 5 * math.pi / 3  # NE
+    # Default 4-way / Roundabout / T-junction
+    if arm == "N": return -math.pi / 2
+    if arm == "S": return math.pi / 2
+    if arm == "E": return 0
+    if arm == "W": return math.pi
+    return 0.0
+
+
+def get_exit_arm(spawn_arm: str, turn_dir: str, intersection_type: str) -> str:
+    if intersection_type in ("y_junction", "y_junction_free_left"):
+        if spawn_arm == "N": return "W" if turn_dir == "left" else "E"
+        if spawn_arm == "E": return "N" if turn_dir == "left" else "W"
+        if spawn_arm == "W": return "E" if turn_dir == "left" else "N"
+    elif intersection_type in ("six_arm", "six_arm_free_left"):
+        if turn_dir == "straight":
+            if spawn_arm == "N": return "S"  # NE -> SW
+            if spawn_arm == "S": return "W"  # SE -> NW
+            if spawn_arm == "E": return "W"  # E -> W
+            if spawn_arm == "W": return "E"  # W -> E
+        elif turn_dir == "left":
+            if spawn_arm == "N": return "E"
+            if spawn_arm == "S": return "E"
+            if spawn_arm == "E": return "N"
+            if spawn_arm == "W": return "N"
+        else: # right
+            if spawn_arm == "N": return "W"
+            if spawn_arm == "S": return "S"
+            if spawn_arm == "E": return "S"
+            if spawn_arm == "W": return "S"
+    elif intersection_type in ("t_junction", "t_junction_free_left"):
+        if spawn_arm == "N": return "W" if turn_dir == "left" else "E"
+        if spawn_arm == "E": return "N" if turn_dir == "left" else "W"
+        if spawn_arm == "W": return "E" if turn_dir == "left" else "N"
+    # 4-way default
+    if spawn_arm == "N": return "E" if turn_dir == "right" else ("W" if turn_dir == "left" else "S")
+    if spawn_arm == "S": return "W" if turn_dir == "right" else ("E" if turn_dir == "left" else "N")
+    if spawn_arm == "E": return "S" if turn_dir == "right" else ("N" if turn_dir == "left" else "W")
+    if spawn_arm == "W": return "N" if turn_dir == "right" else ("S" if turn_dir == "left" else "E")
+    return "N"
+
+
+def intersect_lines(p1: tuple[float, float], d1: tuple[float, float], p2: tuple[float, float], d2: tuple[float, float]) -> tuple[float, float]:
+    denom = d1[0] * (-d2[1]) - d1[1] * (-d2[0])
+    if abs(denom) < 1e-5:
+        return ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+    t1 = ((p2[0] - p1[0]) * (-d2[1]) - (p2[1] - p1[1]) * (-d2[0])) / denom
+    return (p1[0] + t1 * d1[0], p1[1] + t1 * d1[1])
+
+
 _STOP_DIST  = 19.8  # world units from centre to stop line (STOP_PX=99 / scale=5 = 19.8)
 _MOVE_SPEED = 14.0  # world units/s — increased for visible flow at 10k vph / 5× speed
 _SPAWN_DIST = 78.0  # initial spawn distance — longer approach visible on wider canvas
@@ -269,13 +332,14 @@ _LAT_STEER_RATE = 6.0 # wu/s lateral steering speed for gap-seeking (aggressive 
 class _MockVehicle:
     """Synthetic vehicle with per-length stopping, turning, and bezier path support."""
 
-    def __init__(self, vid: str, arm: str | None = None, lane: int = 0):
+    def __init__(self, vid: str, arm: str | None = None, lane: int = 0, intersection_type: str = "four_way"):
         self.id = vid
         self.type_id = random.choice(_VEHICLE_TYPES)
         self.arm = arm or random.choice(["N", "S", "E", "W"])
         self.lane = lane
         self.wait_time = 0.0
         self.through = False
+        self.intersection_type = intersection_type
         self.angle: float | None = None  # overrides frontend ARM_ANGLE when set
         self.stuck_s = 0.0  # accumulated sim-seconds at speed=0 (ghost-creep safety counter)
 
@@ -291,6 +355,14 @@ class _MockVehicle:
         # clear and maintain continuous flow through the canvas.
         r = random.random()
         self.turn_dir: str = "straight" if r < 0.88 else ("right" if r < 0.93 else "left")
+
+        # Roundabout setup:
+        self.roundabout = intersection_type in ("roundabout", "roundabout_free_left")
+        self.roundabout_state = "approach" if self.roundabout else None
+        self.roundabout_phi = 0.0
+        self.roundabout_target_phi = 0.0
+        self.roundabout_exit_d = 0.0
+
         self.turning   = False          # True once bezier path is active
         self.turn_t    = 0.0            # 0 → 1 along bezier
         self.b_p0: tuple | None = None  # bezier control points
@@ -313,7 +385,7 @@ class _MockVehicle:
         self.free_left: bool = False
 
         # Correct side of road for this arm
-        lo, hi = _LANE_RANGE[self.arm]
+        lo, hi = 1.6, 13.8
 
         my_hw = _VEH_WIDTH.get(self.type_id, 1.8) / 2.0
         if self.type_id in _BIKE_TYPES or self.type_id == "auto_rickshaw":
@@ -321,25 +393,23 @@ class _MockVehicle:
             offset = random.uniform(lo + my_hw + 0.1, hi - my_hw - 0.1)
         else:
             freedom = _LAT_FREEDOM.get(self.type_id, 1.0)
-            base = _LANE_OFFSETS[self.arm][lane % _N_LANES]
+            base = 3.7 if (lane % _N_LANES == 0) else (7.9 if (lane % _N_LANES == 1) else 12.1)
             offset = max(lo + my_hw + 0.1, min(hi - my_hw - 0.1, base + random.uniform(-freedom, freedom)))
 
         self.lat_drift  = offset   # keep for reference
         self.lat_target = offset   # gap-seeking target
         spread = random.uniform(2, 18)
 
-        if self.arm == "N":
-            self.x, self.y = offset, -_SPAWN_DIST - spread
-            self.dx, self.dy = 0, 1
-        elif self.arm == "S":
-            self.x, self.y = offset, _SPAWN_DIST + spread
-            self.dx, self.dy = 0, -1
-        elif self.arm == "E":
-            self.x, self.y = _SPAWN_DIST + spread, offset
-            self.dx, self.dy = -1, 0
-        else:  # W
-            self.x, self.y = -_SPAWN_DIST - spread, offset
-            self.dx, self.dy = 1, 0
+        # Generic geometry calculations based on angle
+        theta = get_arm_angle(self.arm, intersection_type)
+        self.dx = -math.cos(theta)
+        self.dy = -math.sin(theta)
+
+        w = abs(offset)
+        d = _SPAWN_DIST + spread
+        self.x = d * math.cos(theta) - w * math.sin(theta)
+        self.y = d * math.sin(theta) + w * math.cos(theta)
+        self.angle = math.atan2(self.dy, self.dx)
 
     # ------------------------------------------------------------------ #
     # Turn bezier setup (called once when vehicle commits to intersection) #
@@ -356,60 +426,45 @@ class _MockVehicle:
             self.free_left = True
 
         # 1. Determine exit arm and direction
-        if a == "N":
-            self.exit_arm = "E" if td == "right" else "W"
-            self.exit_dx = -1 if td == "right" else 1
-            self.exit_dy = 0
-        elif a == "S":
-            self.exit_arm = "W" if td == "right" else "E"
-            self.exit_dx = 1 if td == "right" else -1
-            self.exit_dy = 0
-        elif a == "E":
-            self.exit_arm = "S" if td == "right" else "N"
-            self.exit_dx = 0
-            self.exit_dy = -1 if td == "right" else 1
-        else:  # W
-            self.exit_arm = "N" if td == "right" else "S"
-            self.exit_dx = 0
-            self.exit_dy = 1 if td == "right" else -1
+        self.exit_arm = get_exit_arm(a, td, intersection_type)
+        exit_theta = get_arm_angle(self.exit_arm, intersection_type)
+        self.exit_dx = math.cos(exit_theta)
+        self.exit_dy = math.sin(exit_theta)
 
         # 2. Determine target lane offset on exit arm.
-        # Free-left: use lane 1 (middle lane) on the exit road — it sits between the two
-        # visible dashed lane dividers and looks clearly "on the road" after the turn.
-        # (Lane 2 = outermost fringe; lane 0 = inner too close to median for a slip merge.)
+        offsets = [3.7, 7.9, 12.1]
         if has_free_left and td == "left":
             self.exit_lane = 1
         else:
             self.exit_lane = self.lane % _N_LANES
             
-        exit_lane_center = _LANE_OFFSETS[self.exit_arm][self.exit_lane]
+        exit_lane_center = 7.9 if (has_free_left and td == "left") else offsets[self.exit_lane]
 
         # Calculate deviation relative to starting lane center
-        start_lane_center = _LANE_OFFSETS[a][self.lane % _N_LANES]
+        start_lane_center = offsets[self.lane % _N_LANES]
         deviation = self.lat_drift - start_lane_center
         self.exit_lat_drift = exit_lane_center + deviation
 
-        # CLAMP the exit target inside the exit road. A weaving vehicle (bikes/autos
-        # drift up to 3.5wu) carries its deviation into the turn — without this clamp
-        # exit_lat_drift can exceed the road edge (13.8wu) and the vehicle drives off
-        # the asphalt, since post-turn vehicles are not laterally clamped elsewhere.
-        ex_lo, ex_hi = _LANE_RANGE.get(self.exit_arm, (-13.8, 13.8))
+        ex_lo, ex_hi = 1.6, 13.8
         ex_hw = _VEH_WIDTH.get(self.type_id, 1.8) / 2.0
         self.exit_lat_drift = max(ex_lo + ex_hw, min(ex_hi - ex_hw, self.exit_lat_drift))
 
         # 3. Setup control points based on starting and exit arms
         self.b_p0 = (self.x, self.y)
         
-        if a in ("N", "S"):
-            # Turn N/S -> E/W
-            target_x = self.exit_dx * (22.0 if self.free_left else r)
-            self.b_p2 = (target_x, self.exit_lat_drift)
-            self.b_p1 = (self.x, self.exit_lat_drift)
-        else:
-            # Turn E/W -> N/S
-            target_y = self.exit_dy * (22.0 if self.free_left else r)
-            self.b_p2 = (self.exit_lat_drift, target_y)
-            self.b_p1 = (self.exit_lat_drift, self.y)
+        d_exit = 22.0 if self.free_left else r
+        target_x = d_exit * math.cos(exit_theta) - self.exit_lat_drift * math.sin(exit_theta)
+        target_y = d_exit * math.sin(exit_theta) + self.exit_lat_drift * math.cos(exit_theta)
+        self.b_p2 = (target_x, target_y)
+
+        # Find b_p1 as the intersection of start arm approach line and exit arm exit line
+        spawn_theta = get_arm_angle(a, intersection_type)
+        self.b_p1 = intersect_lines(
+            self.b_p0, 
+            (-math.cos(spawn_theta), -math.sin(spawn_theta)), 
+            self.b_p2, 
+            (math.cos(exit_theta), math.sin(exit_theta))
+        )
 
         self.turning = True
         self.turn_t  = 0.0
@@ -422,10 +477,14 @@ class _MockVehicle:
         if self.turning or self.through:
             return None
 
-        is_ns   = self.arm in ("N", "S")
-        my_long = self.y if is_ns else self.x
-        my_lat  = self.x if is_ns else self.y
-        offsets = _LANE_OFFSETS.get(self.arm, [3.7, 7.9, 12.1])
+        theta = get_arm_angle(self.arm, self.intersection_type)
+        cos_t = math.cos(theta)
+        sin_t = math.sin(theta)
+
+        # Inward direction, longitudinal is distance to center, lateral is positive offset
+        my_long = self.x * cos_t + self.y * sin_t
+        my_lat  = -self.x * sin_t + self.y * cos_t
+        offsets = [3.7, 7.9, 12.1]
         
         LOOK_AHEAD = 35.0
         lane_clearance = [LOOK_AHEAD, LOOK_AHEAD, LOOK_AHEAD]
@@ -441,8 +500,8 @@ class _MockVehicle:
                 for v in world_vehicles:
                     if v is self or v.arm != self.arm or v.through or v.turning:
                         continue
-                    v_long = v.y if is_ns else v.x
-                    v_lat  = v.x if is_ns else v.y
+                    v_long = v.x * cos_t + v.y * sin_t
+                    v_lat  = -v.x * sin_t + v.y * cos_t
                     v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                     v_hl   = _VEH_LEN.get(v.type_id, 4.0) / 2.0
                     
@@ -454,9 +513,9 @@ class _MockVehicle:
                         if long_diff < (my_hl + v_hl + 3.0):
                             is_lane_safe = False
                             break
-                        # If vehicle is ahead, record its clearance limit
-                        if abs(v_long) < abs(my_long):
-                            long_dist = abs(my_long) - abs(v_long)
+                        # If vehicle is ahead (closer to center, so smaller long)
+                        if v_long < my_long:
+                            long_dist = my_long - v_long
                             if long_dist <= LOOK_AHEAD:
                                 lane_clearance[lane_idx] = min(lane_clearance[lane_idx], long_dist)
                 if not is_lane_safe:
@@ -466,13 +525,13 @@ class _MockVehicle:
                 for v in world_vehicles:
                     if v is self or v.arm != self.arm or v.through or v.turning:
                         continue
-                    v_long = v.y if is_ns else v.x
-                    v_lat  = v.x if is_ns else v.y
+                    v_long = v.x * cos_t + v.y * sin_t
+                    v_lat  = -v.x * sin_t + v.y * cos_t
                     v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                     
-                    if abs(v_long) >= abs(my_long):
+                    if v_long >= my_long:
                         continue
-                    long_dist = abs(my_long) - abs(v_long)
+                    long_dist = my_long - v_long
                     if long_dist > LOOK_AHEAD:
                         continue
                     
@@ -499,10 +558,13 @@ class _MockVehicle:
         """
         Find a lateral offset on the current arm that has sufficient gap to any blocker.
         """
-        is_ns   = self.arm in ("N", "S")
-        my_long = self.y if is_ns else self.x
-        my_lat  = self.x if is_ns else self.y
-        lo, hi  = _LANE_RANGE.get(self.arm, (-13.8, 13.8))
+        theta = get_arm_angle(self.arm, self.intersection_type)
+        cos_t = math.cos(theta)
+        sin_t = math.sin(theta)
+        
+        my_long = self.x * cos_t + self.y * sin_t
+        my_lat  = -self.x * sin_t + self.y * cos_t
+        lo, hi  = 1.6, 13.8
         
         # Scan lateral positions in candidate increments to find a clear path
         best_offset = None
@@ -517,15 +579,15 @@ class _MockVehicle:
             for v in world_vehicles:
                 if v is self or v.arm != self.arm or v.through or v.turning:
                     continue
-                v_long = v.y if is_ns else v.x
-                v_lat  = v.x if is_ns else v.y
+                v_long = v.x * cos_t + v.y * sin_t
+                v_lat  = -v.x * sin_t + v.y * cos_t
                 v_hl   = _VEH_LEN.get(v.type_id, 4.0) / 2.0
                 v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                 
                 # Check vehicles that are ahead of us
-                if abs(v_long) >= abs(my_long):
+                if v_long >= my_long:
                     continue
-                long_dist = abs(my_long) - abs(v_long)
+                long_dist = my_long - v_long
                 if long_dist > 35.0:
                     continue
                 
@@ -568,6 +630,72 @@ class _MockVehicle:
         # always clear the intersection box.  Only approach vehicles respect it.
         if ped_blocking or (side_blocked and not self.through):
             self.speed = 0.0
+            return self._check_exit()
+
+        if self.roundabout_state == "circulating":
+            if ped_blocking or (side_blocked and not self.through):
+                self.speed = 0.0
+                return self._check_exit()
+
+            if self.speed < 0.1:
+                self.wait_time += dt
+
+            R = 12.4 - (self.lane % _N_LANES) * 1.4 - 0.8
+            lead_dist = float("inf")
+            half_self = _VEH_LEN.get(self.type_id, 4.0) / 2.0
+            lead_hl = 0.0
+
+            for other in same_lane:
+                if other is self:
+                    continue
+                if other.roundabout and other.roundabout_state == "circulating":
+                    if other.lane % _N_LANES == self.lane % _N_LANES:
+                        angle_diff = (other.roundabout_phi - self.roundabout_phi) % (2 * math.pi)
+                        if 0 < angle_diff < math.pi * 2 / 3:
+                            gap = R * angle_diff - half_self - _VEH_LEN.get(other.type_id, 4.0) / 2.0
+                            if gap < lead_dist:
+                                lead_dist = gap
+                                lead_hl = _VEH_LEN.get(other.type_id, 4.0) / 2.0
+
+            SAFE_GAP = 2.0
+            BRAKE_GAP = 8.0
+            if lead_dist < 18.0:
+                bumper_gap = lead_dist
+                if bumper_gap <= SAFE_GAP:
+                    self.speed = 0.0
+                elif bumper_gap < BRAKE_GAP:
+                    ratio = (bumper_gap - SAFE_GAP) / (BRAKE_GAP - SAFE_GAP)
+                    self.speed = _MOVE_SPEED * ratio
+                else:
+                    self.speed = _MOVE_SPEED
+            else:
+                self.speed = _MOVE_SPEED
+
+            # Move vehicle along circle
+            d_phi = (self.speed * dt) / R
+            self.roundabout_phi += d_phi
+
+            self.x = R * math.cos(self.roundabout_phi)
+            self.y = R * math.sin(self.roundabout_phi)
+            self.dx = -math.sin(self.roundabout_phi)
+            self.dy = math.cos(self.roundabout_phi)
+            self.angle = self.roundabout_phi + math.pi / 2.0
+
+            # Check exit transition
+            if self.roundabout_phi >= self.roundabout_target_phi - 0.1:
+                self.roundabout_state = "exit"
+                self.arm = self.exit_arm
+                exit_theta = get_arm_angle(self.exit_arm, intersection_type)
+                self.dx = math.cos(exit_theta)
+                self.dy = math.sin(exit_theta)
+                self.angle = math.atan2(self.dy, self.dx)
+
+                offsets = [3.7, 7.9, 12.1]
+                w = offsets[self.lane % _N_LANES]
+                self.lat_drift = w
+                self.x = R * math.cos(exit_theta) - w * math.sin(exit_theta)
+                self.y = R * math.sin(exit_theta) + w * math.cos(exit_theta)
+
             return self._check_exit()
 
         # Accumulate wait time if the vehicle was stopped in the previous step
@@ -693,37 +821,66 @@ class _MockVehicle:
                 self.lane    = self.exit_lane
                 self.lat_drift = self.exit_lat_drift
                 self.dx, self.dy = self.exit_dx, self.exit_dy
-                self.angle   = None
+                self.angle   = math.atan2(self.dy, self.dx)
                 self.turning = False
                 self.through = True
             return self._check_exit()
 
         # ── Commit flag (set once, before stop-zone calc) ─────────────
         if not self.through:
-            dist_from_centre = abs(self.y) if self.arm in ("N", "S") else abs(self.x)
+            dist_from_centre = math.hypot(self.x, self.y)
             has_free_left = intersection_type in ("four_way_free_left", "t_junction_free_left", "roundabout_free_left")
             commit_d = 22.0 if (has_free_left and self.turn_dir == "left") else self.through_dist
             if dist_from_centre < commit_d:
                 self.through = True
-                if self.turn_dir != "straight":
+                if self.roundabout:
+                    self.roundabout_state = "circulating"
+                    entry_phi = get_arm_angle(self.arm, intersection_type)
+                    self.roundabout_phi = entry_phi
+                    self.exit_arm = get_exit_arm(self.arm, self.turn_dir, intersection_type)
+                    exit_phi = get_arm_angle(self.exit_arm, intersection_type)
+                    delta_phi = (exit_phi - entry_phi) % (2 * math.pi)
+                    if delta_phi == 0.0:
+                        delta_phi = 2 * math.pi
+                    self.roundabout_target_phi = entry_phi + delta_phi
+                    # Initialize circle coordinate position
+                    R = 12.4 - (self.lane % _N_LANES) * 1.4 - 0.8
+                    self.x = R * math.cos(entry_phi)
+                    self.y = R * math.sin(entry_phi)
+                    self.dx = -math.sin(entry_phi)
+                    self.dy = math.cos(entry_phi)
+                    self.angle = entry_phi + math.pi / 2.0
+                    return self._check_exit()
+                elif self.turn_dir != "straight":
                     self._setup_turn(intersection_type)
                     return self._check_exit()
 
         # ── Stop-zone / signal check ───────────────────────────────────
-        at_stop = (
-            (self.arm == "N" and self.y >= -self.stop_zone) or
-            (self.arm == "S" and self.y <=  self.stop_zone) or
-            (self.arm == "E" and self.x <=  self.stop_zone) or
-            (self.arm == "W" and self.x >= -self.stop_zone)
-        ) and not self.through
+        dist_to_center = math.hypot(self.x, self.y)
+        at_stop = (dist_to_center <= self.stop_zone) and not self.through
 
-        # Scenario 1 — red signal
-        if at_stop and self.arm not in green_arms:
-            if self.lane == 2 and self.turn_dir == "left" and intersection_type in ("four_way_free_left", "t_junction_free_left", "roundabout_free_left"):
-                pass
-            else:
-                self.speed = 0.0
-                return False
+        # Scenario 1 — red signal / roundabout yield
+        if at_stop:
+            if self.roundabout:
+                entry_phi = get_arm_angle(self.arm, intersection_type)
+                yield_active = False
+                for other in same_lane:
+                    if other is self:
+                        continue
+                    if other.roundabout and other.roundabout_state == "circulating":
+                        angle_diff = (entry_phi - other.roundabout_phi) % (2 * math.pi)
+                        if 0 < angle_diff < math.pi / 3.0:
+                            yield_active = True
+                            break
+                if yield_active:
+                    self.speed = 0.0
+                    return False
+            elif self.arm not in green_arms:
+                if self.lane == 2 and self.turn_dir == "left" and intersection_type in ("four_way_free_left", "t_junction_free_left", "roundabout_free_left"):
+                    pass
+                else:
+                    self.speed = 0.0
+                    return False
 
         # Scenario 3 — entry gate (deadlock-free intersection model).
         # Only one axis may occupy the box at a time. A green vehicle holds at
@@ -833,24 +990,21 @@ class _MockVehicle:
         return self._check_exit()
 
     def _dist_ahead(self, other: "_MockVehicle") -> float:
-        if self.arm == "N":  return other.y - self.y
-        if self.arm == "S":  return self.y - other.y
-        if self.arm == "E":  return self.x - other.x
-        return other.x - self.x  # W
+        return (other.x - self.x) * self.dx + (other.y - self.y) * self.dy
 
     def _check_exit(self) -> bool:
         e = _SPAWN_DIST + 12
-        return (abs(self.x) > e or abs(self.y) > e)
+        return math.hypot(self.x, self.y) > e
 
     def to_dict(self) -> dict:
         curr_x, curr_y = self.x, self.y
         if not self.turning and not self.through:
             import math
-            # Add a small weave on top of the actual physical coordinate
-            if self.arm in ("N", "S"):
-                curr_x = self.x + 0.15 * math.sin(self.weave_phase + self.y * 0.2)
-            else:
-                curr_y = self.y + 0.15 * math.sin(self.weave_phase + self.x * 0.2)
+            lx, ly = -self.dy, self.dx
+            long_pos = self.x * self.dx + self.y * self.dy
+            weave = 0.15 * math.sin(self.weave_phase + long_pos * 0.2)
+            curr_x = self.x + lx * weave
+            curr_y = self.y + ly * weave
 
         d = {
             "id":        self.id,
@@ -979,10 +1133,10 @@ _DEMAND_ARMS = ["N", "S", "E", "W"]
 _DEMAND_WEIGHTS = [0.32, 0.32, 0.18, 0.18]
 
 
-def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = None, intersection_type: str = "four_way") -> dict:
+def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = None, intersection_type: str = "four_way", type_weights: dict | None = None) -> dict:
     # 1. Determine active arms and weights based on intersection type
-    if intersection_type in ("t_junction", "t_junction_free_left"):
-        # T-junction: North, East, West. No South!
+    if intersection_type in ("t_junction", "t_junction_free_left", "y_junction", "y_junction_free_left"):
+        # T-junction and Y-junction: North, East, West. No South!
         arms = ["N", "E", "W"]
         weights = [0.4, 0.3, 0.3]
     else:
@@ -1045,24 +1199,34 @@ def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = Non
                 turn = "straight" if r < 0.8 else "right"
             else: # W
                 turn = "straight" if r < 0.8 else "left"
+        elif intersection_type in ("y_junction", "y_junction_free_left"):
+            turn = "left" if r < 0.5 else "right"
         elif intersection_type in ("roundabout", "roundabout_free_left"):
             turn = "straight" if r < 0.75 else ("right" if r < 0.88 else "left")
         else: # 4-way
             turn = "straight" if r < 0.75 else ("right" if r < 0.85 else "left")
 
+    if type_weights and sum(type_weights.values()) > 0.0:
+        types_list = list(type_weights.keys())
+        weights_list = list(type_weights.values())
+        type_id = random.choices(types_list, weights=weights_list, k=1)[0]
+    else:
+        type_id = random.choice(_VEHICLE_TYPES)
+
     return {
         "vid": f"v{vid_counter}",
         "arm": arm,
         "lane": lane,
-        "type_id": random.choice(_VEHICLE_TYPES),
+        "type_id": type_id,
         "turn": turn,
+        "intersection_type": intersection_type,
     }
 
 
 def _vehicle_from_spec(spec: dict) -> _MockVehicle:
     """Build a vehicle whose identity matches a shared spec, so both worlds get
     the same vehicle for the same arrival."""
-    v = _MockVehicle(spec["vid"], spec["arm"], spec["lane"])
+    v = _MockVehicle(spec["vid"], spec["arm"], spec["lane"], spec.get("intersection_type", "four_way"))
     v.type_id = spec["type_id"]
     half = _VEH_LEN.get(v.type_id, 4.0) / 2.0
     v.stop_zone = _STOP_DIST + half + 1.0
@@ -1075,20 +1239,24 @@ def _is_spawn_clear(world, v: _MockVehicle) -> bool:
     """Return True if the spawn zone for vehicle v is clear of any other vehicles."""
     v_hl = _VEH_LEN.get(v.type_id, 4.0) / 2.0
     v_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
+    theta = get_arm_angle(v.arm, v.intersection_type)
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+    
+    v_long = v.x * cos_t + v.y * sin_t
+    v_lat  = -v.x * sin_t + v.y * cos_t
+    
     for other in world.vehicles:
         if other.arm != v.arm or other.through or other.turning:
             continue
-        # Check if they are on the same approach arm and could overlap
         o_hl = _VEH_LEN.get(other.type_id, 4.0) / 2.0
         o_hw = _VEH_WIDTH.get(other.type_id, 1.8) / 2.0
         
-        # Check lateral overlap
-        if v.arm in ("N", "S"):
-            lat_overlap = abs(v.x - other.x) < (v_hw + o_hw + 0.4)
-            long_dist = abs(v.y - other.y)
-        else:
-            lat_overlap = abs(v.y - other.y) < (v_hw + o_hw + 0.4)
-            long_dist = abs(v.x - other.x)
+        o_long = other.x * cos_t + other.y * sin_t
+        o_lat  = -other.x * sin_t + other.y * cos_t
+        
+        lat_overlap = abs(v_lat - o_lat) < (v_hw + o_hw + 0.4)
+        long_dist = abs(v_long - o_long)
             
         if lat_overlap and long_dist < (v_hl + o_hl + 3.0):
             return False
@@ -1141,7 +1309,7 @@ class _SimWorld:
         n = 0
         for v in self.vehicles:
             if v.arm == arm and not v.through:
-                d = abs(v.y) if arm in ("N", "S") else abs(v.x)
+                d = math.hypot(v.x, v.y)
                 if d < 30.0:
                     n += 1
         return n
@@ -1288,19 +1456,23 @@ class _SimWorld:
         # Build fast-lookup: arm → list of (long_pos, lat_pos, half_len, half_width, vehicle)
         arm_veh: dict[str, list] = {}
         for v in self.vehicles:
-            is_ns = v.arm in ("N", "S")
-            v_long = v.y if is_ns else v.x
-            v_lat  = v.x if is_ns else v.y
+            theta = get_arm_angle(v.arm, self.intersection_type)
+            cos_t = math.cos(theta)
+            sin_t = math.sin(theta)
+            v_long = v.x * cos_t + v.y * sin_t
+            v_lat  = -v.x * sin_t + v.y * cos_t
             v_hl   = _VEH_LEN.get(v.type_id, 4.0) / 2.0
             v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
             arm_veh.setdefault(v.arm, []).append((v_long, v_lat, v_hl, v_hw, v))
 
         to_remove: list = []
         for v in self.vehicles:
-            is_ns  = v.arm in ("N", "S")
-            lo, hi = _LANE_RANGE.get(v.arm, (-13.8, 13.8))
-            v_long = v.y if is_ns else v.x
-            v_lat  = v.x if is_ns else v.y
+            theta = get_arm_angle(v.arm, self.intersection_type)
+            cos_t = math.cos(theta)
+            sin_t = math.sin(theta)
+            lo, hi = 1.6, 13.8
+            v_long = v.x * cos_t + v.y * sin_t
+            v_lat  = -v.x * sin_t + v.y * cos_t
             v_hl   = _VEH_LEN.get(v.type_id, 4.0) / 2.0
             v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
 
@@ -1309,11 +1481,11 @@ class _SimWorld:
                 for (parm, px, py, prad) in ped_stop_zones:
                     if parm != v.arm:
                         continue
-                    p_long = py if is_ns else px
-                    p_lat  = px if is_ns else py
+                    p_long = px * cos_t + py * sin_t
+                    p_lat  = -px * sin_t + py * cos_t
                     # Only stop if pedestrian is AHEAD longitudinally (closer to centre)
-                    ahead = abs(p_long) < abs(v_long)
-                    if ahead and abs(p_long - v_long) < prad and abs(p_lat - v_lat) < (v_hw + 1.8):
+                    ahead = p_long < v_long
+                    if ahead and (v_long - p_long) < prad and abs(p_lat - v_lat) < (v_hw + 1.8):
                         v.speed = 0.0
                         ped_blocking = True
                         break
@@ -1326,7 +1498,7 @@ class _SimWorld:
                     if other is v:
                         continue
                     # Is other vehicle ahead of us (closer to intersection)?
-                    long_dist  = abs(v_long) - abs(o_long)   # positive = other is closer
+                    long_dist  = v_long - o_long   # positive = other is closer
                     lat_gap    = abs(o_lat - v_lat) - (v_hw + o_hw)  # negative = overlap
                     if long_dist > 0 and long_dist < 15.0 and lat_gap < 0.5:
                         # Other is ahead and overlapping laterally — following distance check
@@ -1351,10 +1523,9 @@ class _SimWorld:
                                         steer = 0.0
                                         break
                         if steer != 0.0:
-                            if is_ns:
-                                v.x = max(lo + my_hw, min(hi - my_hw, v.x + steer))
-                            else:
-                                v.y = max(lo + my_hw, min(hi - my_hw, v.y + steer))
+                            v.x += steer * (-sin_t)
+                            v.y += steer * cos_t
+                            v_lat += steer
 
             # ── 3. Forward-space lane change (Indian overtaking) ─────────────
             # All vehicles scan ahead in multiple lateral zones and move to
@@ -1376,10 +1547,10 @@ class _SimWorld:
                                 break
 
                 if side_blocked:
-                    target = v.x if is_ns else v.y
+                    target = v_lat
                     steer_rate = 0.0
                 elif v.speed < 0.1:
-                    target = v.x if is_ns else v.y
+                    target = v_lat
                     steer_rate = 0.0
                 else:
                     lane_target = v._find_best_lane(self.vehicles)
@@ -1388,24 +1559,22 @@ class _SimWorld:
                         # Guard: in free-left layouts, lane 2 is dedicated to left-turners.
                         # Prevent straight/right vehicles from drifting into it.
                         if self.intersection_type in ("four_way_free_left", "t_junction_free_left", "roundabout_free_left"):
-                            arm_lane2 = _LANE_OFFSETS.get(v.arm, [3.7, 7.9, 12.1])[2]
+                            arm_lane2 = 12.1
                             if v.turn_dir != "left" and abs(lane_target - arm_lane2) < 2.0:
                                 lane_target = None
 
+                    offsets = [3.7, 7.9, 12.1]
                     if lane_target is not None:
                         # Clear lane found — steer into it faster (decisive lane change)
                         target     = lane_target
                         steer_rate = _LAT_STEER_RATE * 2.0
-                        try:
-                            offsets = _LANE_OFFSETS[v.arm]
+                        if lane_target in offsets:
                             new_lane_idx = offsets.index(lane_target)
                             if new_lane_idx != v.lane:
                                 old_center = offsets[v.lane % _N_LANES]
                                 deviation = v.lat_drift - old_center
                                 v.lane = new_lane_idx
                                 v.lat_drift = lane_target + deviation
-                        except ValueError:
-                            pass
                     else:
                         # No better lane: gentle drift / sinusoidal wander in place
                         if v.type_id in _BIKE_TYPES or v.type_id == "auto_rickshaw":
@@ -1415,20 +1584,19 @@ class _SimWorld:
                             target = mid + amp * math.sin(v.weave_phase)
                         else:
                             v.weave_phase += dt * 0.2
-                            base    = _LANE_OFFSETS[v.arm][v.lane % _N_LANES]
+                            base    = offsets[v.lane % _N_LANES]
                             freedom = _LAT_FREEDOM.get(v.type_id, 1.0) * 0.35
                             target  = base + freedom * math.sin(v.weave_phase)
                         steer_rate = _LAT_STEER_RATE
 
                 my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                 target  = max(lo + my_hw + 0.1, min(hi - my_hw - 0.1, target))
-                current = v.x if is_ns else v.y
-                delta   = target - current
+                delta   = target - v_lat
                 move    = min(abs(delta), steer_rate * dt) * (1 if delta > 0 else -1) if steer_rate > 0.0 else 0.0
                 
                 # Lateral collision prevention check
                 if move != 0.0:
-                    new_lat = current + move
+                    new_lat = v_lat + move
                     for (o_long, o_lat, o_hl, o_hw, other) in arm_veh.get(v.arm, []):
                         if other is v:
                             continue
@@ -1437,23 +1605,23 @@ class _SimWorld:
                                 move = 0.0
                                 break
 
-                if is_ns:
-                    v.x = max(lo + my_hw, min(hi - my_hw, v.x + move))
-                else:
-                    v.y = max(lo + my_hw, min(hi - my_hw, v.y + move))
+                if move != 0.0:
+                    v.x += move * (-sin_t)
+                    v.y += move * cos_t
+                    v_lat += move
                 v.lat_target = target
 
             # ── 4. Queue-creep: bikes thread forward through stopped queue ───
             if v.type_id in _BIKE_TYPES and not v.through and not v.turning:
-                dist_to_stop = abs(v_long) - _STOP_DIST
+                dist_to_stop = v_long - _STOP_DIST
                 if 0 < dist_to_stop < 30.0 and v.speed < 0.1:
                     gap_ahead = True
                     for (o_long, o_lat, o_hl, o_hw, other) in arm_veh.get(v.arm, []):
                         if other is v:
                             continue
                         lat_ov = abs(o_lat - v_lat) - (v_hw + o_hw)
-                        if lat_ov < 0.5 and abs(o_long) < abs(v_long):
-                            gap = (abs(v_long) - abs(o_long)) - v_hl - o_hl
+                        if lat_ov < 0.5 and o_long < v_long:
+                            gap = (v_long - o_long) - v_hl - o_hl
                             if gap < 1.0:
                                 gap_ahead = False
                                 break
@@ -1463,15 +1631,15 @@ class _SimWorld:
 
             # ── 5. Red-light runner ──────────────────────────────────────────
             if v.red_runner and not v.through and not v.turning:
-                dist = abs(v_long)
+                dist = v_long
                 if dist <= v.stop_zone and v.speed < 0.5:
                     blocked = False
                     for (o_long, o_lat, o_hl, o_hw, other) in arm_veh.get(v.arm, []):
                         if other is v:
                             continue
                         lat_ov = abs(o_lat - v_lat) - (v_hw + o_hw)
-                        if lat_ov < 0.5 and abs(o_long) < abs(v_long):
-                            gap = (abs(v_long) - abs(o_long)) - v_hl - o_hl
+                        if lat_ov < 0.5 and o_long < v_long:
+                            gap = (v_long - o_long) - v_hl - o_hl
                             if gap < 1.5:
                                 blocked = True
                                 break
@@ -1493,10 +1661,10 @@ class _SimWorld:
                     if escape is not None:
                         my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                         escape = max(lo + my_hw + 0.1, min(hi - my_hw - 0.1, escape))
-                        delta  = escape - (v.x if is_ns else v.y)
+                        delta  = escape - v_lat
                         steer  = min(abs(delta), _LAT_STEER_RATE * dt * 3) * (1 if delta > 0 else -1)
                         if steer != 0.0:
-                            new_lat = (v.x if is_ns else v.y) + steer
+                            new_lat = v_lat + steer
                             for (o_long, o_lat, o_hl, o_hw, other) in arm_veh.get(v.arm, []):
                                 if other is v:
                                     continue
@@ -1504,35 +1672,38 @@ class _SimWorld:
                                     if abs(new_lat - o_lat) < (my_hw + o_hw + 0.15):
                                         steer = 0.0
                                         break
-                        if is_ns:
-                            v.x = max(lo + my_hw, min(hi - my_hw, v.x + steer))
-                        else:
-                            v.y = max(lo + my_hw, min(hi - my_hw, v.y + steer))
+                        if steer != 0.0:
+                            v.x += steer * (-sin_t)
+                            v.y += steer * cos_t
+                            v_lat += steer
 
             exited = v.update(dt, green, self.vehicles, in_box, self.intersection_type, ped_blocking=ped_blocking, side_blocked=side_blocked)
 
             # ── HARD BOUNDARY CLAMP (runs after update, catches any drift) ─
-            # Approach vehicles: clamp to their arm's lane range.
+            my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
             if not v.turning and not v.through:
-                lo_h, hi_h = _LANE_RANGE.get(v.arm, (-13.8, 13.8))
-                my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
-                if v.arm in ("N", "S"):
-                    v.x = max(lo_h + my_hw, min(hi_h - my_hw, v.x))
-                else:
-                    v.y = max(lo_h + my_hw, min(hi_h - my_hw, v.y))
-            # Post-turn / through vehicles: once they have cleared the intersection
-            # box (|longitudinal| > box half-width 14.4wu) they're back on a straight
-            # road — clamp their lateral axis so they can't drift onto the footpath.
-            # Skipped while still inside the box so the turn curve can sweep freely.
+                # Approach vehicles: clamp to their arm's lane range
+                lo_h, hi_h = 1.6, 13.8
+                clamped_lat = max(lo_h + my_hw, min(hi_h - my_hw, v_lat))
+                move = clamped_lat - v_lat
+                if move != 0.0:
+                    v.x += move * (-sin_t)
+                    v.y += move * cos_t
             elif v.through and not v.turning:
-                lo_h, hi_h = _LANE_RANGE.get(v.arm, (-13.8, 13.8))
-                my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
-                if v.arm in ("N", "S"):
-                    if abs(v.y) > 14.4:
-                        v.x = max(lo_h + my_hw, min(hi_h - my_hw, v.x))
-                else:
-                    if abs(v.x) > 14.4:
-                        v.y = max(lo_h + my_hw, min(hi_h - my_hw, v.y))
+                # Post-turn / through vehicles: once they have cleared the intersection
+                # box (distance to center > 14.4wu) they're back on a straight road.
+                dist_to_center = math.hypot(v.x, v.y)
+                if dist_to_center > 14.4:
+                    exit_theta = get_arm_angle(v.arm, self.intersection_type)
+                    cos_ex = math.cos(exit_theta)
+                    sin_ex = math.sin(exit_theta)
+                    v_lat_ex = -v.x * sin_ex + v.y * cos_ex
+                    lo_h, hi_h = 1.6, 13.8
+                    clamped_lat = max(lo_h + my_hw, min(hi_h - my_hw, v_lat_ex))
+                    move = clamped_lat - v_lat_ex
+                    if move != 0.0:
+                        v.x += move * (-sin_ex)
+                        v.y += move * cos_ex
 
             # ══════════════════════════════════════════════════════════════
             # SAFETY NET — Tiered Stuck Resolution
@@ -1929,6 +2100,30 @@ def _run_mock_sim(sio, session_id: str) -> None:
         except Exception:
             return default
 
+    mix_keys = {
+        "pct_car": "car",
+        "pct_two_wheeler": "two_wheeler",
+        "pct_ev_scooter": "ev_scooter",
+        "pct_auto_rickshaw": "auto_rickshaw",
+        "pct_e_rickshaw": "e_rickshaw",
+        "pct_cab": "cab",
+        "pct_delivery_bike": "delivery_bike",
+        "pct_tsrtc_bus": "tsrtc_bus",
+        "pct_school_bus": "school_bus",
+        "pct_truck": "truck",
+    }
+    type_weights = {}
+    if session is not None:
+        sim_config_db = session.get("sim_config") or {}
+    else:
+        sim_config_db = {}
+    for k, type_id in mix_keys.items():
+        val = state_cfg.get(k) or sim_config_db.get(k)
+        if val is not None:
+            type_weights[type_id] = _safe_float(val, 0.0)
+    if sum(type_weights.values()) <= 0.0:
+        type_weights = None
+
     min_green = 8.0
     max_green = 35.0
     intersection_type = "four_way"
@@ -2036,14 +2231,27 @@ def _run_mock_sim(sio, session_id: str) -> None:
     # Assign the policy to whichever RL world matches the active model_key.
     def _rl_world(mk, **kw):
         """Create an RL _SimWorld, attaching the trained policy when available."""
-        return _SimWorld(
-            fixed_time=False,
-            policy_fn=_policy_fn if mk == model_key and _policy_fn else None,
-            intersection_type=intersection_type,
-            replay_decisions=replay_decisions if mk == model_key else None,
-            replay_episode_num=replay_episode if mk == model_key else None,
-            **kw,
-        )
+        algo = state_cfg.get("rl_algorithm", "PPO")
+        if mk == model_key and algo == "Same as Baseline":
+            actual_kw = {**kw, "min_green": min_green, "max_green": max_green}
+            return _SimWorld(
+                fixed_time=(_baseline_ctrl != "websters"),
+                websters=(_baseline_ctrl == "websters"),
+                policy_fn=None,
+                intersection_type=intersection_type,
+                replay_decisions=replay_decisions if mk == model_key else None,
+                replay_episode_num=replay_episode if mk == model_key else None,
+                **actual_kw,
+            )
+        else:
+            return _SimWorld(
+                fixed_time=False,
+                policy_fn=_policy_fn if mk == model_key and _policy_fn else None,
+                intersection_type=intersection_type,
+                replay_decisions=replay_decisions if mk == model_key else None,
+                replay_episode_num=replay_episode if mk == model_key else None,
+                **kw,
+            )
 
     # Baseline world uses the controller selected by the user.
     _baseline_ctrl = (session.get("sim_config") or {}).get("baseline_controller", "fixed_time") if session else "fixed_time"
@@ -2108,20 +2316,26 @@ def _run_mock_sim(sio, session_id: str) -> None:
     _PER_WORLD_CAP = _SOFT_CAP
 
     # Pre-populate all worlds — 1 vehicle per arm per lane across all 3 lanes.
-    active_arms = ["N", "E", "W"] if intersection_type in ("t_junction", "t_junction_free_left") else ["N", "S", "E", "W"]
+    # Pre-populate all worlds — 1 vehicle per arm per lane across all 3 lanes.
+    active_arms = ["N", "E", "W"] if intersection_type in ("t_junction", "t_junction_free_left", "y_junction", "y_junction_free_left") else ["N", "S", "E", "W"]
     for arm in active_arms:
         for lane in range(_N_LANES):
-            offset = _LANE_OFFSETS[arm][lane % _N_LANES]
+            lane_offsets = _LANE_OFFSETS.get(arm, [3.7, 7.9, 12.1])
+            offset = lane_offsets[lane % _N_LANES]
             dist   = _SPAWN_DIST
             for _ in range(1):
                 vid_counter += 1
-                spec = _spawn_spec(vid_counter, arm, lane, intersection_type)
+                spec = _spawn_spec(vid_counter, arm, lane, intersection_type, type_weights=type_weights)
                 half = _VEH_LEN.get(spec["type_id"], 4.0) / 2.0
                 dist += half
-                if arm == "N":   pos = (offset, -dist)
-                elif arm == "S": pos = (offset,  dist)
-                elif arm == "E": pos = ( dist, offset)
-                else:            pos = (-dist, offset)
+                
+                # Dynamic coordinate project based on arm angle
+                theta = get_arm_angle(arm, intersection_type)
+                w = abs(offset)
+                pos_x = dist * math.cos(theta) - w * math.sin(theta)
+                pos_y = dist * math.sin(theta) + w * math.cos(theta)
+                pos = (pos_x, pos_y)
+                
                 dist += half + 4.0
                 for world in _WORLDS.values():
                     v = _vehicle_from_spec(spec)
@@ -2155,7 +2369,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
             while spawn_timer >= _spawn_interval_s:
                 spawn_timer -= _spawn_interval_s
                 vid_counter += 1
-                spec = _spawn_spec(vid_counter, intersection_type=intersection_type)
+                spec = _spawn_spec(vid_counter, intersection_type=intersection_type, type_weights=type_weights)
                 for k in _WORLDS:
                     _track[k]["pending"].append(spec)
 
@@ -2401,6 +2615,31 @@ def _run_curriculum_training(
     sim_config.training_stage = 2
 
     base_s2 = run_websters_baseline(sim_config, n_decisions=200, seed=7)
+    if not any(h is base_s2 for h in _baseline_history):
+        _baseline_history.append(base_s2)
+        logger.info("Saved curriculum Stage 2 baseline execution to history. Total saved runs: %d", len(_baseline_history))
+
+    # Collect all demonstrations from baseline history
+    combined_demos = []
+    for hist_base in _baseline_history:
+        combined_demos.extend(hist_base.get("demonstrations", []))
+
+    # De-duplicate demonstrations by observation
+    seen_obs = set()
+    unique_demos = []
+    for obs, action in combined_demos:
+        obs_key = tuple(np.round(obs, 4))
+        if obs_key not in seen_obs:
+            seen_obs.add(obs_key)
+            unique_demos.append((obs, action))
+
+    logger.info(
+        "Curriculum Stage 2 pre-training history: loaded %d baseline runs, %d total demonstrations, %d unique demonstrations for behavioral cloning",
+        len(_baseline_history),
+        len(combined_demos),
+        len(unique_demos)
+    )
+
     trainer_s2 = PPOTrainer(
         sim_config=sim_config,
         adverse_config=adverse_config,
@@ -2414,7 +2653,7 @@ def _run_curriculum_training(
             DecisionCaptureCallback(session_id=session_id, emit_fn=emit_fn),
         ],
         baseline_wait=base_s2.get("mean_wait", 0.0),
-        baseline_demonstrations=base_s2.get("demonstrations", []),
+        baseline_demonstrations=unique_demos,
     )
     result_s2 = trainer_s2.train()
     logger.info("Curriculum Stage 2 complete. model=%s", result_s2.get("model_path"))
@@ -2581,6 +2820,25 @@ def _run_real_training(sio, session_id: str) -> None:
             sim_config = SimulationConfig()
             adverse_config = AdverseConfig()
 
+        if getattr(sim_config, "rl_algorithm", "PPO") == "Same as Baseline":
+            logger.info("Training with 'Same as Baseline' is a no-op.")
+            sio.emit("training:insight", {
+                "session_id": session_id,
+                "icon": "ℹ",
+                "message": "Algorithm is set to 'Same as Baseline'. No neural network training required.",
+                "episode": 1,
+            })
+            sio.emit("training:converged", {"session_id": session_id, "episode": 1})
+            sio.emit("training:stopped", {"session_id": session_id})
+            set_session_state(session_id, training=False)
+            _training_greenlets.pop(session_id, None)
+            try:
+                from backend.analytics.session_store import SessionStore
+                SessionStore().update_session_status(session_id, "done")
+            except Exception:
+                pass
+            return
+
         # Use pre-computed baseline from the Baseline tab if available.
         # If user ran Baseline tab first, _baseline_cache['latest'] holds the
         # result (with demonstrations for BC).  Otherwise fall back to running
@@ -2597,6 +2855,9 @@ def _run_real_training(sio, session_id: str) -> None:
                     base.get("controller"), base["mean_wait"], base["throughput"],
                     len(base.get("demonstrations", [])),
                 )
+                if not any(h is base for h in _baseline_history):
+                    _baseline_history.append(base)
+                    logger.info("Saved cached baseline execution to history. Total saved runs: %d", len(_baseline_history))
             else:
                 # No cached baseline — compute fresh (fallback)
                 logger.info("No cached baseline found, computing fresh (%s)…", controller_type)
@@ -2605,6 +2866,11 @@ def _run_real_training(sio, session_id: str) -> None:
                 else:
                     base = run_fixed_time_baseline(sim_config)
                 base["controller"] = controller_type
+
+            # Ensure this baseline run is in history
+            if not any(h is base for h in _baseline_history):
+                _baseline_history.append(base)
+                logger.info("Saved fresh fallback baseline execution to history. Total saved runs: %d", len(_baseline_history))
 
             sio.emit("training:baseline", {
                 "session_id": session_id,
@@ -2653,6 +2919,27 @@ def _run_real_training(sio, session_id: str) -> None:
             sim_config.training_stage = 1
             env_factory = make_mock_env
 
+        # Collect all demonstrations from baseline history
+        combined_demos = []
+        for hist_base in _baseline_history:
+            combined_demos.extend(hist_base.get("demonstrations", []))
+
+        # De-duplicate demonstrations by observation
+        seen_obs = set()
+        unique_demos = []
+        for obs, action in combined_demos:
+            obs_key = tuple(np.round(obs, 4))
+            if obs_key not in seen_obs:
+                seen_obs.add(obs_key)
+                unique_demos.append((obs, action))
+
+        logger.info(
+            "Pre-training history loaded: %d baseline runs, %d total demonstrations, %d unique demonstrations for behavioral cloning",
+            len(_baseline_history),
+            len(combined_demos),
+            len(unique_demos)
+        )
+
         trainer = PPOTrainer(
             sim_config=sim_config,
             adverse_config=adverse_config,
@@ -2667,7 +2954,7 @@ def _run_real_training(sio, session_id: str) -> None:
                 DecisionCaptureCallback(session_id=session_id, emit_fn=sio.emit),
             ],
             baseline_wait=base.get("mean_wait", 0.0),
-            baseline_demonstrations=base.get("demonstrations", []),
+            baseline_demonstrations=unique_demos,
         )
         result = trainer.train()
         model_path = result.get("model_path")
@@ -2906,6 +3193,8 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
 
             result["controller"] = controller_type
             _baseline_cache["latest"] = result
+            _baseline_history.append(result)
+            logger.info("Saved baseline execution to history. Total saved runs: %d", len(_baseline_history))
 
             logger.info(
                 "baseline:compute (%s): mean_wait=%.1fs  throughput=%d  demos=%d",
