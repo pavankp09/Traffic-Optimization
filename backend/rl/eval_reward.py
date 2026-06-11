@@ -32,15 +32,16 @@ from backend.config import SimulationConfig, AdverseConfig
 from backend.rl.mock_env import make_mock_env, run_fixed_time_baseline
 
 
-def _build_ppo(env, seed: int) -> PPO:
+def _build_ppo(env, seed: int, sim_config: SimulationConfig | None = None) -> PPO:
     """Mirror the PPO hyperparameters used by PPOTrainer._build_model."""
+    ppo_epochs = getattr(sim_config, "ppo_epochs", 500) if sim_config is not None else 500
     return PPO(
         policy="MlpPolicy",
         env=env,
         learning_rate=3e-4,
         n_steps=2048,
         batch_size=64,
-        n_epochs=10,
+        n_epochs=ppo_epochs,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
@@ -106,7 +107,7 @@ def run_eval(
 
     for seed in seeds:
         train_env = make_mock_env(sim_config, seed=seed)
-        model = _build_ppo(train_env, seed=seed)
+        model = _build_ppo(train_env, seed=seed, sim_config=sim_config)
         model.learn(total_timesteps=timesteps, reset_num_timesteps=True)
 
         rl_w, rl_t = _evaluate_policy(model, sim_config, seed=seed, n_eval_episodes=eval_episodes)

@@ -3,12 +3,13 @@ import { useSocket } from './useSocket'
 import { useSimulationStore } from '../store/simulationStore'
 import { useSessionStore } from '../store/sessionStore'
 import { useConfigStore } from '../store/configStore'
+import type { TrainingMode } from '../components/TrainingModeSelector'
 
 export function useSimulation() {
   const { emit } = useSocket()
 
   const { sessionId, resetSimulation, setPaused, setSessionId, setSimSpeed } = useSimulationStore()
-  const { setTraining, resetSession, setActiveSession, setConverged, setTrainingPaused, setTrainingModelKey } = useSessionStore()
+  const { setTraining, resetSession, setActiveSession, setConverged, setTrainingPaused, setTrainingModelKey, setTrainingMode } = useSessionStore()
   const { simConfig, adverseConfig } = useConfigStore()
 
   const getMergedConfig = useCallback((cfg: typeof simConfig, modelKey: string) => {
@@ -160,7 +161,8 @@ export function useSimulation() {
   }, [emit, sessionId, setPaused])
 
   const startTraining = useCallback(
-    (totalTimesteps = 500_000, trainingMode: string = 'stage1') => {
+    (totalTimesteps = 500_000, trainingMode: TrainingMode = 'stage1') => {
+      setTrainingMode(trainingMode)
       // Clean reload training curve and metrics first
       resetSession()
 

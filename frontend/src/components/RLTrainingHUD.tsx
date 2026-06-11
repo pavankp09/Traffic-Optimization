@@ -102,7 +102,16 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
   // Get active values or mock them if idle
   const latestEpisode = episodes.length > 0 ? episodes[episodes.length - 1] : null
   const currentEpNum = latestEpisode?.episode ?? 0
-  const totalEpisodes = 500 // mock backend converges at 500
+  
+  const totalSteps = Number(simConfig.total_timesteps ?? 500000)
+  let totalEpisodes = 500
+  if (trainingMode === 'stage1' || trainingMode === 'stage2') {
+    totalEpisodes = Math.round(totalSteps / 40)
+  } else if (trainingMode === 'stage3') {
+    totalEpisodes = Math.round(totalSteps / 360)
+  } else if (trainingMode === 'stage4') {
+    totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360)
+  }
   const progressPct = Math.min(100, (currentEpNum / totalEpisodes) * 100)
 
   const activeReward = latestEpisode?.reward ?? 0
@@ -114,7 +123,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
   const delayReduction = baselineWait > 0 ? ((baselineWait - activeWait) / baselineWait) * 100 : 0
 
   // Calculate live training metrics dynamically
-  const progress = Math.min(currentEpNum / 500.0, 1.0)
+  const progress = Math.min(currentEpNum / totalEpisodes, 1.0)
   const loss = -0.012 - (1.0 - progress) * 0.025 + Math.sin(currentEpNum) * 0.003
   const entropy = Math.max(0.15, 1.0 - progress * 0.85)
 
