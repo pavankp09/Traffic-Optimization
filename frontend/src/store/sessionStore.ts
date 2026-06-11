@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { SessionInfo, TrainingEpisodePayload, InsightCard, EpisodeMetrics, EconomicSummary } from '../types'
+import type { TrainingMode } from '../components/TrainingModeSelector'
 
 export interface TrainedModelData {
   episodes: TrainingEpisodePayload[]
@@ -46,6 +47,8 @@ interface SessionState {
 
   trainingStage: number
   setTrainingStage: (s: number) => void
+  trainingMode: TrainingMode
+  setTrainingMode: (m: TrainingMode) => void
 
   // Actions
   setActiveSession: (id: string | null) => void
@@ -79,6 +82,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   trainingModelKey: null,
   isConverged: false,
   trainingStage: 0,
+  trainingMode: 'stage1',
   bestReward: -Infinity,
   currentMetrics: null,
   baselineMetrics: null,
@@ -88,6 +92,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   trainedModelDetails: {},
 
   setTrainingStage: (s) => set({ trainingStage: s }),
+  setTrainingMode: (m) => set({ trainingMode: m }),
+
   setActiveSession: (id) => set({ activeSessionId: id }),
   setSessions: (sessions) => set({ sessions }),
   addSession: (session) =>

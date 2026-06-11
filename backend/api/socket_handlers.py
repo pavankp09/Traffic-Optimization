@@ -2012,7 +2012,7 @@ def _load_rl_policy(model_key: str):
         return None
 
 
-def _build_rl_obs(world, arms=("N", "S", "E", "W")) -> "np.ndarray":
+def _build_rl_obs(world, sim_config=None, arms=("N", "S", "E", "W")) -> "np.ndarray":
     """Build a 26-dimensional observation matching MockTrafficEnv._obs() schema
     from the live _SimWorld state so the trained policy can make real decisions.
 
@@ -2023,7 +2023,30 @@ def _build_rl_obs(world, arms=("N", "S", "E", "W")) -> "np.ndarray":
         fraction of episode elapsed (capped at 1.0)               (1)
         Total: 26 dims
     """
-    from backend.rl.mock_env import _QUEUE_NORM, _WAIT_NORM, N_PHASES
+    from backend.rl.mock_env import _QUEUE_NORM, _WAIT_NORM, _RATE_NORM, N_PHASES
+    from backend.config import SimulationConfig
+
+    if sim_config is None:
+        sim_config = SimulationConfig()
+    elif isinstance(sim_config, dict):
+        import dataclasses
+        sim_fields = {f.name for f in dataclasses.fields(SimulationConfig)}
+        sim_config = SimulationConfig(**{k: v for k, v in sim_config.items() if k in sim_fields})
+
+    # Compute expected arrival rates per arm
+    active_arms = ["N", "E", "W"] if sim_config.intersection_type in ("t_junction", "t_junction_free_left") else list(arms)
+    configured_vps = sim_config.traffic_volume_vph / 3600.0
+    n_arms = len(active_arms)
+
+    if sim_config.traffic_pattern in ("morning_peak", "evening_peak"):
+        if n_arms == 3:
+            w = {"N": 0.5, "E": 0.25, "W": 0.25, "S": 0.0}
+        else:
+            w = {"N": 0.35, "S": 0.35, "E": 0.15, "W": 0.15}
+    else:
+        w = {a: (1.0 / n_arms if a in active_arms else 0.0) for a in arms}
+
+    arrival_rates = {a: configured_vps * w[a] * n_arms if a in active_arms else 0.0 for a in arms}
 
     feats: list[float] = []
     prev_queues = getattr(world, '_prev_queued_obs', {})
@@ -2033,12 +2056,12 @@ def _build_rl_obs(world, arms=("N", "S", "E", "W")) -> "np.ndarray":
     for arm in arms:
         queued = world._queued(arm)
         curr_queues[arm] = queued
-        arrival_proxy = max(queued / 30.0, 0.01)
-        wait_proxy = queued / arrival_proxy  # Little's law
+        arrival_rate = arrival_rates[arm]
+        wait_proxy = queued / max(arrival_rate, 1e-3)
 
         feats.append(min(queued / _QUEUE_NORM, 1.0))
         feats.append(min(wait_proxy / _WAIT_NORM, 1.0))
-        feats.append(min(arrival_proxy, 1.0))
+        feats.append(min(arrival_rate / _RATE_NORM, 1.0))
         
         # Map our _SimWorld phase to the set of arms that were green/served in this cycle.
         # world.phase: 0=N-S green, 1=N-S yellow, 2=E-W green, 3=E-W yellow, 4=all-red
@@ -2117,6 +2140,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
         sim_config_db = session.get("sim_config") or {}
     else:
         sim_config_db = {}
+    merged_cfg = {**sim_config_db, **state_cfg}
     for k, type_id in mix_keys.items():
         val = state_cfg.get(k) or sim_config_db.get(k)
         if val is not None:
@@ -2213,7 +2237,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
             return 4       # all-red
 
         def _policy_fn(world) -> tuple:
-            obs = _build_rl_obs(world)
+            obs = _build_rl_obs(world, sim_config=merged_cfg)
             action, _ = model.predict(obs, deterministic=True)
             mock_phase, duration = action_to_phase_duration(int(action))
             world_phase = _resolve_world_phase(mock_phase, world)
@@ -2468,10 +2492,16 @@ def _make_inference_fn(session_id: str, emit_fn, model_key: str = "rl1"):
 
     def _inference_fn(model) -> None:
         try:
+            from backend.analytics.session_store import SessionStore
+            session = SessionStore().get_session(session_id)
+            sim_config_db = (session.get("sim_config") or {}) if session else {}
+            state_cfg = (_session_states.get(session_id, {}) or {}).get("raw_sim_config", {}) or {}
+            merged_cfg = {**sim_config_db, **state_cfg}
+
             emit_fn("training:inference_start", {"session_id": session_id})
 
             def policy_fn(world):
-                obs = _build_rl_obs(world)
+                obs = _build_rl_obs(world, sim_config=merged_cfg)
                 action, _ = model.predict(obs, deterministic=True)
                 mock_phase, duration = action_to_phase_duration(int(action))
                 world_phase = _resolve_world_phase_inf(mock_phase, world)
@@ -2758,8 +2788,9 @@ def _run_real_training(sio, session_id: str) -> None:
         MIN_EPISODES = 160
         IMPROVE_FRAC = 0.03   # < 3% gain window-over-window => plateaued
 
-        def __init__(self):
+        def __init__(self, sim_config=None):
             super().__init__()
+            self.sim_config = sim_config
             self._ep_reward = 0.0
             self._ep_num = 0
             self._rewards: list[float] = []
@@ -2793,15 +2824,16 @@ def _run_real_training(sio, session_id: str) -> None:
             start_mean = sum(self._rewards[:self.WINDOW]) / self.WINDOW
             learned = recent_mean > start_mean * 0.5  # reward improved toward 0
             if learned and gain < self.IMPROVE_FRAC:
-                self._done = True
-                sio.emit("training:converged", {"session_id": session_id, "episode": self._ep_num})
-                sio.emit("training:insight", {
-                    "icon": "✅",
-                    "message": "Agent converged — policy stabilised, no further gains",
-                    "episode": self._ep_num,
-                    "session_id": session_id,
-                })
-                return False  # stop learning
+                if getattr(self.sim_config, "early_stopping", True):
+                    self._done = True
+                    sio.emit("training:converged", {"session_id": session_id, "episode": self._ep_num})
+                    sio.emit("training:insight", {
+                        "icon": "✅",
+                        "message": "Agent converged — policy stabilised, no further gains",
+                        "episode": self._ep_num,
+                        "session_id": session_id,
+                    })
+                    return False  # stop learning
             return True
 
     try:
@@ -2950,7 +2982,7 @@ def _run_real_training(sio, session_id: str) -> None:
             extra_callbacks=[
                 _StopCallback(),
                 _PaceCallback(),
-                _PlateauCallback(),
+                _PlateauCallback(sim_config),
                 DecisionCaptureCallback(session_id=session_id, emit_fn=sio.emit),
             ],
             baseline_wait=base.get("mean_wait", 0.0),

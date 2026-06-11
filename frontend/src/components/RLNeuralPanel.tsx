@@ -39,7 +39,8 @@ function MetricPill({ label, value, color }: { label: string; value: string; col
 
 export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
   const [showIntel, setShowIntel] = useState(false)
-  const [trainingMode, setTrainingMode] = useState<TrainingMode>('stage1')
+  const trainingMode   = useSessionStore(s => s.trainingMode)
+  const setTrainingMode = useSessionStore(s => s.setTrainingMode)
   const { startTraining } = useSimulation()
   const isTraining     = useSessionStore(s => s.isTraining)
   const trainingModelKey = useSessionStore(s => s.trainingModelKey)
@@ -67,7 +68,20 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
 
   // Convergence progress (episodes toward total_timesteps equivalent)
   const totalSteps = Number(simConfig.total_timesteps ?? 500000)
-  const estDone    = Math.min(1, epCount / Math.max(1, totalSteps / 3600))
+  
+  let totalEpisodes = 500;
+  if (trainingMode === 'stage1' || trainingMode === 'stage2') {
+    totalEpisodes = Math.round(totalSteps / 40);
+  } else if (trainingMode === 'stage3') {
+    totalEpisodes = Math.round(totalSteps / 360);
+  } else if (trainingMode === 'stage4') {
+    totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360);
+  }
+
+  const isFinished = isTrained && !isThisTraining;
+  const progressRatio = isFinished ? 1 : Math.min(1, epCount / Math.max(1, totalEpisodes));
+  const progressPercent = progressRatio * 100;
+  const denominatorText = isFinished ? `${epCount}` : `~${totalEpisodes}`;
 
   return (
     <div className="w-[560px] h-[560px] bg-gradient-to-b from-[#0e131c] to-[#0a0e15] border border-white/[0.07] rounded-2xl flex flex-col overflow-hidden select-none">
@@ -171,7 +185,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
             <SecLabel>Training Convergence</SecLabel>
             {epCount > 0 && (
               <span className="text-[8px] font-mono text-slate-600 tabular-nums">
-                {epCount} ep · est {(estDone * 100).toFixed(0)}% complete
+                {epCount} ep · est {progressPercent.toFixed(0)}% complete
               </span>
             )}
           </div>
@@ -192,13 +206,13 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
             <div className="flex items-center justify-between mb-1.5">
               <SecLabel>Training Progress</SecLabel>
               <span className="text-[9px] font-mono tabular-nums" style={{ color }}>
-                {epCount} / ~{Math.round(totalSteps / 3600)} episodes
+                {epCount} / {denominatorText} episodes
               </span>
             </div>
             <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, estDone * 100)}%`, backgroundColor: color, opacity: 0.8 }}
+                style={{ width: `${Math.min(100, progressPercent)}%`, backgroundColor: color, opacity: 0.8 }}
               />
             </div>
           </div>
