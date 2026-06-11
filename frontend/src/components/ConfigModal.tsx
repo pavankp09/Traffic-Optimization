@@ -218,6 +218,12 @@ function SectionE({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
                 { value: '256', label: '256 neurons — Heavy' },
               ]} />
           </FormRow>
+          <FormRow label="PPO Epochs" help="Number of optimization epochs per gradient update step. Default is 500" required>
+            <NumberInput value={simConfig.ppo_epochs ?? 500} onChange={(v) => updateSimConfig({ ppo_epochs: v })} min={1} max={2000} />
+          </FormRow>
+          <FormRow label="Early Stopping" help="Declare convergence and stop training early when reward gains level off. Turn off to run full timesteps.">
+            <ToggleInput value={simConfig.early_stopping ?? true} onChange={(v) => updateSimConfig({ early_stopping: v })} />
+          </FormRow>
         </div>
       </div>
       <div className="border-t border-white/[0.05] pt-6">

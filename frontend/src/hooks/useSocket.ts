@@ -239,12 +239,15 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
   const simTime = Math.max(Number(frame.sim_time_s ?? 0), 0.001)
   const tput = Math.round((tracker.exited / simTime) * 3600)
 
-  // Cumulative average — total wait accumulated by ALL exited vehicles ÷ count.
-  // Much more stable and speed-invariant than averaging the current on-screen
-  // snapshot (which is diluted by freshly-spawned vehicles with wait_time ≈ 0).
-  const avgWait = tracker.exited > 0
-    ? tracker.totalWait / tracker.exited
-    : 0
+  // Cumulative average — use backend's system-wide average wait if available
+  // to correctly include queue/backlog and canvas delay. Otherwise fallback.
+  const avgWait = frame.stats !== undefined && frame.stats !== null
+    ? frame.stats.avg_wait_s
+    : (tracker.exited > 0 ? tracker.totalWait / tracker.exited : 0)
+
+  const systemTput = frame.stats !== undefined && frame.stats !== null
+    ? frame.stats.throughput_vph
+    : tput
 
   const moving = vehicles.filter((v) => (v.speed ?? 0) >= 0.5).length
   const util = total > 0 ? Math.min(1, Math.max(0, moving / total)) : 0
@@ -279,11 +282,11 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
     episode_id: key,
     session_id: frame.session_id ?? 'live',
     duration_s: Number(simConfig.simulation_duration_s ?? 1800),
-    n_vehicles: total,
+    n_vehicles: frame.stats !== undefined && frame.stats !== null ? frame.stats.in_queue + frame.stats.exited : total,
     avg_wait_s: avgWait,
     per_type: {},
     per_arm: perArm,
-    throughput_vph: tput,
+    throughput_vph: systemTput,
     green_utilisation: util,
     collision_count: Array.isArray((frame as unknown as { collision_ids?: unknown[] }).collision_ids)
       ? ((frame as unknown as { collision_ids: unknown[] }).collision_ids.length)
@@ -292,7 +295,7 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
     signal_efficiency: eff,
     avg_phase_duration_s: Number(frame.signals?.[0]?.duration_s ?? 0),
     adverse_events_count: 0,
-    total_delay_veh_hrs: (avgWait * tput) / 3600,
+    total_delay_veh_hrs: (avgWait * systemTput) / 3600,
   }
 }
 

@@ -181,6 +181,8 @@ export interface SimConfig {
   rl_algorithm: string
   total_timesteps: number
   learning_rate: number
+  ppo_epochs?: number
+  early_stopping?: boolean
   hidden_layer_size?: number
   discount_factor?: number
   reward_wt_queue?: number

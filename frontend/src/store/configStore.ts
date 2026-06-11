@@ -6,7 +6,7 @@ import type { SimConfig, AdverseConfig, Preset } from '../types'
 const DEFAULT_SIM_CONFIG: SimConfig = {
   intersection_type: 'four_way',
   n_lanes: 3,
-  total_vph: 10000,
+  total_vph: 3000,
   traffic_pattern: 'uniform',
   arrival_distribution: 'poisson',
   pct_car: 40,
@@ -28,6 +28,8 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   rl_algorithm: 'PPO',
   total_timesteps: 500000,
   learning_rate: 0.0003,
+  ppo_epochs: 500,
+  early_stopping: true,
   hidden_layer_size: 64,
   discount_factor: 0.99,
   reward_wt_queue: 1.0,
@@ -36,7 +38,7 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   reward_wt_collision: 1.5,
   reward_wt_pedestrian: 0.8,
   reward_wt_emergency: 0.5,
-  reward_wt_switch: 0.15,
+  reward_wt_switch: 0.5,
   simulation_duration_s: 1800,
   warm_up_s: 60,
   sim_speed_multiplier: 20,
@@ -88,6 +90,7 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
     learning_rate: 0,
     discount_factor: 0,
     hidden_layer_size: 0,
+    ppo_epochs: 0,
   },
   rl1: {
     ...DEFAULT_SIM_CONFIG,
@@ -95,6 +98,7 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
     learning_rate: 0.0003,
     discount_factor: 0.99,
     hidden_layer_size: 64,
+    ppo_epochs: 500,
   },
   rl2: {
     ...DEFAULT_SIM_CONFIG,
@@ -123,6 +127,7 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
     learning_rate: 0.0003,
     discount_factor: 0.99,
     hidden_layer_size: 64,
+    ppo_epochs: 500,
   },
 }
 

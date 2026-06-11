@@ -26,7 +26,7 @@ class SimulationConfig:
     osm_lon: float = 78.3762
 
     # 5B - Traffic Demand
-    traffic_volume_vph: int = 10000
+    traffic_volume_vph: int = 3000
     vehicle_mix: str = "hyderabad_mixed"        # hyderabad_mixed|cars_only|western_mixed|rush_hour|custom
     traffic_pattern: str = "uniform"       # uniform|morning_peak|evening_peak|bidirectional|random
     arrival_distribution: str = "poisson"       # poisson|weibull|uniform
@@ -60,6 +60,7 @@ class SimulationConfig:
     algorithm: str = "PPO"                      # PPO|A2C|DQN|SAC_Discrete
     reward_function: str = "min_wait"           # min_wait|max_throughput|min_stops|min_queue|balanced|custom
     training_episodes: int = 500
+    ppo_epochs: int = 500
     action_frequency_seconds: int = 5
     observation_window: int = 1
     normalise_observations: bool = True
@@ -69,6 +70,7 @@ class SimulationConfig:
     random_seed: int = 42
     use_transfer_learning: bool = False
     base_model_preset_id: Optional[str] = None
+    early_stopping: bool = True
 
     # Dynamic Reward Weights
     reward_wt_queue: float = 1.0
@@ -77,7 +79,7 @@ class SimulationConfig:
     reward_wt_collision: float = 1.5
     reward_wt_pedestrian: float = 0.8
     reward_wt_emergency: float = 0.5
-    reward_wt_switch: float = 0.15
+    reward_wt_switch: float = 0.5
     reward_wt_flow_efficiency: float = 3.0
     reward_wt_pressure: float = 1.5
     reward_wt_starvation: float = 0.8

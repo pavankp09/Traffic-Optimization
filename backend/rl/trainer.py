@@ -640,7 +640,7 @@ class PPOTrainer:
                 learning_rate=lr,
                 n_steps=2048,
                 batch_size=64,
-                n_epochs=10,
+                n_epochs=getattr(self.sim_config, "ppo_epochs", 500),
                 gamma=gamma,
                 gae_lambda=0.95,
                 clip_range=0.2,

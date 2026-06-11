@@ -197,6 +197,20 @@ class ReportGenerator:
         else:
             sim_config_summary = dict(_DEFAULT_SIM_CONFIG_SUMMARY)
 
+        # Hyperparameters overridden by actual training run config
+        hyperparams = dict(_DEFAULT_HYPERPARAMETERS)
+        if sim_config_dict is not None:
+            for k in ("learning_rate", "hidden_layer_size"):
+                if k in sim_config_dict and sim_config_dict[k] is not None:
+                    hyperparams[k] = sim_config_dict[k]
+            if "ppo_epochs" in sim_config_dict and sim_config_dict["ppo_epochs"] is not None:
+                hyperparams["n_epochs"] = sim_config_dict["ppo_epochs"]
+            if "discount_factor" in sim_config_dict and sim_config_dict["discount_factor"] is not None:
+                hyperparams["gamma"] = sim_config_dict["discount_factor"]
+            alg = sim_config_dict.get("rl_algorithm") or sim_config_dict.get("algorithm")
+            if alg:
+                hyperparams["algorithm"] = alg
+
         return ReportData(
             session_id=session_id,
             location=location,
@@ -217,7 +231,7 @@ class ReportGenerator:
             recommendations=recommendations,
             state_space_description=_STATE_SPACE_DESCRIPTION,
             action_space_description=_ACTION_SPACE_DESCRIPTION,
-            hyperparameters=dict(_DEFAULT_HYPERPARAMETERS),
+            hyperparameters=hyperparams,
             training_duration_s=training_duration_s,
         )
 
