@@ -313,6 +313,7 @@ function registerGlobalListeners(socket: Socket) {
   socket.on('sim:frame:baseline', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -323,25 +324,32 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    // Accept frames to update store — setRunning(true) arrives before frames but we
-    // don't gate on isRunning here so first frames are never silently dropped.
-    if (!store.isRunning) store.setRunning(true)
-    store.setBaselineFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setBaselineFrame(frame)
 
-    const simMetrics = _computeLiveSimulationMetrics('baseline', frame)
-    store.setLastSimulationMetrics('baseline', simMetrics)
-    useSessionStore.getState().setBaselineMetrics(simMetrics)
+      const simMetrics = _computeLiveSimulationMetrics('baseline', frame)
+      store.setLastSimulationMetrics('baseline', simMetrics)
+      useSessionStore.getState().setBaselineMetrics(simMetrics)
 
-    const selected = store.selectedModelSingle
-    if (selected === 'baseline') {
-      store.setFrame(frame)
+      const selected = store.selectedModelSingle
+      if (selected === 'baseline') {
+        store.setFrame(frame)
+      }
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('baseline', frame)
+
+      const simMetrics = _computeLiveSimulationMetrics('baseline', frame)
+      store.setSplitLastSimulationMetrics('baseline', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
     }
   })
 
   socket.on('sim:frame:rl1', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -352,17 +360,25 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    if (!store.isRunning) store.setRunning(true)
-    store.setRl1Frame(frame)
-    const simMetrics = _computeLiveSimulationMetrics('rl1', frame)
-    store.setLastSimulationMetrics('rl1', simMetrics)
-    if (store.selectedModelSingle === 'rl1') store.setFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setRl1Frame(frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl1', frame)
+      store.setLastSimulationMetrics('rl1', simMetrics)
+      if (store.selectedModelSingle === 'rl1') store.setFrame(frame)
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('rl1', frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl1', frame)
+      store.setSplitLastSimulationMetrics('rl1', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
+    }
   })
 
   socket.on('sim:frame:rl2', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -373,17 +389,25 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    if (!store.isRunning) store.setRunning(true)
-    store.setRl2Frame(frame)
-    const simMetrics = _computeLiveSimulationMetrics('rl2', frame)
-    store.setLastSimulationMetrics('rl2', simMetrics)
-    if (store.selectedModelSingle === 'rl2') store.setFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setRl2Frame(frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl2', frame)
+      store.setLastSimulationMetrics('rl2', simMetrics)
+      if (store.selectedModelSingle === 'rl2') store.setFrame(frame)
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('rl2', frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl2', frame)
+      store.setSplitLastSimulationMetrics('rl2', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
+    }
   })
 
   socket.on('sim:frame:rl3', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -394,17 +418,25 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    if (!store.isRunning) store.setRunning(true)
-    store.setRl3Frame(frame)
-    const simMetrics = _computeLiveSimulationMetrics('rl3', frame)
-    store.setLastSimulationMetrics('rl3', simMetrics)
-    if (store.selectedModelSingle === 'rl3') store.setFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setRl3Frame(frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl3', frame)
+      store.setLastSimulationMetrics('rl3', simMetrics)
+      if (store.selectedModelSingle === 'rl3') store.setFrame(frame)
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('rl3', frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl3', frame)
+      store.setSplitLastSimulationMetrics('rl3', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
+    }
   })
 
   socket.on('sim:frame:rl4', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -415,17 +447,25 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    if (!store.isRunning) store.setRunning(true)
-    store.setRl4Frame(frame)
-    const simMetrics = _computeLiveSimulationMetrics('rl4', frame)
-    store.setLastSimulationMetrics('rl4', simMetrics)
-    if (store.selectedModelSingle === 'rl4') store.setFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setRl4Frame(frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl4', frame)
+      store.setLastSimulationMetrics('rl4', simMetrics)
+      if (store.selectedModelSingle === 'rl4') store.setFrame(frame)
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('rl4', frame)
+      const simMetrics = _computeLiveSimulationMetrics('rl4', frame)
+      store.setSplitLastSimulationMetrics('rl4', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
+    }
   })
 
   socket.on('sim:frame:custom', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = frame.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -436,17 +476,25 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (frame.session_id && frame.session_id !== activeSid)) return
-    if (!store.isRunning) store.setRunning(true)
-    store.setCustomFrame(frame)
-    const simMetrics = _computeLiveSimulationMetrics('custom', frame)
-    store.setLastSimulationMetrics('custom', simMetrics)
-    if (store.selectedModelSingle === 'custom') store.setFrame(frame)
+    if (session_id === activeSid && activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setCustomFrame(frame)
+      const simMetrics = _computeLiveSimulationMetrics('custom', frame)
+      store.setLastSimulationMetrics('custom', simMetrics)
+      if (store.selectedModelSingle === 'custom') store.setFrame(frame)
+    } else if (session_id === splitSid && splitSid) {
+      if (!store.splitIsRunning) store.setSplitRunning(true)
+      store.setSplitFrame('custom', frame)
+      const simMetrics = _computeLiveSimulationMetrics('custom', frame)
+      store.setSplitLastSimulationMetrics('custom', simMetrics)
+      store.setSplitSimTimeS(frame.sim_time_s ?? 0)
+    }
   })
 
   socket.on('sim:started', (data?: { session_id?: string }) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = data?.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -456,17 +504,22 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (data?.session_id && data.session_id !== activeSid)) return
-    _resetLiveTrackers(data?.session_id ?? activeSid ?? undefined)
-    store.setRunning(true)
-    if (store.selectedModelSingle === 'baseline') {
-      useSessionStore.getState().setBaselineCompleted(false)
+    if (session_id === activeSid && activeSid) {
+      _resetLiveTrackers(session_id)
+      store.setRunning(true)
+      if (store.selectedModelSingle === 'baseline') {
+        useSessionStore.getState().setBaselineCompleted(false)
+      }
+    } else if (session_id === splitSid && splitSid) {
+      _resetLiveTrackers(session_id)
+      store.setSplitRunning(true)
     }
   })
 
   socket.on('sim:stopped', (data?: { session_id?: string; completed?: boolean }) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = data?.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -477,33 +530,44 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    if (!activeSid || (data?.session_id && data.session_id !== activeSid)) return
-    store.setRunning(false)
-    if (store.selectedModelSingle === 'baseline') {
-      useSessionStore.getState().setBaselineCompleted(!!data?.completed)
+    if (session_id === activeSid && activeSid) {
+      store.setRunning(false)
+      if (store.selectedModelSingle === 'baseline') {
+        useSessionStore.getState().setBaselineCompleted(!!data?.completed)
+      }
+    } else if (session_id === splitSid && splitSid) {
+      store.setSplitRunning(false)
     }
   })
 
   socket.on('sim:speed_set', (data?: { session_id?: string; multiplier?: number }) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = data?.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
       const ep = Number(parts[1])
       if (!isNaN(ep)) {
         const m = data?.multiplier
-        if (m === 1 || m === 5 || m === 10 || m === 20) store.setPopupSpeed(ep, m)
+        if (m === 1 || m === 5 || m === 10 || m === 20 || m === 50) store.setPopupSpeed(ep, m)
         return
       }
     }
-    if (!activeSid || (data?.session_id && data.session_id !== activeSid)) return
     const m = data?.multiplier
-    if (m === 1 || m === 5 || m === 10 || m === 20) store.setSimSpeed(m)
+    if (m === 1 || m === 5 || m === 10 || m === 20 || m === 50) {
+      if (session_id === activeSid && activeSid) {
+        store.setSimSpeed(m)
+      } else if (session_id === splitSid && splitSid) {
+        store.setSplitSimSpeed(m)
+      }
+    }
   })
 
   socket.on('sim:error', (data?: { error?: string; session_id?: string }) => {
     const store = useSimulationStore.getState()
+    const activeSid = store.sessionId
+    const splitSid = store.splitSessionId
     const session_id = data?.session_id
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
@@ -514,18 +578,30 @@ function registerGlobalListeners(socket: Socket) {
         return
       }
     }
-    store.setRunning(false)
-    store.setPaused(false)
+    if (session_id === activeSid && activeSid) {
+      store.setRunning(false)
+      store.setPaused(false)
+    } else if (session_id === splitSid && splitSid) {
+      store.setSplitRunning(false)
+      store.setSplitPaused(false)
+    }
     console.error('[Socket] sim:error', data?.error ?? data)
   })
 
   socket.on('adverse:event', (event: AdverseEvent & { session_id?: string }) => {
     const store = useSimulationStore.getState()
-    const isRunning = store.isRunning
     const activeSid = store.sessionId
-    if (!isRunning) return
-    if (!activeSid || (event?.session_id && event.session_id !== activeSid)) return
-    store.addAdverseEvent(event)
+    const splitSid = store.splitSessionId
+    const session_id = event?.session_id
+    if (session_id === activeSid && activeSid) {
+      if (store.isRunning) {
+        store.addAdverseEvent(event)
+      }
+    } else if (session_id === splitSid && splitSid) {
+      if (store.splitIsRunning) {
+        store.addSplitAdverseEvent(event)
+      }
+    }
   })
 
   socket.on('training:episode', (ep: TrainingEpisodePayload) => {

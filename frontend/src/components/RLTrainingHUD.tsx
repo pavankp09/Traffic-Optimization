@@ -560,7 +560,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                 : 'Simulation locked: model uninitialized.'}
             </span>
             <span className="text-[10px] font-mono text-gray-500">
-              Ready split constraint: {meta.label.split(' ')[0]}
+              Ready split constraint: {meta.label.replace('Agent ', '').replace(' Agent', '')}
             </span>
           </div>
         )}

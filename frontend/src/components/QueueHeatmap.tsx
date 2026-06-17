@@ -24,8 +24,8 @@ export default function QueueHeatmap() {
   const viewMode = useSimulationStore((s) => s.viewMode)
   const selectedModelSingle = useSimulationStore((s) => s.selectedModelSingle)
   const selectedModelsSplit = useSimulationStore((s) => s.selectedModelsSplit)
-  const isRunning = useSimulationStore((s) => s.isRunning)
-  const simTimeS = useSimulationStore((s) => s.simTimeS)
+  const isRunning = useSimulationStore((s) => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
+  const simTimeS = useSimulationStore((s) => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
 
   // Simulation frame buffers
   const baselineFrame = useSimulationStore((s) => s.baselineFrame)
@@ -33,6 +33,7 @@ export default function QueueHeatmap() {
   const rl2Frame      = useSimulationStore((s) => s.rl2Frame)
   const rl3Frame      = useSimulationStore((s) => s.rl3Frame)
   const rl4Frame      = useSimulationStore((s) => s.rl4Frame)
+  const splitFrames   = useSimulationStore((s) => s.splitFrames)
 
   const currentMetrics = useSessionStore((s) => s.currentMetrics)
 
@@ -52,6 +53,9 @@ export default function QueueHeatmap() {
   }, [selectedModelSingle, selectedModelsSplit, viewMode])
 
   const getFrameForModel = (modelKey: string): SimFrame | null => {
+    if (viewMode === 'split') {
+      return splitFrames[modelKey] || null
+    }
     if (modelKey === 'baseline') return baselineFrame
     if (modelKey === 'rl1') return rl1Frame
     if (modelKey === 'rl2') return rl2Frame
@@ -62,6 +66,35 @@ export default function QueueHeatmap() {
 
   // Calculate live arm queues dynamically from simulation frames
   const getPerArmMetrics = (modelKey: string): Record<string, ArmMetrics> | null => {
+    if (viewMode === 'split') {
+      const frame = getFrameForModel(modelKey)
+      if (frame) {
+        const arms = ['N', 'S', 'E', 'W'] as const
+        return Object.fromEntries(
+          arms.map((arm) => {
+            const armVehicles = frame.vehicles.filter((v) => v.arm === arm)
+            const stopped = armVehicles.filter((v) => v.speed < 0.5)
+            const waitTimes = armVehicles.map((v) => v.wait_time).filter((w) => w > 0)
+            const avgWait = waitTimes.length ? waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length : 0
+            
+            return [
+              arm,
+              {
+                arm,
+                queue_len: stopped.length,
+                avg_wait_s: avgWait,
+                flow_rate_vph: armVehicles.length * 15,
+                heavy_vehicle_ratio: 0.1,
+                green_time_used_s: 25,
+                green_time_total_s: 30,
+              },
+            ]
+          })
+        )
+      }
+      return null
+    }
+
     // If simulation has not started, show clean empty state
     if (!isRunning && simTimeS === 0 && !currentMetrics) {
       return null
@@ -142,7 +175,7 @@ export default function QueueHeatmap() {
                 style={{ color: isSelected ? meta.color : undefined }}
                 onClick={() => setInspectKey(key)}
               >
-                {meta.label.split(' ')[0]}
+                {meta.label.replace('Agent ', '').replace(' Agent', '')}
               </button>
             )
           })}

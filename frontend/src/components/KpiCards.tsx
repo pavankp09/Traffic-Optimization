@@ -92,8 +92,8 @@ function ComparativeKpiCard({
           return (
             <div key={key} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold font-sans uppercase tracking-wide truncate max-w-[100px]" style={{ color }}>
-                  {modelLabel.split(' ')[0]} {modelLabel.split(' ')[1] || ''}
+                <span className="text-[10px] font-semibold font-sans uppercase tracking-wide truncate max-w-[140px]" style={{ color }}>
+                  {modelLabel.replace('Agent ', '').replace(' Agent', '')}
                 </span>
                 <div className="flex items-center">
                   <span className="text-[13px] font-bold font-mono leading-none" style={{ color: val > 0 ? '#f1f5f9' : '#475569' }}>
@@ -131,7 +131,7 @@ export default function KpiCards() {
 
   // Live metrics are computed centrally in useSocket and kept here; subscribing
   // to this map re-renders the KPI cards on every incoming simulation frame.
-  const lastSimulationMetrics = useSimulationStore((s) => s.lastSimulationMetrics)
+  const lastSimulationMetrics = useSimulationStore((s) => s.viewMode === 'split' ? s.splitLastSimulationMetrics : s.lastSimulationMetrics)
 
   // Training metrics state
   const baselineMetrics = useSessionStore((s) => s.baselineMetrics)

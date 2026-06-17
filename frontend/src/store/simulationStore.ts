@@ -40,6 +40,17 @@ interface SimulationState {
   // Last stored simulation metrics per model key
   lastSimulationMetrics: Record<string, EpisodeMetrics>
 
+  // Split-specific state
+  splitFrames: Record<string, SimFrame | null>
+  splitLastSimulationMetrics: Record<string, EpisodeMetrics>
+  splitAdverseEvents: AdverseEvent[]
+  splitSessionId: string | null
+  splitIsRunning: boolean
+  splitIsPaused: boolean
+  splitSimTimeS: number
+  splitSimSpeed: 1 | 5 | 10 | 20 | 50
+  splitThroughputCount: number
+
   // Popup simulation state per episode (isolated replay)
   popupFrames: Record<number, SimFrame | null>
   popupRunning: Record<number, boolean>
@@ -80,6 +91,19 @@ interface SimulationState {
   clearRlFrames: () => void
   setLastSimulationMetrics: (model: string, metrics: EpisodeMetrics) => void
   resetLastSimulationMetrics: () => void
+
+  // Split-specific actions
+  setSplitFrame: (modelKey: string, frame: SimFrame | null) => void
+  setSplitLastSimulationMetrics: (modelKey: string, metrics: EpisodeMetrics) => void
+  addSplitAdverseEvent: (event: AdverseEvent) => void
+  clearSplitAdverseEvents: () => void
+  setSplitRunning: (running: boolean) => void
+  setSplitPaused: (paused: boolean) => void
+  setSplitSessionId: (id: string | null) => void
+  setSplitSimSpeed: (speed: 1 | 5 | 10 | 20 | 50) => void
+  setSplitSimTimeS: (time: number) => void
+  resetSplitSimulation: () => void
+  clearSplitFrames: () => void
 
   // Actions for popup simulation
   setPopupFrame: (ep: number, frame: SimFrame | null) => void
@@ -128,6 +152,16 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   throughputCount: 0,
   simSpeed: 1,
   lastSimulationMetrics: {},
+
+  splitFrames: {},
+  splitLastSimulationMetrics: {},
+  splitAdverseEvents: [],
+  splitSessionId: null,
+  splitIsRunning: false,
+  splitIsPaused: false,
+  splitSimTimeS: 0,
+  splitSimSpeed: 5,
+  splitThroughputCount: 0,
 
   popupFrames: {},
   popupRunning: {},
@@ -267,6 +301,50 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setPopupDuration: (ep, duration) => set((state) => ({ popupDurations: { ...state.popupDurations, [ep]: duration } })),
   setPopupSimTime: (ep, time) => set((state) => ({ popupSimTimes: { ...state.popupSimTimes, [ep]: time } })),
   setPopupSid: (ep, sid) => set((state) => ({ popupSids: { ...state.popupSids, [ep]: sid } })),
+
+  setSplitFrame: (modelKey, frame) => set((state) => {
+    const prevFrame = state.splitFrames[modelKey]
+    const prevIds = new Set(prevFrame?.vehicles.map((v) => v.id) ?? [])
+    const currIds = new Set(frame?.vehicles.map((v) => v.id) ?? [])
+    const exited = [...prevIds].filter((id) => !currIds.has(id)).length
+    return {
+      splitFrames: {
+        ...state.splitFrames,
+        [modelKey]: frame,
+      },
+      splitThroughputCount: state.splitThroughputCount + exited,
+    }
+  }),
+  setSplitLastSimulationMetrics: (model, metrics) =>
+    set((state) => ({
+      splitLastSimulationMetrics: {
+        ...state.splitLastSimulationMetrics,
+        [model]: metrics,
+      },
+    })),
+  addSplitAdverseEvent: (event) =>
+    set((state) => ({ splitAdverseEvents: [...state.splitAdverseEvents.slice(-19), event] })),
+  clearSplitAdverseEvents: () => set({ splitAdverseEvents: [] }),
+  setSplitRunning: (running) => set({ splitIsRunning: running }),
+  setSplitPaused: (paused) => set({ splitIsPaused: paused }),
+  setSplitSessionId: (id) => set({ splitSessionId: id }),
+  setSplitSimSpeed: (speed) => set({ splitSimSpeed: speed }),
+  setSplitSimTimeS: (time) => set({ splitSimTimeS: time }),
+  resetSplitSimulation: () => set({
+    splitFrames: {},
+    splitLastSimulationMetrics: {},
+    splitAdverseEvents: [],
+    splitIsRunning: false,
+    splitIsPaused: false,
+    splitSessionId: null,
+    splitSimTimeS: 0,
+    splitSimSpeed: 5,
+    splitThroughputCount: 0,
+  }),
+  clearSplitFrames: () => set({
+    splitFrames: {},
+    splitSimTimeS: 0,
+  }),
 
   setIntelSelectedEp: (ep) => set({ intelSelectedEp: ep }),
   setIntelSortMode: (mode) => set({ intelSortMode: mode }),

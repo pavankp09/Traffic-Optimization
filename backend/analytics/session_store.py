@@ -24,6 +24,7 @@ from backend.db.models import (
     MetricRecord,
     InsightCard,
     VehicleCrossing,
+    SimulationRun,
 )
 
 logger = logging.getLogger(__name__)
@@ -396,15 +397,56 @@ class SessionStore:
             logger.exception("Failed to delete session %s", session_id)
             raise
 
+    def create_simulation_run(
+        self,
+        simulation_id: str,
+        session_id: str,
+        sim_config: SimulationConfig,
+        adverse_config: AdverseConfig,
+    ) -> None:
+        """Creates a SimulationRun row in the DB snapshotting configurations."""
+        import dataclasses
+        try:
+            with Session(self._engine) as session:
+                ts_row = (
+                    session.query(TrainingSession)
+                    .filter(TrainingSession.notes == session_id)
+                    .first()
+                )
+                if ts_row is None:
+                    logger.warning("create_simulation_run: TrainingSession not found for %s", session_id)
+                    return
+                
+                # Check if it already exists
+                existing = session.query(SimulationRun).filter(SimulationRun.simulation_id == simulation_id).first()
+                if existing:
+                    return
+
+                row = SimulationRun(
+                    simulation_id=simulation_id,
+                    session_id=ts_row.id,
+                    sim_config=dataclasses.asdict(sim_config),
+                    adverse_config=dataclasses.asdict(adverse_config),
+                )
+                session.add(row)
+                session.commit()
+                logger.info("Saved simulation run %s for session %s", simulation_id, session_id)
+        except Exception:
+            logger.exception("Failed to save simulation run to database")
+            raise
+
     def save_vehicle_crossing(
         self,
         session_id: str,
+        simulation_id: str,
         vehicle_id: str,
         vehicle_type: str,
         number_plate: str,
         entry_time: float,
         exit_time: float,
         crossing_duration: float,
+        run_type: str = "unknown",
+        algorithm: str = "unknown",
     ) -> None:
         """Saves a VehicleCrossing record to both a flat CSV file and the SQL database."""
         import csv
@@ -420,13 +462,13 @@ class SessionStore:
                     writer = csv.writer(f)
                     if not file_exists:
                         writer.writerow([
-                            "session_id", "vehicle_id", "vehicle_type", "number_plate",
-                            "entry_time", "exit_time", "crossing_duration", "created_at"
+                            "session_id", "simulation_id", "vehicle_id", "vehicle_type", "number_plate",
+                            "entry_time", "exit_time", "crossing_duration", "run_type", "algorithm", "created_at"
                         ])
                     writer.writerow([
-                        session_id, vehicle_id, vehicle_type, number_plate,
+                        session_id, simulation_id, vehicle_id, vehicle_type, number_plate,
                         round(entry_time, 2), round(exit_time, 2), round(crossing_duration, 2),
-                        datetime.utcnow().isoformat()
+                        run_type, algorithm, datetime.utcnow().isoformat()
                     ])
                 logger.debug("Logged vehicle crossing to flat CSV for %s", vehicle_id)
         except Exception:
@@ -446,12 +488,15 @@ class SessionStore:
                 
                 row = VehicleCrossing(
                     session_id=ts_row.id,
+                    simulation_id=simulation_id,
                     vehicle_id=vehicle_id,
                     vehicle_type=vehicle_type,
                     number_plate=number_plate,
                     entry_time=entry_time,
                     exit_time=exit_time,
                     crossing_duration=crossing_duration,
+                    run_type=run_type,
+                    algorithm=algorithm,
                 )
                 session.add(row)
                 session.commit()

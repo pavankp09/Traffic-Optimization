@@ -1840,14 +1840,26 @@ class _SimWorld:
                 self.wait_history.append((self.sim_clock, v.wait_time))
                 if getattr(self, "session_store", None) and getattr(self, "session_id", None):
                     crossing_time = self.sim_clock - getattr(v, "spawn_time", 0.0)
+                    
+                    world_key = getattr(self, "world_key", "unknown")
+                    if world_key == "baseline":
+                        run_type = "baseline"
+                        algorithm = getattr(self, "baseline_controller", "fixed_time")
+                    else:
+                        run_type = "rl"
+                        algorithm = getattr(self, "algorithm", "RL")
+
                     self.session_store.save_vehicle_crossing(
                         session_id=self.session_id,
+                        simulation_id=getattr(self, "simulation_id", "unknown"),
                         vehicle_id=v.id,
                         vehicle_type=v.type_id,
                         number_plate=getattr(v, "number_plate", ""),
                         entry_time=getattr(v, "spawn_time", 0.0),
                         exit_time=self.sim_clock,
-                        crossing_duration=crossing_time
+                        crossing_duration=crossing_time,
+                        run_type=run_type,
+                        algorithm=algorithm
                     )
 
         # ── Pedestrian spawn ──────────────────────────────────────────────
@@ -2048,11 +2060,21 @@ def _load_rl_policy(model_key: str):
         logger.debug("No trained model registered for %s — using heuristic", model_key)
         return None
 
-    try:
+    # Resolve algorithm class loader (SAC falls back to DQN in trainer.py)
+    if model_key in ("rl2", "rl3"):
+        from stable_baselines3 import DQN
+        loader = DQN
+    elif model_key == "rl4":
+        from stable_baselines3 import A2C
+        loader = A2C
+    else:
         from stable_baselines3 import PPO
-        model = PPO.load(model_path)
+        loader = PPO
+
+    try:
+        model = loader.load(model_path)
         _loaded_policies[model_key] = model
-        logger.info("Loaded trained RL policy for %s from %s", model_key, model_path)
+        logger.info("Loaded trained %s policy for %s from %s", loader.__name__, model_key, model_path)
         return model
     except Exception as exc:
         logger.warning("Could not load RL model for %s (%s) — using heuristic", model_key, exc)
@@ -2253,10 +2275,11 @@ def _run_mock_sim(sio, session_id: str) -> None:
         except Exception as e:
             logger.exception("Failed to load replay decisions")
 
-    # ── Load trained RL policy (keyed by model_key, not session_id) ─────────
+    # ── Load trained RL policies (keyed by model_key, not session_id) ─────────
     # Lookup uses model_key so the policy persists across the session_id change
     # between training and the subsequent simulation run.
-    _rl_model = _load_rl_policy(model_key)
+    _policy_fns = {}
+    keys_to_load = ["rl1", "rl2", "rl3", "rl4", "custom"] if model_key == "all" else [model_key]
 
     def _make_policy_fn(model):
         """Return a policy_fn(world) → (phase_idx, duration_s) closure."""
@@ -2292,12 +2315,15 @@ def _run_mock_sim(sio, session_id: str) -> None:
 
         return _policy_fn
 
-    _policy_fn = _make_policy_fn(_rl_model) if _rl_model is not None else None
+    for k in keys_to_load:
+        model = _load_rl_policy(k)
+        if model is not None:
+            _policy_fns[k] = _make_policy_fn(model)
 
-    if _rl_model is not None:
-        logger.info("[sim] Session %s: using trained RL policy for RL worlds", session_id)
+    if _policy_fns:
+        logger.info("[sim] Session %s: using trained RL policies for: %s", session_id, list(_policy_fns.keys()))
     else:
-        logger.info("[sim] Session %s: no trained model — using adaptive heuristic", session_id)
+        logger.info("[sim] Session %s: no trained models loaded — using adaptive heuristic", session_id)
 
     # Assign the policy to whichever RL world matches the active model_key.
     def _rl_world(mk, **kw):
@@ -2315,9 +2341,12 @@ def _run_mock_sim(sio, session_id: str) -> None:
                 **actual_kw,
             )
         else:
+            active_policy = None
+            if model_key == "all" or model_key == mk:
+                active_policy = _policy_fns.get(mk)
             return _SimWorld(
                 fixed_time=False,
-                policy_fn=_policy_fn if mk == model_key and _policy_fn else None,
+                policy_fn=active_policy,
                 intersection_type=intersection_type,
                 replay_decisions=replay_decisions if mk == model_key else None,
                 replay_episode_num=replay_episode if mk == model_key else None,
@@ -2358,10 +2387,18 @@ def _run_mock_sim(sio, session_id: str) -> None:
         # In split-view, attach the trained policy to the matching world.
         _WORLDS = _ALL_WORLDS_MAP
 
-    for w in _WORLDS.values():
+    simulation_id = get_session_state(session_id).get("simulation_id", "unknown")
+    for k, w in _WORLDS.items():
         w.max_sim_s = max_sim_s
         w.session_id = session_id
         w.session_store = store
+        w.world_key = k
+        w.simulation_id = simulation_id
+        if k == "baseline":
+            w.baseline_controller = _baseline_ctrl
+        else:
+            algo_map = {"rl1": "PPO", "rl2": "DQN", "rl3": "SAC", "rl4": "A2C", "custom": "Custom"}
+            w.algorithm = algo_map.get(k, "RL")
 
     step = 0
     vid_counter = 0
@@ -3170,10 +3207,20 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
             # 'baseline', 'rl1', 'rl2', 'rl3', 'rl4', 'custom', or 'all'
             model_key = data.get("model_key") or "all"
             replay_episode = data.get("replay_episode")
+            
+            import uuid
+            simulation_id = f"sim-{uuid.uuid4().hex[:12]}"
+            
+            try:
+                store.create_simulation_run(simulation_id, session_id, sim_cfg, adverse_cfg)
+            except Exception as run_db_err:
+                logger.warning("Simulation run database creation failed: %s", run_db_err)
+
             set_session_state(session_id, running=True, paused=False,
                               raw_sim_config=sim_dict, model_key=model_key,
-                              replay_episode=replay_episode)
-            emit("sim:started", {"session_id": session_id, "status": "running"})
+                              replay_episode=replay_episode,
+                              simulation_id=simulation_id)
+            emit("sim:started", {"session_id": session_id, "simulation_id": simulation_id, "status": "running"})
 
             # Launch background sim loop as a daemon thread
             t = threading.Thread(target=_run_mock_sim, args=(socketio, session_id), daemon=True)
@@ -3218,11 +3265,11 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
 
     @socketio.on("sim:speed")
     def handle_sim_speed(data):
-        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20"""
+        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20 | 50"""
         if not isinstance(data, dict):
             return
         session_id  = data.get("session_id", "")
-        multiplier  = max(1, min(20, int(data.get("multiplier", 1))))
+        multiplier  = max(1, min(50, int(data.get("multiplier", 1))))
         if not session_id:
             return
         set_session_state(session_id, sim_speed=multiplier)

@@ -39,13 +39,13 @@ interface SimCanvasProps {
   className?: string
   frameOverride?: SimFrame | null
   // Optional speed/playback overlay rendered on the canvas
-  speedValue?:    1 | 5 | 10 | 20 | 50
+  speedValue?: 1 | 5 | 10 | 20 | 50
   onSpeedChange?: (s: 1 | 5 | 10 | 20 | 50) => void
-  onPlayPause?:   () => void
-  onStop?:        () => void
-  isPaused?:      boolean
-  isRunning?:     boolean
-  responsive?:    boolean
+  onPlayPause?: () => void
+  onStop?: () => void
+  isPaused?: boolean
+  isRunning?: boolean
+  responsive?: boolean
 }
 
 export default function SimCanvas({
@@ -75,7 +75,7 @@ export default function SimCanvas({
     const handleResize = () => {
       if (!containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
-      
+
       const targetRatio = width / height
       let newW = rect.width
       let newH = rect.height
@@ -109,7 +109,7 @@ export default function SimCanvas({
   const activeHeight = responsive ? responsiveSize.h : height
 
   const currentFrame = useSimulationStore((s) => s.currentFrame)
-  const adverseEvents = useSimulationStore((s) => s.adverseEvents)
+  const adverseEvents = useSimulationStore((s) => s.viewMode === 'split' ? s.splitAdverseEvents : s.adverseEvents)
   const trainedModels = useSimulationStore((s) => s.trainedModels)
   const intersectionType = useConfigStore((s) => s.simConfig.intersection_type)
   const nLanes = useConfigStore((s) => s.simConfig.n_lanes)
@@ -141,7 +141,7 @@ export default function SimCanvas({
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    
+
     // Scale client coords to match canvas design width/height (activeWidth/activeHeight)
     // because canvas element might be scaled down by CSS/responsive wrapper
     const cx = (e.clientX - rect.left) * (activeWidth / rect.width)
@@ -178,11 +178,11 @@ export default function SimCanvas({
     if (!ctx) return
 
     // ── HiDPI / Retina fix ────────────────────────────────────────────────────
-    const dpr  = window.devicePixelRatio || 1
-    const bufW = Math.round(activeWidth  * dpr)
+    const dpr = window.devicePixelRatio || 1
+    const bufW = Math.round(activeWidth * dpr)
     const bufH = Math.round(activeHeight * dpr)
     if (canvas.width !== bufW || canvas.height !== bufH) {
-      canvas.width  = bufW
+      canvas.width = bufW
       canvas.height = bufH
     }
 
@@ -232,44 +232,44 @@ export default function SimCanvas({
     if (label) {
       const policyMode = frame?.policy_mode ?? null
       const isRL = label.includes('RL') || label.includes('PPO') || label.includes('DQN') ||
-                   label.includes('SAC') || label.includes('A2C') || label.includes('Custom')
+        label.includes('SAC') || label.includes('A2C') || label.includes('Custom')
 
       let modelKey = ''
-      if      (label.includes('PPO'))    modelKey = 'rl1'
-      else if (label.includes('DQN'))    modelKey = 'rl2'
-      else if (label.includes('SAC'))    modelKey = 'rl3'
-      else if (label.includes('A2C'))    modelKey = 'rl4'
+      if (label.includes('PPO')) modelKey = 'rl1'
+      else if (label.includes('DQN')) modelKey = 'rl2'
+      else if (label.includes('SAC')) modelKey = 'rl3'
+      else if (label.includes('A2C')) modelKey = 'rl4'
       else if (label.includes('Custom')) modelKey = 'custom'
 
       const isTrainedRL = isRL && modelKey && trainedModels.includes(modelKey)
 
       // Accent colour: green = neural model running, blue = trained/baseline, default = muted
       const accentColor =
-        policyMode === 'model'     ? 'rgba(74,222,128,0.95)'  :   // bright green — real RL!
-        policyMode === 'replay'    ? 'rgba(6,182,212,0.95)'   :   // neon cyan — replay!
-        policyMode === 'heuristic' ? 'rgba(251,191,36,0.90)'  :   // amber — trained but using heuristic
-        isTrainedRL                ? 'rgba(151,185,167,0.90)' :   // sage — trained
-                                     'rgba(143,184,206,0.90)'     // blue — baseline/default
+        policyMode === 'model' ? 'rgba(74,222,128,0.95)' :   // bright green — real RL!
+          policyMode === 'replay' ? 'rgba(6,182,212,0.95)' :   // neon cyan — replay!
+            policyMode === 'heuristic' ? 'rgba(251,191,36,0.90)' :   // amber — trained but using heuristic
+              isTrainedRL ? 'rgba(151,185,167,0.90)' :   // sage — trained
+                'rgba(143,184,206,0.90)'     // blue — baseline/default
 
       const borderColor =
-        policyMode === 'model'     ? 'rgba(74,222,128,0.35)'  :
-        policyMode === 'replay'    ? 'rgba(6,182,212,0.35)'   :
-        policyMode === 'heuristic' ? 'rgba(251,191,36,0.30)'  :
-        isTrainedRL                ? 'rgba(151,185,167,0.32)' :
-                                     'rgba(143,184,206,0.28)'
+        policyMode === 'model' ? 'rgba(74,222,128,0.35)' :
+          policyMode === 'replay' ? 'rgba(6,182,212,0.35)' :
+            policyMode === 'heuristic' ? 'rgba(251,191,36,0.30)' :
+              isTrainedRL ? 'rgba(151,185,167,0.32)' :
+                'rgba(143,184,206,0.28)'
 
       // Badge text: append the policy mode so it's unambiguous
       const replayEp = (frame as any)?.replay_episode
       const modeSuffix =
-        policyMode === 'model'     ? '  ·  ⚡ MODEL ACTIVE' :
-        policyMode === 'replay'    ? `  ·  🎬 REPLAY EP${replayEp ?? ''}` :
-        policyMode === 'heuristic' ? '  ·  ~ HEURISTIC'     :
-        isTrainedRL                ? '  ·  TRAINED'          : ''
+        policyMode === 'model' ? '  ·  ⚡ MODEL ACTIVE' :
+          policyMode === 'replay' ? `  ·  🎬 REPLAY EP${replayEp ?? ''}` :
+            policyMode === 'heuristic' ? '  ·  ~ HEURISTIC' :
+              isTrainedRL ? '  ·  TRAINED' : ''
       const badgeText = `${label.toUpperCase()}${modeSuffix}`
 
       ctx.save()
       ctx.font = 'bold 9px "SF Mono", "Fira Code", monospace'
-      const textW  = ctx.measureText(badgeText).width
+      const textW = ctx.measureText(badgeText).width
       const badgeW = textW + 30
       const badgeH = 22
       const bx = 10
@@ -279,14 +279,14 @@ export default function SimCanvas({
       ctx.fillStyle = 'rgba(0,0,0,0.55)'
       ctx.beginPath()
       if (ctx.roundRect) { ctx.roundRect(bx + 1, by + 1.5, badgeW, badgeH, 5) }
-      else                { ctx.rect(bx + 1, by + 1.5, badgeW, badgeH) }
+      else { ctx.rect(bx + 1, by + 1.5, badgeW, badgeH) }
       ctx.fill()
 
       // Background — slightly tinted green when model is active
       ctx.fillStyle = policyMode === 'model' ? 'rgba(10,30,16,0.96)' : 'rgba(6,9,14,0.95)'
       ctx.beginPath()
       if (ctx.roundRect) { ctx.roundRect(bx, by, badgeW, badgeH, 5) }
-      else                { ctx.rect(bx, by, badgeW, badgeH) }
+      else { ctx.rect(bx, by, badgeW, badgeH) }
       ctx.fill()
 
       ctx.strokeStyle = borderColor
@@ -399,11 +399,10 @@ export default function SimCanvas({
                       key={s}
                       onClick={() => onSpeedChange(s)}
                       type="button"
-                      className={`px-2 py-0.5 text-[10px] font-bold font-mono rounded-full transition-all duration-150 flex-shrink-0 ${
-                        isActive
+                      className={`px-2 py-0.5 text-[10px] font-bold font-mono rounded-full transition-all duration-150 flex-shrink-0 ${isActive
                           ? 'bg-[#0e2a35] text-cyan-400 border border-cyan-400/45 shadow-[0_0_8px_rgba(34,211,238,0.22)]'
                           : 'text-slate-500 hover:text-slate-300 border border-transparent hover:bg-white/[0.05]'
-                      }`}
+                        }`}
                     >
                       {s}x
                     </button>
@@ -446,7 +445,7 @@ export default function SimCanvas({
               <span className="text-[7px] border border-black/20 rounded px-0.5 py-0">IND</span>
               <span>{selectedVehicleData.number_plate || 'TS09EX1234'}</span>
             </div>
-            
+
             {frame?.vehicles.some(v => v.id === selectedVehicleId) ? (
               <span className="flex items-center gap-1.5 text-[9px] text-green-400 font-semibold font-mono uppercase bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -491,8 +490,8 @@ export default function SimCanvas({
               <span className="text-slate-300 capitalize flex items-center gap-1 font-medium font-mono text-[10px]">
                 {selectedVehicleData.arm || 'N/A'} Arm → {
                   selectedVehicleData.turn === 'straight' ? 'Straight ⬆' :
-                  selectedVehicleData.turn === 'right' ? 'Right Turn ↗' :
-                  selectedVehicleData.turn === 'left' ? 'Left Turn ↖' : 'Straight ⬆'
+                    selectedVehicleData.turn === 'right' ? 'Right Turn ↗' :
+                      selectedVehicleData.turn === 'left' ? 'Left Turn ↖' : 'Straight ⬆'
                 }
               </span>
             </div>

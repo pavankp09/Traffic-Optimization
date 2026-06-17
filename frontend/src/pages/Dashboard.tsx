@@ -44,13 +44,12 @@ function PanelBtn({ active, label, onClick, disabled }: { active: boolean; label
     <button
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
-        disabled
+      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${disabled
           ? 'bg-transparent border-white/[0.04] text-slate-650 opacity-40 cursor-not-allowed'
           : active
             ? 'bg-[#8fb8ce]/[0.12] border-[#8fb8ce]/35 text-[#8fb8ce]'
             : 'bg-transparent border-white/[0.07] text-slate-500 hover:border-white/[0.14] hover:text-slate-300'
-      }`}
+        }`}
     >
       {path && (
         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 opacity-70" fill="currentColor">
@@ -137,6 +136,9 @@ export default function Dashboard() {
 
   const isRunning = useSimulationStore((s) => s.isRunning)
   const isPaused = useSimulationStore((s) => s.isPaused)
+  const splitIsRunning = useSimulationStore((s) => s.splitIsRunning)
+  const splitIsPaused = useSimulationStore((s) => s.splitIsPaused)
+  const splitSimSpeed = useSimulationStore((s) => s.splitSimSpeed)
   const viewMode = useSimulationStore((s) => s.viewMode)
   const setViewMode = useSimulationStore((s) => s.setViewMode)
 
@@ -164,7 +166,11 @@ export default function Dashboard() {
   const baselineMetrics = useSessionStore((s) => s.baselineMetrics)
   const isBaselineCompleted = useSessionStore((s) => s.isBaselineCompleted)
   const simTimeS = useSimulationStore((s) => s.simTimeS)
+  const splitSimTimeS = useSimulationStore((s) => s.splitSimTimeS)
   const economic = useSessionStore((s) => s.economic)
+
+  const fmtClock = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
   // Keep Neural Processing tab while training is active
   useEffect(() => {
@@ -200,9 +206,9 @@ export default function Dashboard() {
                 <span className="text-[10px] text-slate-500 hidden lg:block">Traffic Management Research Tool</span>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${(viewMode === 'split' ? splitIsRunning : isRunning) ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
                 <p className="text-[10px] text-slate-500 font-mono">
-                  {isRunning ? 'SIMULATION ACTIVE' : 'READY'}
+                  {(viewMode === 'split' ? splitIsRunning : isRunning) ? 'SIMULATION ACTIVE' : 'READY'}
                 </p>
               </div>
             </div>
@@ -378,7 +384,7 @@ export default function Dashboard() {
 
             {/* Simulation controls — for RL models: only after training completes, never during training */}
             {(viewMode === 'split' || selectedModelSingle === 'baseline' || (trainedModels.includes(selectedModelSingle) && !isTraining)) && (
-              !isRunning ? (
+              !(viewMode === 'split' ? splitIsRunning : isRunning) ? (
                 <div className="flex items-center gap-2 animate-fadeIn">
                   <button
                     className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide"
@@ -399,9 +405,9 @@ export default function Dashboard() {
                   <div className="flex items-center gap-1.5 animate-fadeIn">
                     <button
                       className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.10] hover:border-white/[0.20] text-slate-300 hover:text-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      onClick={isPaused ? resumeSimulation : pauseSimulation}
+                      onClick={splitIsPaused ? resumeSimulation : pauseSimulation}
                     >
-                      {isPaused
+                      {splitIsPaused
                         ? <><svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg> Resume</>
                         : <><svg viewBox="0 0 10 10" className="w-2.5 h-2 fill-current" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="0" width="3" height="10" /><rect x="6" y="0" width="3" height="10" /></svg> Pause</>
                       }
@@ -448,15 +454,15 @@ export default function Dashboard() {
             {/* Convergence badge removed from header — shown in NRAL panel only */}
 
             {/* Speed controls for split grid — shared across all canvases */}
-            {viewMode === 'split' && isRunning && (
-              <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1">
+            {viewMode === 'split' && splitIsRunning && (
+              <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1 h-8">
                 <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Speed</span>
                 {([1, 5, 20, 50] as const).map((spd) => (
                   <button
                     key={spd}
                     type="button"
                     onClick={() => setSpeed(spd)}
-                    className={`w-7 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${simSpeed === spd
+                    className={`w-7 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${splitSimSpeed === spd
                       ? 'bg-white text-[#0a0d14] border-white'
                       : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/[0.15]'
                       }`}
@@ -464,6 +470,15 @@ export default function Dashboard() {
                     {spd}×
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Simulation timer for split grid */}
+            {viewMode === 'split' && splitIsRunning && (
+              <div className="flex items-center gap-1.5 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-2 py-1 h-8 animate-fadeIn">
+                <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Time</span>
+                <span className="text-[10px] font-bold font-mono text-[#7ec8e3] tabular-nums">{fmtClock(splitSimTimeS)}</span>
+                <span className="text-[9px] text-slate-600 font-mono ml-0.5">/ {fmtClock(Number(simConfig.simulation_duration_s ?? 1800))}</span>
               </div>
             )}
 
@@ -521,42 +536,42 @@ export default function Dashboard() {
                             />
                           </div>
 
-                           <div className="animate-fadeIn flex-shrink-0">
-                             {baselineRightTab === 'stats' ? (
-                               <SimLiveStatsPanel />
-                             ) : (
-                               <RLConfigDetailsPanel modelKey="baseline" />
-                             )}
-                           </div>
+                          <div className="animate-fadeIn flex-shrink-0">
+                            {baselineRightTab === 'stats' ? (
+                              <SimLiveStatsPanel />
+                            ) : (
+                              <RLConfigDetailsPanel modelKey="baseline" />
+                            )}
+                          </div>
 
-                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
-                               <button
-                                 type="button"
-                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
-                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                   }`}
-                                 onClick={() => setBaselineRightTab('config')}
-                                 title="Configuration Specs"
-                               >
-                                 <span className="text-[13px] leading-none font-bold">CFG</span>
-                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
-                               </button>
-                               <button
-                                 type="button"
-                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
-                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                   }`}
-                                 onClick={() => setBaselineRightTab('stats')}
-                                 title="Live Stats Panel"
-                               >
-                                 <span className="text-[13px] leading-none font-bold">SIM</span>
-                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
-                               </button>
-                             </div>
-                           </div>
+                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
+                              <button
+                                type="button"
+                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
+                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                  }`}
+                                onClick={() => setBaselineRightTab('config')}
+                                title="Configuration Specs"
+                              >
+                                <span className="text-[13px] leading-none font-bold">CFG</span>
+                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
+                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                  }`}
+                                onClick={() => setBaselineRightTab('stats')}
+                                title="Live Stats Panel"
+                              >
+                                <span className="text-[13px] leading-none font-bold">SIM</span>
+                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
+                              </button>
+                            </div>
+                          </div>
                         </>
                       )
                     }
@@ -620,21 +635,21 @@ export default function Dashboard() {
                             )}
                           </div>
 
-                           <div className="animate-fadeIn flex-shrink-0">
-                             {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
-                             {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
-                             {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
-                           </div>
+                          <div className="animate-fadeIn flex-shrink-0">
+                            {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
+                            {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
+                            {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
+                          </div>
 
-                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
-                               {(
-                                 [
-                                   { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
-                                   { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
-                                   { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
-                                 ] as const
-                               ).map(({ key, label, sub, title }) => (
+                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
+                              {(
+                                [
+                                  { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
+                                  { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
+                                  { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
+                                ] as const
+                              ).map(({ key, label, sub, title }) => (
                                 <button
                                   key={key}
                                   type="button"

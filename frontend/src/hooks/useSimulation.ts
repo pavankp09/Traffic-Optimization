@@ -40,59 +40,87 @@ export function useSimulation() {
 
   const startSimulation = useCallback(
     (sessionIdOverride?: string, durationSeconds?: number) => {
-      // Get the active model key so the backend only runs that world
-      const modelKey = useSimulationStore.getState().selectedModelSingle
-
-      // Clear baseline results when starting simulation on baseline itself
-      if (modelKey === 'baseline') {
-        useSimulationStore.getState().clearBaselineResults()
-      }
-
-      // For RL models: preserve baseline frames & metrics — only clear RL frames
-      // For baseline: do a full reset
-      resetSimulation()
-      if (modelKey === 'baseline') {
-        useSimulationStore.getState().clearFrames()
-      } else {
-        // Clear only RL frames; keep baseline frame + metrics intact
-        useSimulationStore.getState().clearRlFrames()
-      }
-
-      const sid = sessionIdOverride ?? `session_${Date.now()}`
-      setSessionId(sid)
-      setActiveSession(sid)
-
-      const START_SPEED = 5
-      setSimSpeed(START_SPEED)
-
       const viewMode = useSimulationStore.getState().viewMode
-      // In split grid both worlds must run → omit model_key (backend defaults to 'all').
-      // In single view restrict to the active model so unused worlds don't waste CPU.
-      const effectiveModelKey = viewMode === 'split' ? 'all' : modelKey
 
-      const currentSimConfig = useConfigStore.getState().simConfig
-      const currentAdverseConfig = useConfigStore.getState().adverseConfig
-      const mergedConfig = getMergedConfig(currentSimConfig, modelKey)
-      const runtimeSimConfig = {
-        ...mergedConfig,
-        simulation_duration_s: durationSeconds ?? mergedConfig.simulation_duration_s ?? 1800,
-        sim_speed_multiplier: START_SPEED,
-      }
-      emit('sim:start', {
-        session_id: sid,
-        model_key: effectiveModelKey,
-        sim_config: runtimeSimConfig,
-        adverse_config: currentAdverseConfig,
-      })
+      if (viewMode === 'split') {
+        const resetSplitSimulation = useSimulationStore.getState().resetSplitSimulation
+        const clearSplitFrames = useSimulationStore.getState().clearSplitFrames
+        const setSplitSessionId = useSimulationStore.getState().setSplitSessionId
+        const setSplitSimSpeed = useSimulationStore.getState().setSplitSimSpeed
 
-      // When Baseline tab simulation starts, also trigger baseline computation
-      // so RL training can reuse the metrics + demonstrations without re-running.
-      if (modelKey === 'baseline') {
-        emit('baseline:compute', {
+        resetSplitSimulation()
+        clearSplitFrames()
+
+        const sid = sessionIdOverride ?? `session_split_${Date.now()}`
+        setSplitSessionId(sid)
+
+        const START_SPEED = 5
+        setSplitSimSpeed(START_SPEED)
+
+        const currentSimConfig = useConfigStore.getState().simConfig
+        const currentAdverseConfig = useConfigStore.getState().adverseConfig
+        const runtimeSimConfig = {
+          ...currentSimConfig,
+          simulation_duration_s: durationSeconds ?? currentSimConfig.simulation_duration_s ?? 1800,
+          sim_speed_multiplier: START_SPEED,
+        }
+
+        emit('sim:start', {
           session_id: sid,
+          model_key: 'all',
           sim_config: runtimeSimConfig,
           adverse_config: currentAdverseConfig,
         })
+      } else {
+        // Get the active model key so the backend only runs that world
+        const modelKey = useSimulationStore.getState().selectedModelSingle
+
+        // Clear baseline results when starting simulation on baseline itself
+        if (modelKey === 'baseline') {
+          useSimulationStore.getState().clearBaselineResults()
+        }
+
+        // For RL models: preserve baseline frames & metrics — only clear RL frames
+        // For baseline: do a full reset
+        resetSimulation()
+        if (modelKey === 'baseline') {
+          useSimulationStore.getState().clearFrames()
+        } else {
+          // Clear only RL frames; keep baseline frame + metrics intact
+          useSimulationStore.getState().clearRlFrames()
+        }
+
+        const sid = sessionIdOverride ?? `session_${Date.now()}`
+        setSessionId(sid)
+        setActiveSession(sid)
+
+        const START_SPEED = 5
+        setSimSpeed(START_SPEED)
+
+        const currentSimConfig = useConfigStore.getState().simConfig
+        const currentAdverseConfig = useConfigStore.getState().adverseConfig
+        const mergedConfig = getMergedConfig(currentSimConfig, modelKey)
+        const runtimeSimConfig = {
+          ...mergedConfig,
+          simulation_duration_s: durationSeconds ?? mergedConfig.simulation_duration_s ?? 1800,
+          sim_speed_multiplier: START_SPEED,
+        }
+        emit('sim:start', {
+          session_id: sid,
+          model_key: modelKey,
+          sim_config: runtimeSimConfig,
+          adverse_config: currentAdverseConfig,
+        })
+
+        // When Baseline tab simulation starts, also trigger baseline computation
+        // so RL training can reuse the metrics + demonstrations without re-running.
+        if (modelKey === 'baseline') {
+          emit('baseline:compute', {
+            session_id: sid,
+            sim_config: runtimeSimConfig,
+            adverse_config: currentAdverseConfig,
+          })
+        }
       }
     },
     [emit, resetSimulation, setSessionId, setActiveSession, setSimSpeed, getMergedConfig]
@@ -147,21 +175,45 @@ export function useSimulation() {
   )
 
   const stopSimulation = useCallback(() => {
-    if (!sessionId) return
-    emit('sim:stop', { session_id: sessionId })
-    resetSimulation()
+    const viewMode = useSimulationStore.getState().viewMode
+    if (viewMode === 'split') {
+      const splitSid = useSimulationStore.getState().splitSessionId
+      if (!splitSid) return
+      emit('sim:stop', { session_id: splitSid })
+      useSimulationStore.getState().resetSplitSimulation()
+    } else {
+      if (!sessionId) return
+      emit('sim:stop', { session_id: sessionId })
+      resetSimulation()
+    }
   }, [emit, sessionId, resetSimulation])
 
   const pauseSimulation = useCallback(() => {
-    if (!sessionId) return
-    setPaused(true)
-    emit('sim:pause', { session_id: sessionId })
+    const viewMode = useSimulationStore.getState().viewMode
+    if (viewMode === 'split') {
+      const splitSid = useSimulationStore.getState().splitSessionId
+      if (!splitSid) return
+      useSimulationStore.getState().setSplitPaused(true)
+      emit('sim:pause', { session_id: splitSid })
+    } else {
+      if (!sessionId) return
+      setPaused(true)
+      emit('sim:pause', { session_id: sessionId })
+    }
   }, [emit, sessionId, setPaused])
 
   const resumeSimulation = useCallback(() => {
-    if (!sessionId) return
-    setPaused(false)
-    emit('sim:resume', { session_id: sessionId })
+    const viewMode = useSimulationStore.getState().viewMode
+    if (viewMode === 'split') {
+      const splitSid = useSimulationStore.getState().splitSessionId
+      if (!splitSid) return
+      useSimulationStore.getState().setSplitPaused(false)
+      emit('sim:resume', { session_id: splitSid })
+    } else {
+      if (!sessionId) return
+      setPaused(false)
+      emit('sim:resume', { session_id: sessionId })
+    }
   }, [emit, sessionId, setPaused])
 
   const startTraining = useCallback(
@@ -233,14 +285,18 @@ export function useSimulation() {
   }, [emit, sessionId, setTrainingPaused])
 
   const setSpeed = useCallback((multiplier: 1 | 5 | 10 | 20 | 50) => {
-    // Always read sessionId live from store — avoids stale closure when the
-    // callback is created before sessionId is set (React timing edge-case).
-    const sid = useSimulationStore.getState().sessionId
-    if (!sid) return
-    // Optimistic UI update: button highlights immediately, no round-trip needed.
-    useSimulationStore.getState().setSimSpeed(multiplier)
-    // Tell the backend — the sim loop re-reads sim_speed every tick.
-    emit('sim:speed', { session_id: sid, multiplier })
+    const viewMode = useSimulationStore.getState().viewMode
+    if (viewMode === 'split') {
+      const splitSid = useSimulationStore.getState().splitSessionId
+      if (!splitSid) return
+      useSimulationStore.getState().setSplitSimSpeed(multiplier)
+      emit('sim:speed', { session_id: splitSid, multiplier })
+    } else {
+      const sid = useSimulationStore.getState().sessionId
+      if (!sid) return
+      useSimulationStore.getState().setSimSpeed(multiplier)
+      emit('sim:speed', { session_id: sid, multiplier })
+    }
   }, [emit])  // emit is stable (empty deps in useSocket)
 
   const resetAll = useCallback(() => {

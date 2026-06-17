@@ -10,8 +10,8 @@ export default function BeforeAfterChart() {
   const viewMode = useSimulationStore((s) => s.viewMode)
   const selectedModelSingle = useSimulationStore((s) => s.selectedModelSingle)
   const selectedModelsSplit = useSimulationStore((s) => s.selectedModelsSplit)
-  const isRunning = useSimulationStore((s) => s.isRunning)
-  const simTimeS = useSimulationStore((s) => s.simTimeS)
+  const isRunning = useSimulationStore((s) => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
+  const simTimeS = useSimulationStore((s) => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
 
   // Simulation frame buffers
   const baselineFrame = useSimulationStore((s) => s.baselineFrame)
@@ -19,12 +19,16 @@ export default function BeforeAfterChart() {
   const rl2Frame      = useSimulationStore((s) => s.rl2Frame)
   const rl3Frame      = useSimulationStore((s) => s.rl3Frame)
   const rl4Frame      = useSimulationStore((s) => s.rl4Frame)
+  const splitFrames   = useSimulationStore((s) => s.splitFrames)
 
   // Session metrics
   const currentMetrics  = useSessionStore((s) => s.currentMetrics)
   const baselineMetrics = useSessionStore((s) => s.baselineMetrics)
 
   const getFrameForModel = (modelKey: string): SimFrame | null => {
+    if (viewMode === 'split') {
+      return splitFrames[modelKey] || null
+    }
     if (modelKey === 'baseline') return baselineFrame
     if (modelKey === 'rl1') return rl1Frame
     if (modelKey === 'rl2') return rl2Frame
@@ -40,6 +44,11 @@ export default function BeforeAfterChart() {
 
   // Resolve metrics for each active key
   const getMetricsForModel = (modelKey: string): EpisodeMetrics | null => {
+    if (viewMode === 'split') {
+      const splitLastSimulationMetrics = useSimulationStore.getState().splitLastSimulationMetrics
+      return splitLastSimulationMetrics[modelKey] || null
+    }
+
     // If not running and no metrics exist yet, show clean empty state
     if (!isRunning && simTimeS === 0 && !currentMetrics && !baselineMetrics) {
       return null
@@ -162,7 +171,7 @@ export default function BeforeAfterChart() {
               <Bar
                 key={key}
                 dataKey={key}
-                name={meta.label.split(' ')[0] + ' ' + (meta.label.split(' ')[1] || '')}
+                name={meta.label.replace('Agent ', '').replace(' Agent', '')}
                 fill={meta.color}
                 radius={[2, 2, 0, 0]}
               />

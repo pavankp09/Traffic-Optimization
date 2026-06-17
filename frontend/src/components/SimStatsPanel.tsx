@@ -154,7 +154,7 @@ function ComparativeStatTile({
           return (
             <div key={key} className={`flex flex-col ${idx > 0 ? 'border-l border-white/[0.05] pl-2' : ''}`}>
               <span className="text-[9px] font-bold uppercase tracking-widest font-mono mb-0.5 truncate" style={{ color: meta.color }}>
-                {meta.label.split(' ')[0]}
+                {meta.label.replace('Agent ', '').replace(' Agent', '')}
               </span>
               <span className="tabular-nums" style={{ color: stats && valNum !== undefined && valNum > 0 ? '#f1f5f9' : '#475569' }}>
                 {valNum !== undefined ? `${format(valNum)}${unit}` : '—'}
@@ -170,9 +170,9 @@ function ComparativeStatTile({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function SimStatsPanel() {
-  const isRunning = useSimulationStore((s) => s.isRunning)
-  const simTimeS = useSimulationStore((s) => s.simTimeS)
   const viewMode = useSimulationStore((s) => s.viewMode)
+  const isRunning = useSimulationStore((s) => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
+  const simTimeS = useSimulationStore((s) => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
 
   const selectedModelSingle = useSimulationStore((s) => s.selectedModelSingle)
   const selectedModelsSplit = useSimulationStore((s) => s.selectedModelsSplit)
@@ -182,8 +182,12 @@ export default function SimStatsPanel() {
   const rl2Frame = useSimulationStore((s) => s.rl2Frame)
   const rl3Frame = useSimulationStore((s) => s.rl3Frame)
   const rl4Frame = useSimulationStore((s) => s.rl4Frame)
+  const splitFrames = useSimulationStore((s) => s.splitFrames)
 
   const getFrameForModel = (modelName: string) => {
+    if (viewMode === 'split') {
+      return splitFrames[modelName] || null
+    }
     if (modelName === 'baseline') return baselineFrame
     if (modelName === 'rl1') return rl1Frame
     if (modelName === 'rl2') return rl2Frame
@@ -250,7 +254,7 @@ export default function SimStatsPanel() {
               <div className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${meta.indicatorColor} ${key !== 'baseline' ? 'animate-pulse' : ''}`} />
                 <span className="font-bold text-[10px] truncate uppercase font-sans tracking-wide" style={{ color: meta.color }}>
-                  {meta.label.split(' ')[0]} {meta.label.split(' ')[1] || ''}
+                  {meta.label.replace('Agent ', '').replace(' Agent', '')}
                 </span>
               </div>
 
@@ -351,7 +355,7 @@ export default function SimStatsPanel() {
                       return (
                         <span key={key} style={{ color: mMeta.color }} className="flex items-center gap-0.5">
                           {idx > 0 && <span className="text-gray-700 mr-1.5">|</span>}
-                          {mMeta.label.split(' ')[0]}: {armStopped.length}
+                          {mMeta.label.replace('Agent ', '').replace(' Agent', '')}: {armStopped.length}
                         </span>
                       )
                     })}
@@ -369,7 +373,7 @@ export default function SimStatsPanel() {
                     return (
                       <div key={key} className="flex items-center gap-2">
                         <span className="w-12 flex-shrink-0 truncate font-semibold" style={{ color: mMeta.color }}>
-                          {mMeta.label.split(' ')[0]}
+                          {mMeta.label.replace('Agent ', '').replace(' Agent', '')}
                         </span>
                         <div className="flex-1 h-[3px] bg-white/[0.04] rounded-full overflow-hidden">
                           <div

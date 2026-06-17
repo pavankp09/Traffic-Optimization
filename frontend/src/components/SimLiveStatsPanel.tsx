@@ -154,12 +154,18 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
   const selectedModelSingle = useSimulationStore(s => s.selectedModelSingle)
   const activeModelKey = modelKey ?? selectedModelSingle
 
-  const isRunning = useSimulationStore(s => s.isRunning)
-  const globalSimTimeS = useSimulationStore(s => s.simTimeS)
-  const lastMetrics = useSimulationStore(s => s.lastSimulationMetrics[activeModelKey])
+  const viewMode = useSimulationStore(s => s.viewMode)
+  const isRunning = useSimulationStore(s => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
+  const globalSimTimeS = useSimulationStore(s => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
+  const lastMetrics = useSimulationStore(s => 
+    viewMode === 'split' ? s.splitLastSimulationMetrics[activeModelKey] : s.lastSimulationMetrics[activeModelKey]
+  )
   const { simConfig } = useConfigStore()
 
   const activeFrame = useSimulationStore(s => {
+    if (viewMode === 'split') {
+      return s.splitFrames[activeModelKey] || null
+    }
     switch (activeModelKey) {
       case 'baseline': return s.baselineFrame
       case 'rl1': return s.rl1Frame
