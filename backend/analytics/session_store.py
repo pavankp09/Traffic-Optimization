@@ -23,6 +23,7 @@ from backend.db.models import (
     Episode,
     MetricRecord,
     InsightCard,
+    VehicleCrossing,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,8 +40,35 @@ class SessionStore:
     """
 
     def __init__(self, db_url: str = "sqlite:///backend/db/traffic.db"):
+        import os
+        if db_url.startswith("sqlite:///"):
+            path = db_url[10:]
+            if path and not path.startswith(":") and not os.path.isabs(path):
+                backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if path.startswith("backend/"):
+                    path = path[8:]
+                elif path.startswith("backend\\"):
+                    path = path[8:]
+                abs_path = os.path.abspath(os.path.join(backend_dir, path))
+                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                db_url = f"sqlite:///{abs_path}"
+
         self._engine = create_engine(db_url, echo=False)
         init_db(db_url)  # ensure all tables exist
+        import threading
+        self._csv_lock = threading.Lock()
+        
+        csv_path = "backend/db/vehicle_crossings.csv"
+        if not os.path.isabs(csv_path):
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if csv_path.startswith("backend/"):
+                csv_path = csv_path[8:]
+            elif csv_path.startswith("backend\\"):
+                csv_path = csv_path[8:]
+            self._csv_path = os.path.abspath(os.path.join(backend_dir, csv_path))
+        else:
+            self._csv_path = csv_path
+        os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
 
     # ------------------------------------------------------------------
     # Session management
@@ -367,3 +395,67 @@ class SessionStore:
         except Exception:
             logger.exception("Failed to delete session %s", session_id)
             raise
+
+    def save_vehicle_crossing(
+        self,
+        session_id: str,
+        vehicle_id: str,
+        vehicle_type: str,
+        number_plate: str,
+        entry_time: float,
+        exit_time: float,
+        crossing_duration: float,
+    ) -> None:
+        """Saves a VehicleCrossing record to both a flat CSV file and the SQL database."""
+        import csv
+        import os
+        from datetime import datetime
+
+        # 1. Save to flat CSV file
+        try:
+            os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
+            with self._csv_lock:
+                file_exists = os.path.exists(self._csv_path)
+                with open(self._csv_path, mode="a", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    if not file_exists:
+                        writer.writerow([
+                            "session_id", "vehicle_id", "vehicle_type", "number_plate",
+                            "entry_time", "exit_time", "crossing_duration", "created_at"
+                        ])
+                    writer.writerow([
+                        session_id, vehicle_id, vehicle_type, number_plate,
+                        round(entry_time, 2), round(exit_time, 2), round(crossing_duration, 2),
+                        datetime.utcnow().isoformat()
+                    ])
+                logger.debug("Logged vehicle crossing to flat CSV for %s", vehicle_id)
+        except Exception:
+            logger.exception("Failed to save vehicle crossing to flat CSV file")
+
+        # 2. Save to SQL database
+        try:
+            with Session(self._engine) as session:
+                ts_row = (
+                    session.query(TrainingSession)
+                    .filter(TrainingSession.notes == session_id)
+                    .first()
+                )
+                if ts_row is None:
+                    logger.warning("save_vehicle_crossing: TrainingSession not found for %s", session_id)
+                    return
+                
+                row = VehicleCrossing(
+                    session_id=ts_row.id,
+                    vehicle_id=vehicle_id,
+                    vehicle_type=vehicle_type,
+                    number_plate=number_plate,
+                    entry_time=entry_time,
+                    exit_time=exit_time,
+                    crossing_duration=crossing_duration,
+                )
+                session.add(row)
+                session.commit()
+                logger.debug("Saved vehicle crossing to DB for %s", vehicle_id)
+        except Exception:
+            logger.exception("Failed to save vehicle crossing record to SQL database")
+

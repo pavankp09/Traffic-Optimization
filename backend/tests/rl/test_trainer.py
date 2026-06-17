@@ -313,7 +313,7 @@ class TestConvergenceCallback:
         _on_step() with a done=True step and verify training stops (returns False)
         and converged is set to True.
         """
-        cb = ConvergenceCallback(session_id="test-session", emit_fn=None)
+        cb = ConvergenceCallback(session_id="test-session", emit_fn=None, early_stopping=True)
         cb.db_url = "sqlite://"  # in-memory, unused but set for completeness
         cb.emit_fn = None
 

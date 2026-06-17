@@ -68,8 +68,28 @@ function calculateStats(frame: SimFrame | null) {
 
   const signal = frame.signals[0]
   const phase = signal?.phase ?? 0
-  const phColor = PHASE_COLORS[phase] ?? '#fff'
-  const phName = PHASE_NAMES[phase] ?? `Phase ${phase}`
+  const isArrowJunction = signal?.arrow_state !== undefined
+  const phColor = isArrowJunction
+    ? (phase % 2 === 0 ? '#10b981' : '#f59e0b')
+    : (PHASE_COLORS[phase] ?? '#fff')
+
+  let phName = `Phase ${phase}`
+  if (isArrowJunction) {
+    const arrowPhaseNames = [
+      'N–S Straight/Left Green',
+      'N–S Straight/Left Yellow',
+      'N–S Right Green',
+      'N–S Right Yellow',
+      'E–W Straight/Left Green',
+      'E–W Straight/Left Yellow',
+      'E–W Right Green',
+      'E–W Right Yellow'
+    ]
+    phName = arrowPhaseNames[phase] ?? phName
+  } else {
+    phName = PHASE_NAMES[phase] ?? phName
+  }
+
   const remaining = signal?.remaining_s ?? 0
 
   return {

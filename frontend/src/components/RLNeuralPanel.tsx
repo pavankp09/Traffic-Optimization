@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TrainingModeSelector, type TrainingMode } from './TrainingModeSelector'
+import type { TrainingMode } from './TrainingModeSelector'
 import { useSessionStore } from '../store/sessionStore'
 import { useSimulationStore } from '../store/simulationStore'
 import { useConfigStore } from '../store/configStore'
@@ -67,15 +67,20 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
   const lastTput   = latestEp?.metrics?.throughput ?? currentMetrics?.throughput_vph ?? 0
 
   // Convergence progress (episodes toward total_timesteps equivalent)
-  const totalSteps = Number(simConfig.total_timesteps ?? 500000)
+  const totalSteps = Number(simConfig.total_timesteps ?? 20000)
+  const resolvedTrainingMode = simConfig.training_mode ?? trainingMode
   
   let totalEpisodes = 500;
-  if (trainingMode === 'stage1' || trainingMode === 'stage2') {
+  let stepsPerEpText = '40 steps/ep';
+  if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
     totalEpisodes = Math.round(totalSteps / 40);
-  } else if (trainingMode === 'stage3') {
+    stepsPerEpText = '40 steps/ep';
+  } else if (resolvedTrainingMode === 'stage3') {
     totalEpisodes = Math.round(totalSteps / 360);
-  } else if (trainingMode === 'stage4') {
+    stepsPerEpText = '360 steps/ep';
+  } else if (resolvedTrainingMode === 'stage4') {
     totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360);
+    stepsPerEpText = 'mixed steps/ep';
   }
 
   const isFinished = isTrained && !isThisTraining;
@@ -131,7 +136,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
             <button
               onClick={() => {
                 useDecisionStore.getState().clearLive()
-                startTraining(simConfig.total_timesteps, trainingMode)
+                startTraining(simConfig.total_timesteps, simConfig.training_mode ?? 'stage1')
               }}
               className="flex items-center gap-1.5 text-[8px] font-mono uppercase tracking-widest px-2 py-1 rounded-md border border-orange-500/40 text-orange-400 bg-orange-500/[0.06] hover:bg-orange-500/20 transition-colors"
               title="Retrain from scratch"
@@ -144,13 +149,6 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
-
-        {/* Training mode selector — only before first training */}
-        {!isTraining && !isTrained && (
-          <div>
-            <TrainingModeSelector selected={trainingMode} onChange={setTrainingMode} />
-          </div>
-        )}
 
         {/* Active stage badge — during training */}
         {isThisTraining && trainingStage > 0 && (
@@ -204,7 +202,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
         {(isThisTraining || isTrained) && (
           <div className="bg-black/20 border border-white/[0.05] rounded-xl px-3 py-2.5">
             <div className="flex items-center justify-between mb-1.5">
-              <SecLabel>Training Progress</SecLabel>
+              <SecLabel>Training Progress ({totalSteps.toLocaleString()} steps · {stepsPerEpText})</SecLabel>
               <span className="text-[9px] font-mono tabular-nums" style={{ color }}>
                 {epCount} / {denominatorText} episodes
               </span>
@@ -227,7 +225,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
               { k: 'LR',          v: simConfig.learning_rate?.toExponential(0) ?? '3e-4' },
               { k: 'Gamma',       v: (simConfig.discount_factor ?? 0.99).toString() },
               { k: 'Hidden',      v: `${simConfig.hidden_layer_size ?? 64}` },
-              { k: 'Timesteps',   v: ((simConfig.total_timesteps ?? 500000) / 1000).toFixed(0) + 'k' },
+              { k: 'Episodes',    v: totalEpisodes.toLocaleString() },
               { k: 'Optimizer',   v: modelKey === 'rl4' ? 'RMSProp' : 'Adam' },
             ].map(({ k, v }) => (
               <div key={k} className="flex flex-col gap-0.5 bg-black/20 rounded-lg p-1.5 border border-white/[0.04]">

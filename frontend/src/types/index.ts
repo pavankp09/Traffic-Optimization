@@ -16,6 +16,7 @@ export interface VehicleFrame {
   arm: 'N' | 'S' | 'E' | 'W'
   angle?: number   // radians override for turning vehicles
   turn?: 'straight' | 'right' | 'left'
+  number_plate?: string
 }
 
 export interface SignalState {
@@ -24,6 +25,12 @@ export interface SignalState {
   elapsed_s: number
   duration_s?: number    // total duration of current phase (s)
   remaining_s?: number   // seconds left in current phase
+  arrow_state?: {
+    N: { main: 'red' | 'yellow' | 'green_straight_left'; right: 'red' | 'yellow' | 'green_right' }
+    S: { main: 'red' | 'yellow' | 'green_straight_left'; right: 'red' | 'yellow' | 'green_right' }
+    E: { main: 'red' | 'yellow' | 'green_straight_left'; right: 'red' | 'yellow' | 'green_right' }
+    W: { main: 'red' | 'yellow' | 'green_straight_left'; right: 'red' | 'yellow' | 'green_right' }
+  }
 }
 
 export interface SimAggStats {
@@ -157,8 +164,9 @@ export interface EconomicSummary {
 // ---- Config types ----
 
 export interface SimConfig {
-  intersection_type: 'four_way' | 't_junction' | 'y_junction' | 'six_arm' | 'roundabout' | 'four_way_free_left' | 't_junction_free_left' | 'roundabout_free_left' | 'custom'
+  intersection_type: 'four_way' | 't_junction' | 'y_junction' | 'six_arm' | 'roundabout' | 'four_way_free_left' | 't_junction_free_left' | 'roundabout_free_left' | 'four_way_arrow' | 'four_way_protected_right' | 'custom'
   n_lanes: number
+  lane_config?: Partial<Record<'N' | 'S' | 'E' | 'W', number>>
   total_vph: number
   traffic_pattern: 'uniform' | 'morning_peak' | 'evening_peak' | 'bidirectional' | 'random'
   arrival_distribution: 'poisson' | 'weibull' | 'uniform'
@@ -204,6 +212,7 @@ export interface SimConfig {
   baseline_coordination?: number
   baseline_controller?: 'fixed_time' | 'websters'
   same_as_baseline?: boolean
+  training_mode?: 'stage1' | 'stage2' | 'stage3' | 'stage4'
   [key: string]: unknown
 }
 

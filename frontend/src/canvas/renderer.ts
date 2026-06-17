@@ -1,16 +1,16 @@
 import type { VehicleFrame, SignalState, AdverseEvent } from '../types'
 
 export const VEHICLE_COLORS: Record<string, string> = {
-  car:           '#60a5fa',
-  two_wheeler:   '#c084fc',
-  ev_scooter:    '#34d399',
+  car: '#60a5fa',
+  two_wheeler: '#c084fc',
+  ev_scooter: '#34d399',
   auto_rickshaw: '#f59e0b',
-  e_rickshaw:    '#6ee7b7',
-  cab:           '#fbbf24',
+  e_rickshaw: '#6ee7b7',
+  cab: '#fbbf24',
   delivery_bike: '#fb923c',
-  tsrtc_bus:     '#f87171',
-  school_bus:    '#fcd34d',
-  truck:         '#94a3b8',
+  tsrtc_bus: '#f87171',
+  school_bus: '#fcd34d',
+  truck: '#94a3b8',
 }
 
 export const PHASE_COLORS: Record<number, string> = {
@@ -23,16 +23,16 @@ export const PHASE_COLORS: Record<number, string> = {
 
 // [bodyLength, bodyWidth] in world units
 const VEHICLE_DIMS: Record<string, [number, number]> = {
-  car:           [3.8, 1.8],
-  two_wheeler:   [2.0, 0.8],
-  ev_scooter:    [2.1, 0.9],
+  car: [3.8, 1.8],
+  two_wheeler: [2.0, 0.8],
+  ev_scooter: [2.1, 0.9],
   auto_rickshaw: [2.9, 1.7],
-  e_rickshaw:    [3.1, 1.7],
-  cab:           [4.1, 1.9],
+  e_rickshaw: [3.1, 1.7],
+  cab: [4.1, 1.9],
   delivery_bike: [2.0, 0.8],
-  tsrtc_bus:     [9.5, 2.4],
-  school_bus:    [7.5, 2.4],
-  truck:         [8.5, 2.6],
+  tsrtc_bus: [9.5, 2.4],
+  school_bus: [7.5, 2.4],
+  truck: [8.5, 2.6],
 }
 
 const ARM_ANGLE: Record<string, number> = {
@@ -44,28 +44,65 @@ const ARM_ANGLE: Record<string, number> = {
 
 // ── Layout constants ─────────────────────────────────────────────────────────
 const ROAD_HALF_PX = 72    // pixels: half total road width (≈14.4 world units)
-const MEDIAN_PX    = 8     // centre median half-width in pixels
-const LANE_W_PX    = 21    // pixels per lane
-const LANE_DIV_1   = MEDIAN_PX + LANE_W_PX       // inner↔mid boundary  = 29 px
-const LANE_DIV_2   = MEDIAN_PX + 2 * LANE_W_PX   // mid↔outer boundary  = 50 px
-const STOP_PX      = 99    // pixels from canvas centre to stop line
-const CORNER_R     = 14    // kerb corner radius at intersection arm entries
-const FOOTPATH     = '#0d1520'  // sidewalk / footpath surface colour
+const MEDIAN_PX = 8     // centre median half-width in pixels
+const LANE_W_PX = 21    // pixels per lane
+const LANE_DIV_1 = MEDIAN_PX + LANE_W_PX       // inner↔mid boundary  = 29 px
+const LANE_DIV_2 = MEDIAN_PX + 2 * LANE_W_PX   // mid↔outer boundary  = 50 px
+const STOP_PX = 99    // pixels from canvas centre to stop line
+const CORNER_R = 14    // kerb corner radius at intersection arm entries
+const FOOTPATH = '#0d1520'  // sidewalk / footpath surface colour
+
+type ArmId = 'N' | 'S' | 'E' | 'W'
+
+export interface LaneRenderConfig {
+  n_lanes?: number
+  lane_config?: Partial<Record<ArmId, number>>
+}
+
+function clampLaneCount(value: unknown, fallback = 3): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(5, Math.round(parsed)))
+}
+
+function resolveLaneCounts(config?: LaneRenderConfig): Record<ArmId, number> {
+  const base = clampLaneCount(config?.n_lanes, 3)
+  return {
+    N: clampLaneCount(config?.lane_config?.N, base),
+    S: clampLaneCount(config?.lane_config?.S, base),
+    E: clampLaneCount(config?.lane_config?.E, base),
+    W: clampLaneCount(config?.lane_config?.W, base),
+  }
+}
+
+function laneEdgePx(count: number): number {
+  return MEDIAN_PX + clampLaneCount(count) * LANE_W_PX + 1
+}
+
+function laneDividerPx(index: number): number {
+  return MEDIAN_PX + index * LANE_W_PX
+}
+
+function laneCenterPx(index: number): number {
+  return MEDIAN_PX + LANE_W_PX * index + LANE_W_PX / 2
+}
 
 export interface RenderConfig {
-  width:      number
-  height:     number
-  scale:      number
-  offsetX:    number
-  offsetY:    number
+  width: number
+  height: number
+  scale: number
+  offsetX: number
+  offsetY: number
   showTrails: boolean
   showLabels: boolean
-  showGrid:   boolean
+  showGrid: boolean
 }
 
 export function getDefaultRenderConfig(width: number, height: number): RenderConfig {
-  return { width, height, scale: 5, offsetX: width / 2, offsetY: height / 2,
-           showTrails: true, showLabels: false, showGrid: true }
+  return {
+    width, height, scale: 5, offsetX: width / 2, offsetY: height / 2,
+    showTrails: true, showLabels: false, showGrid: true
+  }
 }
 
 export function worldToCanvas(x: number, y: number, cfg: RenderConfig): [number, number] {
@@ -109,11 +146,11 @@ export function drawGrid(ctx: CanvasRenderingContext2D, cfg: RenderConfig): void
 // ── Road & Intersection ──────────────────────────────────────────────────────
 
 function drawYRoad(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh: number, width: number, height: number): void {
-  const len  = Math.max(width, height) * 1.1
+  const len = Math.max(width, height) * 1.1
   const arms: { angle: number; label: string }[] = [
-    { angle: -Math.PI / 2,                         label: 'NORTH' },
-    { angle: -Math.PI / 2 + (2 * Math.PI / 3),    label: 'SE'    },
-    { angle: -Math.PI / 2 - (2 * Math.PI / 3),    label: 'SW'    },
+    { angle: -Math.PI / 2, label: 'NORTH' },
+    { angle: -Math.PI / 2 + (2 * Math.PI / 3), label: 'SE' },
+    { angle: -Math.PI / 2 - (2 * Math.PI / 3), label: 'SW' },
   ]
 
   // Footpath base
@@ -130,15 +167,15 @@ function drawYRoad(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh: nu
     ctx.fillRect(0, -rh, len, rh * 2)
 
     ctx.strokeStyle = 'rgba(71,85,105,0.75)'
-    ctx.lineWidth   = 1.5
+    ctx.lineWidth = 1.5
     ctx.setLineDash([])
     ctx.beginPath()
     ctx.moveTo(0, -rh); ctx.lineTo(len, -rh)
-    ctx.moveTo(0,  rh); ctx.lineTo(len,  rh)
+    ctx.moveTo(0, rh); ctx.lineTo(len, rh)
     ctx.stroke()
 
     ctx.strokeStyle = 'rgba(250,204,21,0.60)'
-    ctx.lineWidth   = 1.5
+    ctx.lineWidth = 1.5
     for (const s of [-1, 1]) {
       ctx.beginPath()
       ctx.moveTo(0, s * MEDIAN_PX); ctx.lineTo(len, s * MEDIAN_PX)
@@ -146,7 +183,7 @@ function drawYRoad(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh: nu
     }
 
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'
-    ctx.lineWidth   = 1
+    ctx.lineWidth = 1
     ctx.setLineDash([12, 10])
     for (const s of [-1, 1]) {
       ctx.beginPath()
@@ -156,7 +193,7 @@ function drawYRoad(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh: nu
     ctx.setLineDash([])
 
     ctx.strokeStyle = 'rgba(229,231,235,0.85)'
-    ctx.lineWidth   = 2.5
+    ctx.lineWidth = 2.5
     ctx.beginPath()
     ctx.moveTo(STOP_PX, MEDIAN_PX); ctx.lineTo(STOP_PX, rh)
     ctx.stroke()
@@ -168,23 +205,23 @@ function drawYRoad(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh: nu
   ctx.fillStyle = '#1e2a3a'
   ctx.beginPath()
   for (let i = 0; i < 6; i++) {
-    const a  = (i * Math.PI) / 3
+    const a = (i * Math.PI) / 3
     const px = cx + rh * Math.cos(a)
     const py = cy + rh * Math.sin(a)
     if (i === 0) ctx.moveTo(px, py)
-    else         ctx.lineTo(px, py)
+    else ctx.lineTo(px, py)
   }
   ctx.closePath()
   ctx.fill()
   ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-  ctx.lineWidth   = 1.5
+  ctx.lineWidth = 1.5
   ctx.stroke()
 
   // Arm labels
-  ctx.font          = 'bold 11px monospace'
+  ctx.font = 'bold 11px monospace'
   ctx.letterSpacing = '0.10em'
-  ctx.fillStyle     = 'rgba(148,163,184,0.55)'
-  ctx.textAlign     = 'center'
+  ctx.fillStyle = 'rgba(148,163,184,0.55)'
+  ctx.textAlign = 'center'
   arms.forEach(({ angle, label }) => {
     const lx = cx + (rh * 2 + 16) * Math.cos(angle) * 1.8
     const ly = cy + (rh * 2 + 16) * Math.sin(angle) * 1.8
@@ -211,15 +248,15 @@ function drawSixRoads(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh:
     ctx.fillRect(0, -rh, len, rh * 2)
 
     ctx.strokeStyle = 'rgba(71,85,105,0.75)'
-    ctx.lineWidth   = 1.5
+    ctx.lineWidth = 1.5
     ctx.setLineDash([])
     ctx.beginPath()
     ctx.moveTo(0, -rh); ctx.lineTo(len, -rh)
-    ctx.moveTo(0,  rh); ctx.lineTo(len,  rh)
+    ctx.moveTo(0, rh); ctx.lineTo(len, rh)
     ctx.stroke()
 
     ctx.strokeStyle = 'rgba(250,204,21,0.60)'
-    ctx.lineWidth   = 1.5
+    ctx.lineWidth = 1.5
     for (const s of [-1, 1]) {
       ctx.beginPath()
       ctx.moveTo(0, s * MEDIAN_PX); ctx.lineTo(len, s * MEDIAN_PX)
@@ -227,7 +264,7 @@ function drawSixRoads(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh:
     }
 
     ctx.strokeStyle = 'rgba(255,255,255,0.20)'
-    ctx.lineWidth   = 1
+    ctx.lineWidth = 1
     ctx.setLineDash([12, 10])
     for (const s of [-1, 1]) {
       ctx.beginPath()
@@ -237,7 +274,7 @@ function drawSixRoads(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh:
     ctx.setLineDash([])
 
     ctx.strokeStyle = 'rgba(229,231,235,0.85)'
-    ctx.lineWidth   = 2.5
+    ctx.lineWidth = 2.5
     ctx.beginPath()
     ctx.moveTo(STOP_PX, MEDIAN_PX); ctx.lineTo(STOP_PX, rh)
     ctx.stroke()
@@ -249,32 +286,32 @@ function drawSixRoads(ctx: CanvasRenderingContext2D, cx: number, cy: number, rh:
   ctx.fillStyle = '#1e2a3a'
   ctx.beginPath()
   for (let i = 0; i < 6; i++) {
-    const a    = (i * Math.PI) / 3
+    const a = (i * Math.PI) / 3
     const next = ((i + 1) * Math.PI) / 3
-    const px   = cx + rh * Math.cos(a - Math.PI / 6)
-    const py   = cy + rh * Math.sin(a - Math.PI / 6)
-    const qx   = cx + rh * Math.cos(a + Math.PI / 6)
-    const qy   = cy + rh * Math.sin(a + Math.PI / 6)
+    const px = cx + rh * Math.cos(a - Math.PI / 6)
+    const py = cy + rh * Math.sin(a - Math.PI / 6)
+    const qx = cx + rh * Math.cos(a + Math.PI / 6)
+    const qy = cy + rh * Math.sin(a + Math.PI / 6)
     if (i === 0) ctx.moveTo(px, py)
     ctx.lineTo(qx, qy)
-    const mx   = cx + rh * 0.82 * Math.cos((a + next) / 2)
-    const my   = cy + rh * 0.82 * Math.sin((a + next) / 2)
+    const mx = cx + rh * 0.82 * Math.cos((a + next) / 2)
+    const my = cy + rh * 0.82 * Math.sin((a + next) / 2)
     ctx.lineTo(mx, my)
   }
   ctx.closePath()
   ctx.fill()
   ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-  ctx.lineWidth   = 1.5
+  ctx.lineWidth = 1.5
   ctx.stroke()
 
   // Arm labels
   const LABEL_NAMES = ['E', 'SE', 'SW', 'W', 'NW', 'NE']
-  ctx.font          = 'bold 11px monospace'
+  ctx.font = 'bold 11px monospace'
   ctx.letterSpacing = '0.10em'
-  ctx.fillStyle     = 'rgba(148,163,184,0.55)'
-  ctx.textAlign     = 'center'
+  ctx.fillStyle = 'rgba(148,163,184,0.55)'
+  ctx.textAlign = 'center'
   for (let i = 0; i < 6; i++) {
-    const a  = (i * Math.PI) / 3
+    const a = (i * Math.PI) / 3
     const lx = cx + (rh * 2 + 20) * Math.cos(a)
     const ly = cy + (rh * 2 + 20) * Math.sin(a)
     ctx.fillText(LABEL_NAMES[i], lx, ly + 4)
@@ -288,10 +325,10 @@ function drawFreeleftSlip(
 ): void {
   // Draw channelised triangular islands + slip lanes at all 4 corners
   const corners = [
-    { ix: cx + rh, iy: cy - rh, a1x: cx + rh + 20, a1y: cy - rh,      a2x: cx + rh,      a2y: cy - rh - 20, ex: cx + rh + 14, ey: cy - rh - 14 },
-    { ix: cx + rh, iy: cy + rh, a1x: cx + rh,       a1y: cy + rh + 20, a2x: cx + rh + 20, a2y: cy + rh,      ex: cx + rh + 14, ey: cy + rh + 14 },
-    { ix: cx - rh, iy: cy + rh, a1x: cx - rh - 20,  a1y: cy + rh,      a2x: cx - rh,      a2y: cy + rh + 20, ex: cx - rh - 14, ey: cy + rh + 14 },
-    { ix: cx - rh, iy: cy - rh, a1x: cx - rh,        a1y: cy - rh - 20, a2x: cx - rh - 20, a2y: cy - rh,     ex: cx - rh - 14, ey: cy - rh - 14 },
+    { ix: cx + rh, iy: cy - rh, a1x: cx + rh + 20, a1y: cy - rh, a2x: cx + rh, a2y: cy - rh - 20, ex: cx + rh + 14, ey: cy - rh - 14 },
+    { ix: cx + rh, iy: cy + rh, a1x: cx + rh, a1y: cy + rh + 20, a2x: cx + rh + 20, a2y: cy + rh, ex: cx + rh + 14, ey: cy + rh + 14 },
+    { ix: cx - rh, iy: cy + rh, a1x: cx - rh - 20, a1y: cy + rh, a2x: cx - rh, a2y: cy + rh + 20, ex: cx - rh - 14, ey: cy + rh + 14 },
+    { ix: cx - rh, iy: cy - rh, a1x: cx - rh, a1y: cy - rh - 20, a2x: cx - rh - 20, a2y: cy - rh, ex: cx - rh - 14, ey: cy - rh - 14 },
   ]
   corners.forEach(({ ix, iy, a1x, a1y, a2x, a2y, ex, ey }) => {
     // Slip lane surface
@@ -333,19 +370,19 @@ function drawTurnArrow(
   ctx.translate(x, y)
   ctx.rotate(heading)
   ctx.strokeStyle = 'rgba(255,255,255,0.28)'
-  ctx.lineWidth   = 1.5
-  ctx.lineCap     = 'round'
-  ctx.lineJoin    = 'round'
+  ctx.lineWidth = 1.5
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
 
   const SHAFT = 10, HEAD = 3.5
 
   const shaft = () => {
     ctx.beginPath()
-    ctx.moveTo(0,  SHAFT * 0.5)
+    ctx.moveTo(0, SHAFT * 0.5)
     ctx.lineTo(0, -SHAFT * 0.5)
     ctx.moveTo(-HEAD, -SHAFT * 0.5 + HEAD + 1)
     ctx.lineTo(0, -SHAFT * 0.5 - 1)
-    ctx.lineTo( HEAD, -SHAFT * 0.5 + HEAD + 1)
+    ctx.lineTo(HEAD, -SHAFT * 0.5 + HEAD + 1)
     ctx.stroke()
   }
 
@@ -373,11 +410,11 @@ function drawTurnArrow(
     ctx.stroke()
   }
 
-  if (type === 'straight')       shaft()
-  if (type === 'right')          rightArc(0)
-  if (type === 'left')           leftArc(0)
+  if (type === 'straight') shaft()
+  if (type === 'right') rightArc(0)
+  if (type === 'left') leftArc(0)
   if (type === 'straight_right') { shaft(); rightArc(4) }
-  if (type === 'straight_left')  { shaft(); leftArc(-4) }
+  if (type === 'straight_left') { shaft(); leftArc(-4) }
 
   ctx.restore()
 }
@@ -392,7 +429,7 @@ function drawJunctionHatch(
   ctx.rect(cx - rh + 1, cy - rh + 1, rh * 2 - 2, rh * 2 - 2)
   ctx.clip()
   ctx.strokeStyle = 'rgba(250,204,21,0.065)'
-  ctx.lineWidth   = 1
+  ctx.lineWidth = 1
   ctx.setLineDash([])
   const step = 18, ext = rh * 4
   for (let offset = -ext; offset < ext * 2; offset += step) {
@@ -410,18 +447,18 @@ function drawZebraCrossing(
   arm: 'N' | 'S' | 'E' | 'W'
 ): void {
   // 3 clean white lines — simple, premium pedestrian crossing
-  const STRIPE_W  = 5
-  const GAP_W     = 5
+  const STRIPE_W = 5
+  const GAP_W = 5
   const N_STRIPES = 3
   const CROSS_LEN = rh * 2
-  const CROSS_W   = N_STRIPES * STRIPE_W + (N_STRIPES - 1) * GAP_W   // 3×5 + 2×5 = 25px
+  const CROSS_W = N_STRIPES * STRIPE_W + (N_STRIPES - 1) * GAP_W   // 3×5 + 2×5 = 25px
 
   ctx.save()
   ctx.translate(cx, cy)
-  if      (arm === 'N') { ctx.translate(0, -rh - CROSS_W - 2) }
-  else if (arm === 'S') { ctx.translate(0,  rh + 2) }
+  if (arm === 'N') { ctx.translate(0, -rh - CROSS_W - 2) }
+  else if (arm === 'S') { ctx.translate(0, rh + 2) }
   else if (arm === 'E') { ctx.rotate(Math.PI / 2); ctx.translate(0, -rh - CROSS_W - 2) }
-  else                  { ctx.rotate(Math.PI / 2); ctx.translate(0,  rh + 2) }
+  else { ctx.rotate(Math.PI / 2); ctx.translate(0, rh + 2) }
 
   // Draw in two halves — skip center median (MEDIAN_PX wide on each side)
   const MEDIAN = MEDIAN_PX   // 8px median gap each side
@@ -438,10 +475,20 @@ function drawZebraCrossing(
   ctx.restore()
 }
 
-export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfig, intersectionType: string = "four_way"): void {
+export function drawIntersection(
+  ctx: CanvasRenderingContext2D,
+  cfg: RenderConfig,
+  intersectionType: string = "four_way",
+  laneRenderConfig?: LaneRenderConfig
+): void {
   const cx = cfg.offsetX
   const cy = cfg.offsetY
-  const rh = ROAD_HALF_PX
+  const lanes = resolveLaneCounts(laneRenderConfig)
+  const nEdge = laneEdgePx(lanes.N)
+  const sEdge = laneEdgePx(lanes.S)
+  const eEdge = laneEdgePx(lanes.E)
+  const wEdge = laneEdgePx(lanes.W)
+  const rh = Math.max(nEdge, sEdge, eEdge, wEdge)
   const isTJunction = intersectionType === 't_junction' || intersectionType === 't_junction_free_left'
   const isYJunction = intersectionType === 'y_junction'
   const isSixArm = intersectionType === 'six_arm'
@@ -466,10 +513,15 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
 
   // Road asphalt — slightly warmer, lighter premium tone
   ctx.fillStyle = '#1a2230'
-  ctx.fillRect(0, cy - rh, cfg.width, rh * 2)
-  ctx.fillRect(cx - rh, 0, rh * 2, isTJunction ? cy + rh : cfg.height)
+  // W arm
+  ctx.fillRect(0, cy - wEdge, cx, wEdge * 2)
+  // E arm
+  ctx.fillRect(cx, cy - eEdge, cfg.width - cx, eEdge * 2)
+  // N arm
+  ctx.fillRect(cx - nEdge, 0, nEdge * 2, cy)
+  // S arm
   if (!isTJunction) {
-    ctx.fillRect(cx - rh, cy - rh, rh * 2, cfg.height - (cy - rh))
+    ctx.fillRect(cx - sEdge, cy, sEdge * 2, cfg.height - cy)
   }
 
   // Draw curved asphalt slip roads at corners for Free Left
@@ -499,7 +551,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
 
   // Intersection box — slightly lighter than road for premium contrast
   ctx.fillStyle = '#1e2a3a'
-  ctx.fillRect(cx - rh, cy - rh, rh * 2, rh * 2)
+  ctx.fillRect(cx - sEdge, cy - wEdge, sEdge + nEdge, wEdge + eEdge)
 
   // KEEP CLEAR diagonal hatch — very subtle yellow, only on non-roundabout
   if (!isRoundabout) drawJunctionHatch(ctx, cx, cy, rh)
@@ -520,64 +572,57 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
   // Centre median — E/W road
   for (const sign of [-1, 1]) {
     ctx.beginPath()
-    ctx.moveTo(0,       cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
+    ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
     ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
     ctx.stroke()
   }
 
-  // Inner lane dividers (inner↔middle lane)
+  // Lane dividers
   ctx.strokeStyle = 'rgba(255,255,255,0.28)'
   ctx.lineWidth = 1
   ctx.setLineDash([14, 10])
-  for (const sign of [-1, 1]) {
-    // N/S
-    ctx.beginPath()
-    ctx.moveTo(cx + sign * LANE_DIV_1, 0); ctx.lineTo(cx + sign * LANE_DIV_1, cy - rh)
-    if (!isTJunction) {
-      ctx.moveTo(cx + sign * LANE_DIV_1, cy + rh); ctx.lineTo(cx + sign * LANE_DIV_1, cfg.height)
+  const drawArmDividers = (axis: 'V' | 'H', sign: 1 | -1, count: number, isOppositeEnd: boolean) => {
+    for (let idx = 1; idx < count; idx++) {
+      ctx.strokeStyle = `rgba(255,255,255,${idx === 1 ? 0.28 : 0.12})`
+      const div = laneDividerPx(idx)
+      const limit = hasFreeLeft && idx === count - 1 ? Math.max(rh, div + LANE_W_PX) : rh
+      ctx.beginPath()
+      if (axis === 'V') {
+        if (!isOppositeEnd) { // N arm
+          ctx.moveTo(cx + sign * div, 0); ctx.lineTo(cx + sign * div, cy - limit)
+        } else if (!isTJunction) { // S arm
+          ctx.moveTo(cx + sign * div, cy + limit); ctx.lineTo(cx + sign * div, cfg.height)
+        }
+      } else {
+        if (!isOppositeEnd) { // W arm
+          ctx.moveTo(0, cy + sign * div); ctx.lineTo(cx - limit, cy + sign * div)
+        } else { // E arm
+          ctx.moveTo(cx + limit, cy + sign * div); ctx.lineTo(cfg.width, cy + sign * div)
+        }
+      }
+      ctx.stroke()
     }
-    ctx.stroke()
-    // E/W
-    ctx.beginPath()
-    ctx.moveTo(0,       cy + sign * LANE_DIV_1); ctx.lineTo(cx - rh, cy + sign * LANE_DIV_1)
-    ctx.moveTo(cx + rh, cy + sign * LANE_DIV_1); ctx.lineTo(cfg.width, cy + sign * LANE_DIV_1)
-    ctx.stroke()
   }
 
-  // Outer lane dividers (middle↔outer lane)
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)'
-  for (const sign of [-1, 1]) {
-    const nLimit = hasFreeLeft ? 110 : rh
-    const sLimit = (hasFreeLeft && !isTJunction) ? 110 : rh
-    const eLimit = (hasFreeLeft && intersectionType !== 't_junction_free_left') ? 110 : rh
-    const wLimit = hasFreeLeft ? 110 : rh
+  drawArmDividers('V', 1, lanes.N, false)   // N arm approaching (right side)
+  drawArmDividers('V', 1, lanes.S, true)    // S arm exiting (right side)
+  drawArmDividers('V', -1, lanes.S, true)   // S arm approaching (left side)
+  drawArmDividers('V', -1, lanes.N, false)  // N arm exiting (left side)
 
-    // N/S
-    const limitY1 = sign === 1 ? nLimit : sLimit
-    ctx.beginPath()
-    ctx.moveTo(cx + sign * LANE_DIV_2, 0); ctx.lineTo(cx + sign * LANE_DIV_2, cy - limitY1)
-    if (!isTJunction) {
-      ctx.moveTo(cx + sign * LANE_DIV_2, cy + limitY1); ctx.lineTo(cx + sign * LANE_DIV_2, cfg.height)
-    }
-    ctx.stroke()
-
-    // E/W
-    const limitX1 = sign === 1 ? eLimit : wLimit
-    ctx.beginPath()
-    ctx.moveTo(0,       cy + sign * LANE_DIV_2); ctx.lineTo(cx - limitX1, cy + sign * LANE_DIV_2)
-    ctx.moveTo(cx + limitX1, cy + sign * LANE_DIV_2); ctx.lineTo(cfg.width, cy + sign * LANE_DIV_2)
-    ctx.stroke()
-  }
+  drawArmDividers('H', -1, lanes.W, false)  // W arm approaching (top side)
+  drawArmDividers('H', -1, lanes.E, true)   // E arm exiting (top side)
+  drawArmDividers('H', 1, lanes.E, true)    // E arm approaching (bottom side)
+  drawArmDividers('H', 1, lanes.W, false)   // W arm exiting (bottom side)
   ctx.setLineDash([])
 
   // ── Stop lines (solid white) ───────────────────────────────────────────────
   ctx.strokeStyle = 'rgba(229,231,235,0.9)'
   ctx.lineWidth = 2.5
   ctx.beginPath()
-  const nLimit = hasFreeLeft ? LANE_DIV_2 : rh
-  const sLimit = (hasFreeLeft && !isTJunction) ? LANE_DIV_2 : rh
-  const eLimit = (hasFreeLeft && intersectionType !== 't_junction_free_left') ? LANE_DIV_2 : rh
-  const wLimit = hasFreeLeft ? LANE_DIV_2 : rh
+  const nLimit = hasFreeLeft ? laneDividerPx(Math.max(1, lanes.N - 1)) : nEdge
+  const sLimit = (hasFreeLeft && !isTJunction) ? laneDividerPx(Math.max(1, lanes.S - 1)) : sEdge
+  const eLimit = (hasFreeLeft && intersectionType !== 't_junction_free_left') ? laneDividerPx(Math.max(1, lanes.E - 1)) : eEdge
+  const wLimit = hasFreeLeft ? laneDividerPx(Math.max(1, lanes.W - 1)) : wEdge
 
   // N arm southbound
   ctx.moveTo(cx + MEDIAN_PX, cy - STOP_PX); ctx.lineTo(cx + nLimit, cy - STOP_PX)
@@ -596,36 +641,46 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
     const ARROW_OFFSET = 22
     // N arm (southbound, heading = Math.PI = pointing south/down)
     const nArrowY = cy - STOP_PX - ARROW_OFFSET
-    drawTurnArrow(ctx, cx + MEDIAN_PX + LANE_W_PX * 0.5, nArrowY, Math.PI, 'straight_left')
-    drawTurnArrow(ctx, cx + MEDIAN_PX + LANE_W_PX * 1.5, nArrowY, Math.PI, 'straight')
-    drawTurnArrow(ctx, cx + MEDIAN_PX + LANE_W_PX * 2.5, nArrowY, Math.PI, 'straight_right')
+    for (let idx = 0; idx < lanes.N; idx++) {
+      const type = idx === 0 ? 'straight_left' : idx === lanes.N - 1 ? 'straight_right' : 'straight'
+      drawTurnArrow(ctx, cx + laneCenterPx(idx), nArrowY, Math.PI, type)
+    }
     // S arm (northbound, heading = 0 = pointing north/up)
     if (!isTJunction) {
       const sArrowY = cy + STOP_PX + ARROW_OFFSET
-      drawTurnArrow(ctx, cx - MEDIAN_PX - LANE_W_PX * 0.5, sArrowY, 0, 'straight_left')
-      drawTurnArrow(ctx, cx - MEDIAN_PX - LANE_W_PX * 1.5, sArrowY, 0, 'straight')
-      drawTurnArrow(ctx, cx - MEDIAN_PX - LANE_W_PX * 2.5, sArrowY, 0, 'straight_right')
+      for (let idx = 0; idx < lanes.S; idx++) {
+        const type = idx === 0 ? 'straight_left' : idx === lanes.S - 1 ? 'straight_right' : 'straight'
+        drawTurnArrow(ctx, cx - laneCenterPx(idx), sArrowY, 0, type)
+      }
     }
     // E arm (westbound, heading = Math.PI/2 = pointing west/left)
     const eArrowX = cx + STOP_PX + ARROW_OFFSET
-    drawTurnArrow(ctx, eArrowX, cy + MEDIAN_PX + LANE_W_PX * 0.5, Math.PI / 2, 'straight_left')
-    drawTurnArrow(ctx, eArrowX, cy + MEDIAN_PX + LANE_W_PX * 1.5, Math.PI / 2, 'straight')
-    drawTurnArrow(ctx, eArrowX, cy + MEDIAN_PX + LANE_W_PX * 2.5, Math.PI / 2, 'straight_right')
+    for (let idx = 0; idx < lanes.E; idx++) {
+      const type = idx === 0 ? 'straight_left' : idx === lanes.E - 1 ? 'straight_right' : 'straight'
+      drawTurnArrow(ctx, eArrowX, cy + laneCenterPx(idx), Math.PI / 2, type)
+    }
     // W arm (eastbound, heading = -Math.PI/2 = pointing east/right)
     const wArrowX = cx - STOP_PX - ARROW_OFFSET
-    drawTurnArrow(ctx, wArrowX, cy - MEDIAN_PX - LANE_W_PX * 0.5, -Math.PI / 2, 'straight_left')
-    drawTurnArrow(ctx, wArrowX, cy - MEDIAN_PX - LANE_W_PX * 1.5, -Math.PI / 2, 'straight')
-    drawTurnArrow(ctx, wArrowX, cy - MEDIAN_PX - LANE_W_PX * 2.5, -Math.PI / 2, 'straight_right')
+    for (let idx = 0; idx < lanes.W; idx++) {
+      const type = idx === 0 ? 'straight_left' : idx === lanes.W - 1 ? 'straight_right' : 'straight'
+      drawTurnArrow(ctx, wArrowX, cy - laneCenterPx(idx), -Math.PI / 2, type)
+    }
   }
 
   // ── Intersection box outline ───────────────────────────────────────────────
   ctx.strokeStyle = 'rgba(255,255,255,0.12)'
   ctx.lineWidth = 1.5
-  ctx.strokeRect(cx - rh + 0.5, cy - rh + 0.5, rh * 2 - 1, rh * 2 - 1)
+  ctx.beginPath()
+  ctx.moveTo(cx - sEdge + 0.5, cy - wEdge + 0.5)
+  ctx.lineTo(cx + nEdge - 0.5, cy - eEdge + 0.5)
+  ctx.lineTo(cx + nEdge - 0.5, cy + eEdge - 0.5)
+  ctx.lineTo(cx - sEdge + 0.5, cy + wEdge - 0.5)
+  ctx.closePath()
+  ctx.stroke()
 
   // ── Kerb edges with corner radius ─────────────────────────────────────────
   ctx.strokeStyle = 'rgba(71,85,105,0.75)'
-  ctx.lineWidth   = 1.5
+  ctx.lineWidth = 1.5
   ctx.setLineDash([])
 
   if (hasFreeLeft) {
@@ -665,24 +720,25 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
       ctx.stroke()
     }
     // NW: west edge → corner → N arm left kerb up
-    kerbPath([[0, cy - rh], [cx - rh, cy - rh], [cx - rh, 0]])
+    kerbPath([[0, cy - wEdge], [cx - nEdge, cy - wEdge], [cx - nEdge, 0]])
     // NE: east edge → corner → N arm right kerb up
-    kerbPath([[cfg.width, cy - rh], [cx + rh, cy - rh], [cx + rh, 0]])
+    kerbPath([[cfg.width, cy - eEdge], [cx + nEdge, cy - eEdge], [cx + nEdge, 0]])
     if (isTJunction) {
       // No S arm — south kerb spans full width
-      ctx.beginPath(); ctx.moveTo(0, cy + rh); ctx.lineTo(cfg.width, cy + rh); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(0, cy + wEdge); ctx.lineTo(cx, cy + wEdge); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(cx, cy + eEdge); ctx.lineTo(cfg.width, cy + eEdge); ctx.stroke()
     } else {
       // SW: west edge → corner → S arm left kerb down
-      kerbPath([[0, cy + rh], [cx - rh, cy + rh], [cx - rh, cfg.height]])
+      kerbPath([[0, cy + wEdge], [cx - sEdge, cy + wEdge], [cx - sEdge, cfg.height]])
       // SE: east edge → corner → S arm right kerb down
-      kerbPath([[cfg.width, cy + rh], [cx + rh, cy + rh], [cx + rh, cfg.height]])
+      kerbPath([[cfg.width, cy + eEdge], [cx + sEdge, cy + eEdge], [cx + sEdge, cfg.height]])
     }
   }
 
   // ── Roundabout Island + Ring ──────────────────────────────────────────────
   if (isRoundabout) {
     const rIsland = 40
-    const rRing   = 62
+    const rRing = 62
 
     // Ring carriageway asphalt
     ctx.fillStyle = '#1a2230'
@@ -692,55 +748,55 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
 
     // Ring mid-lane divider (dashed)
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'
-    ctx.lineWidth   = 1
+    ctx.lineWidth = 1
     ctx.setLineDash([8, 8])
     ctx.beginPath()
     ctx.arc(cx, cy, (rIsland + rRing) / 2, 0, Math.PI * 2)
     ctx.stroke()
     ctx.setLineDash([])
 
-    // Yield lines at each arm entry
-    ;[0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((armAngle) => {
-      const entryDist = rRing + 2
-      const perpLen   = ROAD_HALF_PX * 0.6
-      const perp      = armAngle + Math.PI / 2
-      const ex        = cx + entryDist * Math.cos(armAngle)
-      const ey        = cy + entryDist * Math.sin(armAngle)
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
-      ctx.lineWidth   = 1.5
-      ctx.setLineDash([3, 4])
-      ctx.beginPath()
-      ctx.moveTo(ex - perpLen * Math.cos(perp), ey - perpLen * Math.sin(perp))
-      ctx.lineTo(ex + perpLen * Math.cos(perp), ey + perpLen * Math.sin(perp))
-      ctx.stroke()
-      ctx.setLineDash([])
-    })
+      // Yield lines at each arm entry
+      ;[0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((armAngle) => {
+        const entryDist = rRing + 2
+        const perpLen = ROAD_HALF_PX * 0.6
+        const perp = armAngle + Math.PI / 2
+        const ex = cx + entryDist * Math.cos(armAngle)
+        const ey = cy + entryDist * Math.sin(armAngle)
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([3, 4])
+        ctx.beginPath()
+        ctx.moveTo(ex - perpLen * Math.cos(perp), ey - perpLen * Math.sin(perp))
+        ctx.lineTo(ex + perpLen * Math.cos(perp), ey + perpLen * Math.sin(perp))
+        ctx.stroke()
+        ctx.setLineDash([])
+      })
 
-    // Splitter islands at each arm entry
-    ;[0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((armAngle) => {
-      const tipX  = cx + (rRing + 6) * Math.cos(armAngle)
-      const tipY  = cy + (rRing + 6) * Math.sin(armAngle)
-      const perpA = armAngle + Math.PI / 2
-      const baseW = MEDIAN_PX + 2
-      const baseD = rRing + 22
-      const b1x = cx + baseD * Math.cos(armAngle) - baseW * Math.cos(perpA)
-      const b1y = cy + baseD * Math.sin(armAngle) - baseW * Math.sin(perpA)
-      const b2x = cx + baseD * Math.cos(armAngle) + baseW * Math.cos(perpA)
-      const b2y = cy + baseD * Math.sin(armAngle) + baseW * Math.sin(perpA)
-      ctx.fillStyle = '#2d3a4a'
-      ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(b1x, b1y); ctx.lineTo(b2x, b2y); ctx.closePath(); ctx.fill()
-      const sh = 2.5
-      ctx.fillStyle = '#1b3a2a'
-      ctx.beginPath()
-      ctx.moveTo(tipX + sh * Math.cos(armAngle + Math.PI), tipY + sh * Math.sin(armAngle + Math.PI))
-      ctx.lineTo(b1x + sh * Math.cos(perpA + Math.PI), b1y + sh * Math.sin(perpA + Math.PI))
-      ctx.lineTo(b2x + sh * Math.cos(perpA), b2y + sh * Math.sin(perpA))
-      ctx.closePath(); ctx.fill()
-    })
+      // Splitter islands at each arm entry
+      ;[0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((armAngle) => {
+        const tipX = cx + (rRing + 6) * Math.cos(armAngle)
+        const tipY = cy + (rRing + 6) * Math.sin(armAngle)
+        const perpA = armAngle + Math.PI / 2
+        const baseW = MEDIAN_PX + 2
+        const baseD = rRing + 22
+        const b1x = cx + baseD * Math.cos(armAngle) - baseW * Math.cos(perpA)
+        const b1y = cy + baseD * Math.sin(armAngle) - baseW * Math.sin(perpA)
+        const b2x = cx + baseD * Math.cos(armAngle) + baseW * Math.cos(perpA)
+        const b2y = cy + baseD * Math.sin(armAngle) + baseW * Math.sin(perpA)
+        ctx.fillStyle = '#2d3a4a'
+        ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(b1x, b1y); ctx.lineTo(b2x, b2y); ctx.closePath(); ctx.fill()
+        const sh = 2.5
+        ctx.fillStyle = '#1b3a2a'
+        ctx.beginPath()
+        ctx.moveTo(tipX + sh * Math.cos(armAngle + Math.PI), tipY + sh * Math.sin(armAngle + Math.PI))
+        ctx.lineTo(b1x + sh * Math.cos(perpA + Math.PI), b1y + sh * Math.sin(perpA + Math.PI))
+        ctx.lineTo(b2x + sh * Math.cos(perpA), b2y + sh * Math.sin(perpA))
+        ctx.closePath(); ctx.fill()
+      })
 
     // Ring outer kerb
     ctx.strokeStyle = 'rgba(71,85,105,0.75)'
-    ctx.lineWidth   = 1.5
+    ctx.lineWidth = 1.5
     ctx.beginPath(); ctx.arc(cx, cy, rRing, 0, Math.PI * 2); ctx.stroke()
 
     // Central island raised kerb
@@ -749,30 +805,30 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
     ctx.fillStyle = '#1b4332'
     ctx.beginPath(); ctx.arc(cx, cy, rIsland - 4, 0, Math.PI * 2); ctx.fill()
     ctx.strokeStyle = '#475569'
-    ctx.lineWidth   = 2
+    ctx.lineWidth = 2
     ctx.beginPath(); ctx.arc(cx, cy, rIsland, 0, Math.PI * 2); ctx.stroke()
 
     // Clockwise direction arrows at 45°/135°/225°/315° on ring
     const midR = (rIsland + rRing) / 2
-    ;[-Math.PI * 0.25, Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25].forEach((a) => {
-      const ax = cx + midR * Math.cos(a)
-      const ay = cy + midR * Math.sin(a)
-      ctx.save()
-      ctx.translate(ax, ay)
-      ctx.rotate(a + Math.PI / 2)
-      ctx.strokeStyle = 'rgba(255,255,255,0.28)'
-      ctx.lineWidth   = 1.5
-      ctx.lineCap     = 'round'
-      ctx.beginPath()
-      ctx.moveTo(-5, 0); ctx.lineTo(5, 0)
-      ctx.moveTo(2, -3); ctx.lineTo(5, 0); ctx.lineTo(2, 3)
-      ctx.stroke()
-      ctx.restore()
-    })
+      ;[-Math.PI * 0.25, Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25].forEach((a) => {
+        const ax = cx + midR * Math.cos(a)
+        const ay = cy + midR * Math.sin(a)
+        ctx.save()
+        ctx.translate(ax, ay)
+        ctx.rotate(a + Math.PI / 2)
+        ctx.strokeStyle = 'rgba(255,255,255,0.28)'
+        ctx.lineWidth = 1.5
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(-5, 0); ctx.lineTo(5, 0)
+        ctx.moveTo(2, -3); ctx.lineTo(5, 0); ctx.lineTo(2, 3)
+        ctx.stroke()
+        ctx.restore()
+      })
 
-    ctx.fillStyle     = 'rgba(250,204,21,0.55)'
-    ctx.font          = 'bold 7px monospace'
-    ctx.textAlign     = 'center'
+    ctx.fillStyle = 'rgba(250,204,21,0.55)'
+    ctx.font = 'bold 7px monospace'
+    ctx.textAlign = 'center'
     ctx.letterSpacing = '0.08em'
     ctx.fillText('ROTARY', cx, cy + 3)
     ctx.letterSpacing = '0'
@@ -783,12 +839,12 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
     ctx.fillStyle = '#2d3a4a'
     ctx.fillRect(cx - rh + 4, cy + rh, rh * 2 - 8, 6)
     ctx.strokeStyle = '#475569'
-    ctx.lineWidth   = 1
+    ctx.lineWidth = 1
     ctx.strokeRect(cx - rh + 4, cy + rh, rh * 2 - 8, 6)
     const arrowX = cx, arrowY = cy + rh * 0.6
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'
-    ctx.lineWidth   = 1.5
-    ctx.lineCap     = 'round'
+    ctx.lineWidth = 1.5
+    ctx.lineCap = 'round'
     ctx.beginPath()
     ctx.moveTo(arrowX + 8, arrowY + 10)
     ctx.lineTo(arrowX + 8, arrowY - 10)
@@ -813,7 +869,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
       { dx: 1, dy: 1, label: 'SE' },
       { dx: -1, dy: 1, label: 'SW' },
     ]
-    
+
     // Draw slip road asphalt and outer kerbs first
     corners.forEach((c) => {
       if (isTJunction && (c.label === 'SE' || c.label === 'SW')) return
@@ -824,20 +880,20 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
       //                clearly "on the road"; lane 2 = outer fringe looks off-road).
       // Lane 1 lateral = 7.9 world × 5 = 39.5 canvas px from centre.
       if (c.label === 'NE') {
-        sx = 60.5;   sy = -110;  ex = 110;   ey = -39.5;
-        osx = 71.5;  osy = -110; oex = 110;  oey = -50.5;
+        sx = 60.5; sy = -110; ex = 110; ey = -39.5;
+        osx = 71.5; osy = -110; oex = 110; oey = -50.5;
         ctrl_x = 110; ctrl_y = -110
       } else if (c.label === 'NW') {
-        sx = -110;   sy = -60.5; ex = -39.5; ey = -110;
-        osx = -110;  osy = -71.5;oex = -50.5;oey = -110;
+        sx = -110; sy = -60.5; ex = -39.5; ey = -110;
+        osx = -110; osy = -71.5; oex = -50.5; oey = -110;
         ctrl_x = -110; ctrl_y = -110
       } else if (c.label === 'SE') {
-        sx = 110;    sy = 60.5;  ex = 39.5;  ey = 110;
-        osx = 110;   osy = 71.5; oex = 50.5; oey = 110;
+        sx = 110; sy = 60.5; ex = 39.5; ey = 110;
+        osx = 110; osy = 71.5; oex = 50.5; oey = 110;
         ctrl_x = 110; ctrl_y = 110
       } else { // SW
-        sx = -60.5;  sy = 110;   ex = -110;  ey = 39.5;
-        osx = -71.5; osy = 110;  oex = -110; oey = 50.5;
+        sx = -60.5; sy = 110; ex = -110; ey = 39.5;
+        osx = -71.5; osy = 110; oex = -110; oey = 50.5;
         ctrl_x = -110; ctrl_y = 110
       }
 
@@ -860,20 +916,20 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
 
     corners.forEach((c) => {
       if (isTJunction && (c.label === 'SE' || c.label === 'SW')) return
-      
+
       const cornerX = cx + c.dx * rh
       const cornerY = cy + c.dy * rh
-      
+
       const margin = 2
       const ax = cornerX + c.dx * margin
       const ay = cornerY + c.dy * (L_island + margin)
-      
+
       const bx = cornerX + c.dx * (L_island + margin)
       const by = cornerY + c.dy * margin
-      
+
       const cx_pt = cornerX + c.dx * margin
       const cy_pt = cornerY + c.dy * margin
-      
+
       // Draw island background (concrete)
       ctx.fillStyle = '#334155'
       ctx.beginPath()
@@ -886,22 +942,22 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
       )
       ctx.closePath()
       ctx.fill()
-      
+
       ctx.strokeStyle = '#475569'
       ctx.lineWidth = 1.5
       ctx.stroke()
-      
+
       // Draw inner turf (green landscape)
       const turfMargin = 3
       const tax = cornerX + c.dx * (margin + turfMargin)
       const tay = cornerY + c.dy * (L_island + margin - turfMargin)
-      
+
       const tbx = cornerX + c.dx * (L_island + margin - turfMargin)
       const tby = cornerY + c.dy * (margin + turfMargin)
-      
+
       const tcx = cornerX + c.dx * (margin + turfMargin)
       const tcy = cornerY + c.dy * (margin + turfMargin)
-      
+
       ctx.fillStyle = '#1b4332'
       ctx.beginPath()
       ctx.moveTo(tax, tay)
@@ -917,16 +973,16 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
       // ── Directional arrow inside the slip road ──────────────────────────
       const x_center = cornerX + c.dx * (L + L_island) * 0.375
       const y_center = cornerY + c.dy * (L + L_island) * 0.375
-      
+
       const isEndToStart = c.label === 'SE' || c.label === 'NW'
-      const angle = isEndToStart 
-        ? Math.atan2(c.dy, -c.dx) 
+      const angle = isEndToStart
+        ? Math.atan2(c.dy, -c.dx)
         : Math.atan2(-c.dy, c.dx)
-      
+
       ctx.save()
       ctx.translate(x_center, y_center)
       ctx.rotate(angle)
-      
+
       ctx.strokeStyle = 'rgba(255,255,255,0.25)'
       ctx.lineWidth = 1.5
       ctx.beginPath()
@@ -979,7 +1035,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
   const laneCenter = (idx: number) => MEDIAN_PX + LANE_W_PX * idx + LANE_W_PX / 2
 
   // N arm
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < lanes.N; i++) {
     const laneX = cx + laneCenter(i)
     for (const frac of [0.33, 0.67]) {
       const laneY = cy - rh - (cy - rh) * frac
@@ -989,7 +1045,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
   }
   // S arm
   if (!isTJunction) {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < lanes.S; i++) {
       const laneX = cx - laneCenter(i)
       for (const frac of [0.33, 0.67]) {
         const laneY = cy + rh + (cfg.height - cy - rh) * frac
@@ -999,7 +1055,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
     }
   }
   // W arm
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < lanes.W; i++) {
     const laneY = cy - laneCenter(i)
     for (const frac of [0.33, 0.67]) {
       const laneX = cx - rh - (cx - rh) * frac
@@ -1008,7 +1064,7 @@ export function drawIntersection(ctx: CanvasRenderingContext2D, cfg: RenderConfi
     }
   }
   // E arm
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < lanes.E; i++) {
     const laneY = cy + laneCenter(i)
     for (const frac of [0.33, 0.67]) {
       const laneX = cx + rh + (cfg.width - cx - rh) * frac
@@ -1036,103 +1092,308 @@ function _armSignalState(arm: string, phase: number): 'red' | 'yellow' | 'green'
   return 'red'
 }
 
+// Helper to draw clean glowing arrows in traffic signal bulbs
+function drawArrowInBulb(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  direction: 'straight' | 'right' | 'left',
+  color: string,
+  size = 3.5
+): void {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.lineWidth = 1.8 // thicker shaft for high visibility
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  if (direction === 'straight') {
+    // Vertical shaft
+    ctx.beginPath()
+    ctx.moveTo(cx, cy + size)
+    ctx.lineTo(cx, cy - size + 3)
+    ctx.stroke()
+
+    // Filled triangular arrowhead
+    ctx.beginPath()
+    ctx.moveTo(cx - 2.5, cy - size + 3)
+    ctx.lineTo(cx, cy - size)
+    ctx.lineTo(cx + 2.5, cy - size + 3)
+    ctx.closePath()
+    ctx.fill()
+  } else if (direction === 'right') {
+    // Horizontal shaft
+    ctx.beginPath()
+    ctx.moveTo(cx - size, cy)
+    ctx.lineTo(cx + size - 3, cy)
+    ctx.stroke()
+
+    // Filled triangular arrowhead
+    ctx.beginPath()
+    ctx.moveTo(cx + size - 3, cy - 2.5)
+    ctx.lineTo(cx + size, cy)
+    ctx.lineTo(cx + size - 3, cy + 2.5)
+    ctx.closePath()
+    ctx.fill()
+  } else if (direction === 'left') {
+    // Horizontal shaft
+    ctx.beginPath()
+    ctx.moveTo(cx + size, cy)
+    ctx.lineTo(cx - size + 3, cy)
+    ctx.stroke()
+
+    // Filled triangular arrowhead
+    ctx.beginPath()
+    ctx.moveTo(cx - size + 3, cy - 2.5)
+    ctx.lineTo(cx - size, cy)
+    ctx.lineTo(cx - size + 3, cy + 2.5)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
 function _signalHead(
   ctx: CanvasRenderingContext2D,
   px: number, py: number,
-  state: 'red' | 'yellow' | 'green',
-  elapsed = 0
+  mainState: string,
+  rightState: string,
+  elapsed = 0,
+  isArrow = false
 ): void {
-  const hw = 9, hh = 28, br = 5
+  if (!isArrow) {
+    const hw = 9, hh = 28, br = 5
 
-  // Matte flat housing — no gradient, no drop shadow
-  rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
-  ctx.fillStyle = '#10151e'
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)'
-  ctx.lineWidth = 1
-  ctx.stroke()
-
-  const LIT:  Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
-  const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
-
-  ;[
-    { dy: -hh + 9,  name: 'red'    as const },
-    { dy: 0,        name: 'yellow' as const },
-    { dy:  hh - 9,  name: 'green'  as const },
-  ].forEach(({ dy, name }) => {
-    const lit = state === name
-    ctx.beginPath()
-    ctx.arc(px, py + dy, br, 0, Math.PI * 2)
-    ctx.fillStyle = lit ? LIT[name] : DARK[name]
+    // Matte flat housing — no gradient, no drop shadow
+    rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
+    ctx.fillStyle = '#10151e'
     ctx.fill()
-    // Thin matte ring around lit bulb instead of a glow
-    if (lit) {
-      ctx.strokeStyle = LIT[name]
-      ctx.globalAlpha = 0.35
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      ctx.arc(px, py + dy, br + 1.5, 0, Math.PI * 2)
-      ctx.stroke()
-      ctx.globalAlpha = 1
-    }
-  })
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+    ctx.lineWidth = 1
+    ctx.stroke()
 
-  ctx.fillStyle = 'rgba(8,12,18,0.9)'
-  rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
-  ctx.fill()
-  ctx.fillStyle = state === 'red' ? '#ef4444' : state === 'yellow' ? '#facc15' : '#22c55e'
-  ctx.font = 'bold 8px monospace'
-  ctx.textAlign = 'center'
-  ctx.fillText(`${Math.round(elapsed)}s`, px, py + hh + 11)
+    const LIT: Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
+    const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
+
+      ;[
+        { dy: -hh + 9, name: 'red' },
+        { dy: 0, name: 'yellow' },
+        { dy: hh - 9, name: 'green' },
+      ].forEach(({ dy, name }) => {
+        const lit = mainState === name
+        ctx.beginPath()
+        ctx.arc(px, py + dy, br, 0, Math.PI * 2)
+        ctx.fillStyle = lit ? LIT[name] : DARK[name]
+        ctx.fill()
+
+        // Thin matte ring around lit bulb
+        if (lit) {
+          ctx.strokeStyle = LIT[name]
+          ctx.globalAlpha = 0.35
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(px, py + dy, br + 1.5, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.globalAlpha = 1
+        }
+      })
+
+    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+
+    ctx.fillStyle = 'rgba(8,12,18,0.9)'
+    rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
+    ctx.fill()
+
+    let textColor = '#ef4444'
+    if (mainState === 'yellow') textColor = '#facc15'
+    else if (mainState === 'green') textColor = '#22c55e'
+
+    ctx.fillStyle = textColor
+    ctx.font = 'bold 8px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+  } else {
+    // Indian 5-bulb vertical arrow signal head
+    const hw = 9, hh = 44, br = 4.5
+    rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
+    ctx.fillStyle = '#10151e'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+
+    const LIT: Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
+    const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
+
+    const bulbs = [
+      { dy: -33, type: 'circle', color: 'red', lit: mainState === 'red' && rightState === 'red' },
+      { dy: -16, type: 'circle', color: 'yellow', lit: mainState === 'yellow' || rightState === 'yellow' },
+      { dy: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' },
+      { dy: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' },
+      { dy: 33, type: 'right', color: 'green', lit: rightState === 'green_right' },
+    ]
+
+    bulbs.forEach(({ dy, type, color, lit }) => {
+      ctx.beginPath()
+      ctx.arc(px, py + dy, br, 0, Math.PI * 2)
+
+      if (type !== 'circle') {
+        ctx.fillStyle = '#0a0d14'
+        ctx.fill()
+        const arrowColor = lit ? LIT[color] : DARK[color]
+        drawArrowInBulb(ctx, px, py + dy, type as 'straight' | 'left' | 'right', arrowColor, 3.2)
+      } else {
+        ctx.fillStyle = lit ? LIT[color] : DARK[color]
+        ctx.fill()
+      }
+
+      if (lit) {
+        ctx.strokeStyle = LIT[color]
+        ctx.globalAlpha = 0.35
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.arc(px, py + dy, br + 1.5, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.globalAlpha = 1
+      }
+    })
+
+    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+    ctx.fillStyle = 'rgba(8,12,18,0.9)'
+    rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
+    ctx.fill()
+
+    let textColor = '#ef4444'
+    if (mainState === 'yellow' || rightState === 'yellow') textColor = '#facc15'
+    else if (mainState.startsWith('green') || rightState.startsWith('green')) textColor = '#22c55e'
+
+    ctx.fillStyle = textColor
+    ctx.font = 'bold 8px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+  }
 }
 
 function _signalHeadH(
   ctx: CanvasRenderingContext2D,
   px: number, py: number,
-  state: 'red' | 'yellow' | 'green',
-  elapsed = 0
+  mainState: string,
+  rightState: string,
+  elapsed = 0,
+  isArrow = false
 ): void {
-  const hh = 9, hw = 28, br = 5
+  if (!isArrow) {
+    const hh = 9, hw = 28, br = 5
 
-  // Matte flat housing
-  rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
-  ctx.fillStyle = '#10151e'
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)'
-  ctx.lineWidth = 1
-  ctx.stroke()
-
-  const LIT:  Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
-  const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
-
-  ;[
-    { dx: -hw + 9, name: 'red'    as const },
-    { dx: 0,       name: 'yellow' as const },
-    { dx:  hw - 9, name: 'green'  as const },
-  ].forEach(({ dx, name }) => {
-    const lit = state === name
-    ctx.beginPath()
-    ctx.arc(px + dx, py, br, 0, Math.PI * 2)
-    ctx.fillStyle = lit ? LIT[name] : DARK[name]
+    // Matte flat housing
+    rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
+    ctx.fillStyle = '#10151e'
     ctx.fill()
-    if (lit) {
-      ctx.strokeStyle = LIT[name]
-      ctx.globalAlpha = 0.35
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      ctx.arc(px + dx, py, br + 1.5, 0, Math.PI * 2)
-      ctx.stroke()
-      ctx.globalAlpha = 1
-    }
-  })
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+    ctx.lineWidth = 1
+    ctx.stroke()
 
-  ctx.fillStyle = 'rgba(8,12,18,0.9)'
-  rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
-  ctx.fill()
-  ctx.fillStyle = state === 'red' ? '#ef4444' : state === 'yellow' ? '#facc15' : '#22c55e'
-  ctx.font = 'bold 8px monospace'
-  ctx.textAlign = 'center'
-  ctx.fillText(`${Math.round(elapsed)}s`, px, py + hh + 11)
+    const LIT: Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
+    const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
+
+      ;[
+        { dx: -hw + 9, name: 'red' },
+        { dx: 0, name: 'yellow' },
+        { dx: hw - 9, name: 'green' },
+      ].forEach(({ dx, name }) => {
+        const lit = mainState === name
+        ctx.beginPath()
+        ctx.arc(px + dx, py, br, 0, Math.PI * 2)
+        ctx.fillStyle = lit ? LIT[name] : DARK[name]
+        ctx.fill()
+        if (lit) {
+          ctx.strokeStyle = LIT[name]
+          ctx.globalAlpha = 0.35
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(px + dx, py, br + 1.5, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.globalAlpha = 1
+        }
+      })
+
+    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+
+    ctx.fillStyle = 'rgba(8,12,18,0.9)'
+    rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
+    ctx.fill()
+
+    let textColor = '#ef4444'
+    if (mainState === 'yellow') textColor = '#facc15'
+    else if (mainState === 'green') textColor = '#22c55e'
+
+    ctx.fillStyle = textColor
+    ctx.font = 'bold 8px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+  } else {
+    // Indian 5-bulb horizontal arrow signal head
+    const hh = 9, hw = 44, br = 4.5
+    rr(ctx, px - hw, py - hh, hw * 2, hh * 2, 4)
+    ctx.fillStyle = '#10151e'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+
+    const LIT: Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
+    const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
+
+    // Left to right order: Red, Yellow, Green Straight, Green Left, Green Right
+    const bulbs = [
+      { dx: -33, type: 'circle', color: 'red', lit: mainState === 'red' && rightState === 'red' },
+      { dx: -16, type: 'circle', color: 'yellow', lit: mainState === 'yellow' || rightState === 'yellow' },
+      { dx: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' },
+      { dx: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' },
+      { dx: 33, type: 'right', color: 'green', lit: rightState === 'green_right' },
+    ]
+
+    bulbs.forEach(({ dx, type, color, lit }) => {
+      ctx.beginPath()
+      ctx.arc(px + dx, py, br, 0, Math.PI * 2)
+
+      if (type !== 'circle') {
+        ctx.fillStyle = '#0a0d14'
+        ctx.fill()
+        const arrowColor = lit ? LIT[color] : DARK[color]
+        drawArrowInBulb(ctx, px + dx, py, type as 'straight' | 'left' | 'right', arrowColor, 3.2)
+      } else {
+        ctx.fillStyle = lit ? LIT[color] : DARK[color]
+        ctx.fill()
+      }
+
+      if (lit) {
+        ctx.strokeStyle = LIT[color]
+        ctx.globalAlpha = 0.35
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.arc(px + dx, py, br + 1.5, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.globalAlpha = 1
+      }
+    })
+
+    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+
+    ctx.fillStyle = 'rgba(8,12,18,0.9)'
+    rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
+    ctx.fill()
+
+    let textColor = '#ef4444'
+    if (mainState === 'yellow' || rightState === 'yellow') textColor = '#facc15'
+    else if (mainState.startsWith('green') || rightState.startsWith('green')) textColor = '#22c55e'
+
+    ctx.fillStyle = textColor
+    ctx.font = 'bold 8px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+  }
 }
 
 // Draw a compact arm info chip: signal dot + arm label + vehicle count
@@ -1171,15 +1432,23 @@ export function drawTrafficSignals(
   signals: SignalState[],
   cfg: RenderConfig,
   vehicles?: VehicleFrame[],
-  intersectionType: string = "four_way"
+  intersectionType: string = "four_way",
+  laneRenderConfig?: LaneRenderConfig
 ): void {
   if (!signals.length) return
-  const phase   = signals[0].phase
+  const phase = signals[0].phase
   const elapsed = signals[0].elapsed_s ?? 0
   const cx = cfg.offsetX, cy = cfg.offsetY
-  const rh = ROAD_HALF_PX
+
+  const lanes = resolveLaneCounts(laneRenderConfig)
+  const nEdge = laneEdgePx(lanes.N)
+  const sEdge = laneEdgePx(lanes.S)
+  const eEdge = laneEdgePx(lanes.E)
+  const wEdge = laneEdgePx(lanes.W)
+
   const off = 10  // gap between road edge and signal post
   const isTJunction = intersectionType === 't_junction' || intersectionType === 't_junction_free_left'
+  const isArrow = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow'
 
   const nCount = vehicles ? vehicles.filter(v => v.arm === 'N').length : 0
   const sCount = vehicles ? vehicles.filter(v => v.arm === 'S').length : 0
@@ -1195,36 +1464,63 @@ export function drawTrafficSignals(
     ctx.fillRect(tx - 3, ty - 2, 6, 4)
   }
 
-  const nState = _armSignalState('N', phase)
-  const sState = _armSignalState('S', phase)
-  const eState = _armSignalState('E', phase)
-  const wState = _armSignalState('W', phase)
+  const arrowState = signals[0].arrow_state
+  let nMain = 'red', nRight = 'red'
+  let sMain = 'red', sRight = 'red'
+  let eMain = 'red', eRight = 'red'
+  let wMain = 'red', wRight = 'red'
+
+  if (arrowState) {
+    if (arrowState.N) { nMain = arrowState.N.main; nRight = arrowState.N.right }
+    if (arrowState.S) { sMain = arrowState.S.main; sRight = arrowState.S.right }
+    if (arrowState.E) { eMain = arrowState.E.main; eRight = arrowState.E.right }
+    if (arrowState.W) { wMain = arrowState.W.main; wRight = arrowState.W.right }
+  } else {
+    nMain = _armSignalState('N', phase)
+    sMain = _armSignalState('S', phase)
+    eMain = _armSignalState('E', phase)
+    wMain = _armSignalState('W', phase)
+  }
+
+  const getArmColorState = (main: string, right: string) => {
+    if (main.startsWith('green') || right.startsWith('green')) return 'green'
+    if (main === 'yellow' || right === 'yellow') return 'yellow'
+    return 'red'
+  }
 
   // N arm signal — at stop line, east kerb side, vertical head
-  const ne = { px: cx + rh + off + 9, py: cy - STOP_PX - 28 }
-  drawPole(cx + rh, cy - STOP_PX, ne.px, ne.py + 28)
-  _signalHead(ctx, ne.px, ne.py, nState, elapsed)
-  _drawArmInfo(ctx, 'NORTH', nCount, cx, 22, nState)
+  const nHH = isArrow ? 44 : 28
+  const nPx = cx + nEdge + off + 9
+  const nPy = cy - STOP_PX - nHH
+  drawPole(cx + nEdge, cy - STOP_PX, nPx, nPy + nHH)
+  _signalHead(ctx, nPx, nPy, nMain, nRight, elapsed, isArrow)
+  _drawArmInfo(ctx, 'NORTH', nCount, cx, 22, getArmColorState(nMain, nRight))
 
   // S arm signal — at stop line, west kerb side, vertical head
   if (!isTJunction) {
-    const sw = { px: cx - rh - off - 9, py: cy + STOP_PX + 28 }
-    drawPole(cx - rh, cy + STOP_PX, sw.px, sw.py - 28)
-    _signalHead(ctx, sw.px, sw.py, sState, elapsed)
-    _drawArmInfo(ctx, 'SOUTH', sCount, cx, cfg.height - 16, sState)
+    const sHH = isArrow ? 44 : 28
+    const sPx = cx - sEdge - off - 9
+    const sPy = cy + STOP_PX + sHH
+    drawPole(cx - sEdge, cy + STOP_PX, sPx, sPy - sHH)
+    _signalHead(ctx, sPx, sPy, sMain, sRight, elapsed, isArrow)
+    _drawArmInfo(ctx, 'SOUTH', sCount, cx, cfg.height - 16, getArmColorState(sMain, sRight))
   }
 
   // E arm signal — at stop line, south kerb side, horizontal head
-  const se = { px: cx + STOP_PX + 28, py: cy + rh + off + 9 }
-  drawPole(cx + STOP_PX, cy + rh, se.px - 28, se.py)
-  _signalHeadH(ctx, se.px, se.py, eState, elapsed)
-  _drawArmInfo(ctx, 'EAST', eCount, cfg.width - 58, cy, eState)
+  const eHW = isArrow ? 44 : 28
+  const ePx = cx + STOP_PX + eHW
+  const ePy = cy + eEdge + off + 9
+  drawPole(cx + STOP_PX, cy + eEdge, ePx - eHW, ePy)
+  _signalHeadH(ctx, ePx, ePy, eMain, eRight, elapsed, isArrow)
+  _drawArmInfo(ctx, 'EAST', eCount, cfg.width - 58, cy, getArmColorState(eMain, eRight))
 
   // W arm signal — at stop line, north kerb side, horizontal head
-  const nw = { px: cx - STOP_PX - 28, py: cy - rh - off - 9 }
-  drawPole(cx - STOP_PX, cy - rh, nw.px + 28, nw.py)
-  _signalHeadH(ctx, nw.px, nw.py, wState, elapsed)
-  _drawArmInfo(ctx, 'WEST', wCount, 58, cy, wState)
+  const wHW = isArrow ? 44 : 28
+  const wPx = cx - STOP_PX - wHW
+  const wPy = cy - wEdge - off - 9
+  drawPole(cx - STOP_PX, cy - wEdge, wPx + wHW, wPy)
+  _signalHeadH(ctx, wPx, wPy, wMain, wRight, elapsed, isArrow)
+  _drawArmInfo(ctx, 'WEST', wCount, 58, cy, getArmColorState(wMain, wRight))
 }
 
 // ── Vehicles ─────────────────────────────────────────────────────────────────
@@ -1263,14 +1559,14 @@ export function drawVehicle(
   cfg: RenderConfig,
   alpha = 1.0
 ): void {
-  const [vx, vy]    = worldToCanvas(vehicle.x, vehicle.y, cfg)
-  const color        = VEHICLE_COLORS[vehicle.type_id] ?? '#94a3b8'
+  const [vx, vy] = worldToCanvas(vehicle.x, vehicle.y, cfg)
+  const color = VEHICLE_COLORS[vehicle.type_id] ?? '#94a3b8'
   const [dimL, dimW] = VEHICLE_DIMS[vehicle.type_id] ?? [3.8, 1.8]
-  const bL           = dimL * cfg.scale
-  const bW           = Math.min(dimW * cfg.scale, LANE_W_PX - 4)
-  const angle        = vehicle.angle !== undefined ? vehicle.angle : (ARM_ANGLE[vehicle.arm] ?? 0)
-  const stopped      = vehicle.speed < 0.5
-  const cr           = Math.min(2.5, bW * 0.2)
+  const bL = dimL * cfg.scale
+  const bW = Math.min(dimW * cfg.scale, LANE_W_PX - 4)
+  const angle = vehicle.angle !== undefined ? vehicle.angle : (ARM_ANGLE[vehicle.arm] ?? 0)
+  const stopped = vehicle.speed < 0.5
+  const cr = Math.min(2.5, bW * 0.2)
 
   ctx.save()
   ctx.globalAlpha = alpha
@@ -1333,20 +1629,56 @@ export function drawVehicleTrail(
 export function drawSignalIndicator(
   ctx: CanvasRenderingContext2D,
   signal: SignalState,
-  cfg: RenderConfig
+  cfg: RenderConfig,
+  intersectionType: string = "four_way"
 ): void {
-  const color = PHASE_COLORS[signal.phase] ?? '#fff'
-  const names = ['N-S Green', 'N-S Yellow', 'E-W Green', 'E-W Yellow', 'All Red']
-  const name  = names[signal.phase] ?? `Phase ${signal.phase}`
+  const isArrowJunction = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow'
+  const color = isArrowJunction
+    ? (signal.phase % 2 === 0 ? '#10b981' : '#f59e0b')
+    : (PHASE_COLORS[signal.phase] ?? '#fff')
+
+  let name = `Phase ${signal.phase}`
+  if (isArrowJunction) {
+    const arrowNames = [
+      'N-S Straight/Left Green',
+      'N-S Straight/Left Yellow',
+      'N-S Right Green',
+      'N-S Right Yellow',
+      'E-W Straight/Left Green',
+      'E-W Straight/Left Yellow',
+      'E-W Right Green',
+      'E-W Right Yellow'
+    ]
+    name = arrowNames[signal.phase] ?? name
+  } else {
+    const names = ['N-S Green', 'N-S Yellow', 'E-W Green', 'E-W Yellow', 'All Red']
+    name = names[signal.phase] ?? name
+  }
+
+  const elapsedVal = typeof signal.elapsed_s === 'number' && !isNaN(signal.elapsed_s) ? signal.elapsed_s : 0
+  const remainingStr = typeof signal.remaining_s === 'number' && !isNaN(signal.remaining_s) ? `${signal.remaining_s.toFixed(0)}s` : '?'
+  const timingText = `${elapsedVal.toFixed(1)}s  ·  ${remainingStr} left`
+
+  // Measure text to size box dynamically
+  ctx.save()
+  ctx.font = 'bold 9px monospace'
+  const nameWidth = ctx.measureText(name).width
+  ctx.font = '8px monospace'
+  const timingWidth = ctx.measureText(timingText).width
+  ctx.restore()
+
+  const textWidth = Math.max(nameWidth, timingWidth)
+  const boxWidth = Math.max(132, textWidth + 32) // at least 132px, or dynamic with padding
+
   // Bottom-left corner — avoids colliding with the centered model badge + top speed bar
   const bx = 10, by = cfg.height - 38
 
   ctx.fillStyle = 'rgba(8,12,18,0.92)'
-  rr(ctx, bx, by, 132, 28, 6)
+  rr(ctx, bx, by, boxWidth, 28, 6)
   ctx.fill()
   ctx.strokeStyle = 'rgba(255,255,255,0.07)'
   ctx.lineWidth = 1
-  rr(ctx, bx, by, 132, 28, 6)
+  rr(ctx, bx, by, boxWidth, 28, 6)
   ctx.stroke()
 
   // Matte state dot (no glow)
@@ -1357,9 +1689,10 @@ export function drawSignalIndicator(
   ctx.font = 'bold 9px monospace'
   ctx.textAlign = 'left'
   ctx.fillText(name, bx + 22, by + 11)
+
   ctx.fillStyle = 'rgba(148,163,184,0.85)'
   ctx.font = '8px monospace'
-  ctx.fillText(`${signal.elapsed_s.toFixed(1)}s  ·  ${signal.remaining_s?.toFixed(0) ?? '?'}s left`, bx + 22, by + 22)
+  ctx.fillText(timingText, bx + 22, by + 22)
 }
 
 export function drawAdverseOverlay(
@@ -1389,7 +1722,7 @@ export function drawStats(
   cfg: RenderConfig
 ): void {
   const waiting = frame.vehicles.filter((v) => v.speed < 0.5).length
-  const moving  = frame.vehicles.length - waiting
+  const moving = frame.vehicles.length - waiting
 
   ctx.fillStyle = 'rgba(8,12,18,0.90)'
   rr(ctx, 6, 6, 168, 52, 6)

@@ -64,9 +64,9 @@ function RewardHistogram({ history }: { history: { episode: number; total_reward
       {/* Bars */}
       <div className="flex items-end gap-1 h-28 mb-1">
         {bins.map((b, i) => {
-          const isPos  = b.lo >= 0
-          const h      = Math.max(b.count > 0 ? 8 : 0, b.pct * 100)
-          const label  = `${b.lo >= 0 ? '+' : ''}${b.lo.toFixed(0)} → ${b.hi >= 0 ? '+' : ''}${b.hi.toFixed(0)}\n${b.count} episodes`
+          const isPos = b.lo >= 0
+          const h = Math.max(b.count > 0 ? 8 : 0, b.pct * 100)
+          const label = `${b.lo >= 0 ? '+' : ''}${b.lo.toFixed(0)} → ${b.hi >= 0 ? '+' : ''}${b.hi.toFixed(0)}\n${b.count} episodes`
           return (
             <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={label}>
               {b.count > 0 && (
@@ -116,7 +116,7 @@ function PhaseRewardCorrelation({ byEp }: { byEp: Record<number, Decision[]> }) 
   all.forEach(d => {
     const p = d.action.phase
     if (!sums[p]) sums[p] = { sum: 0, count: 0 }
-    sums[p].sum   += d.reward_total
+    sums[p].sum += d.reward_total
     sums[p].count += 1
   })
   const entries = Object.entries(sums)
@@ -128,7 +128,7 @@ function PhaseRewardCorrelation({ byEp }: { byEp: Record<number, Decision[]> }) 
     <div className="space-y-2">
       {entries.map(({ phase, avg, count }) => {
         const isP = avg >= 0
-        const w   = Math.round(Math.abs(avg) / maxAbs * 100)
+        const w = Math.round(Math.abs(avg) / maxAbs * 100)
         return (
           <div key={phase}>
             <div className="flex items-center justify-between mb-0.5">
@@ -164,14 +164,14 @@ function ConfidenceChart({ epNums, byEp }: { epNums: number[]; byEp: Record<numb
   if (data.length < 2) return <p className="text-gray-700 text-sm">Needs 2+ episodes with decisions</p>
 
   const W = 560; const H = 72; const PAD = 10
-  const confs  = data.map(d => d.conf)
-  const minC   = Math.min(...confs)
-  const maxC   = Math.max(...confs)
+  const confs = data.map(d => d.conf)
+  const minC = Math.min(...confs)
+  const maxC = Math.max(...confs)
   const rangeC = maxC - minC || 0.01
-  const xOf    = (i: number) => PAD + (i / (data.length - 1)) * (W - PAD * 2)
-  const yOf    = (c: number) => H - PAD - ((c - minC) / rangeC) * (H - PAD * 2)
-  const pts    = data.map((d, i) => `${xOf(i)},${yOf(d.conf)}`).join(' ')
-  const fill   = `M ${xOf(0)},${H - PAD} ${data.map((d, i) => `L ${xOf(i)},${yOf(d.conf)}`).join(' ')} L ${xOf(data.length - 1)},${H - PAD} Z`
+  const xOf = (i: number) => PAD + (i / (data.length - 1)) * (W - PAD * 2)
+  const yOf = (c: number) => H - PAD - ((c - minC) / rangeC) * (H - PAD * 2)
+  const pts = data.map((d, i) => `${xOf(i)},${yOf(d.conf)}`).join(' ')
+  const fill = `M ${xOf(0)},${H - PAD} ${data.map((d, i) => `L ${xOf(i)},${yOf(d.conf)}`).join(' ')} L ${xOf(data.length - 1)},${H - PAD} Z`
   const latest = confs[confs.length - 1]
 
   return (
@@ -212,9 +212,9 @@ function DecisionTimeline({ decisions, selected, onSelect }: {
       <div className="flex items-end gap-[2px] h-16">
         {decisions.map((d, i) => {
           const isPos = d.reward_total >= 0
-          const h     = Math.max(5, (Math.abs(d.reward_total) / maxAbs) * 60)
+          const h = Math.max(5, (Math.abs(d.reward_total) / maxAbs) * 60)
           const isSel = selected?.step === d.step
-          const bg    = isPos ? PHASE_HEX[d.action.phase] ?? '#10b981' : '#ef4444'
+          const bg = isPos ? PHASE_HEX[d.action.phase] ?? '#10b981' : '#ef4444'
           return (
             <button key={i} onClick={() => onSelect(d)}
               title={`#${d.step} · ${d.action.phase_name} · ${isPos ? '+' : ''}${d.reward_total.toFixed(2)}`}
@@ -251,38 +251,38 @@ function DecisionTimeline({ decisions, selected, onSelect }: {
 interface ObsInfo { what: string; norm: string; high: string; low: string }
 const OBS_INFO: Record<string, ObsInfo> = {
   // Per-arm: Queue
-  'N Queue (veh)': { what:'Vehicles waiting at the North stop line',   norm:'÷ 60 → 0–1', high:'Heavy North backlog — needs green urgently', low:'North arm clear — green here may be wasted' },
-  'S Queue (veh)': { what:'Vehicles waiting at the South stop line',   norm:'÷ 60 → 0–1', high:'Heavy South backlog', low:'South arm clear' },
-  'E Queue (veh)': { what:'Vehicles waiting at the East stop line',    norm:'÷ 60 → 0–1', high:'Heavy East backlog', low:'East arm clear' },
-  'W Queue (veh)': { what:'Vehicles waiting at the West stop line',    norm:'÷ 60 → 0–1', high:'Heavy West backlog', low:'West arm clear' },
+  'N Queue (veh)': { what: 'Vehicles waiting at the North stop line', norm: '÷ 60 → 0–1', high: 'Heavy North backlog — needs green urgently', low: 'North arm clear — green here may be wasted' },
+  'S Queue (veh)': { what: 'Vehicles waiting at the South stop line', norm: '÷ 60 → 0–1', high: 'Heavy South backlog', low: 'South arm clear' },
+  'E Queue (veh)': { what: 'Vehicles waiting at the East stop line', norm: '÷ 60 → 0–1', high: 'Heavy East backlog', low: 'East arm clear' },
+  'W Queue (veh)': { what: 'Vehicles waiting at the West stop line', norm: '÷ 60 → 0–1', high: 'Heavy West backlog', low: 'West arm clear' },
   // Per-arm: Wait proxy
-  'N Wait (s)': { what:'Estimated mean wait for North arm (queue ÷ arrival rate)', norm:'÷ 120s → 0–1', high:'Vehicles waiting a long time on North — urgent', low:'North wait is low or arm is empty' },
-  'S Wait (s)': { what:'Estimated mean wait for South arm', norm:'÷ 120s → 0–1', high:'Long South wait', low:'South wait is low' },
-  'E Wait (s)': { what:'Estimated mean wait for East arm',  norm:'÷ 120s → 0–1', high:'Long East wait',  low:'East wait is low' },
-  'W Wait (s)': { what:'Estimated mean wait for West arm',  norm:'÷ 120s → 0–1', high:'Long West wait',  low:'West wait is low' },
+  'N Wait (s)': { what: 'Estimated mean wait for North arm (queue ÷ arrival rate)', norm: '÷ 120s → 0–1', high: 'Vehicles waiting a long time on North — urgent', low: 'North wait is low or arm is empty' },
+  'S Wait (s)': { what: 'Estimated mean wait for South arm', norm: '÷ 120s → 0–1', high: 'Long South wait', low: 'South wait is low' },
+  'E Wait (s)': { what: 'Estimated mean wait for East arm', norm: '÷ 120s → 0–1', high: 'Long East wait', low: 'East wait is low' },
+  'W Wait (s)': { what: 'Estimated mean wait for West arm', norm: '÷ 120s → 0–1', high: 'Long West wait', low: 'West wait is low' },
   // Per-arm: Arrival rate
-  'N Arrival Rate': { what:'Vehicles arriving per second at North approach', norm:'÷ 1 veh/s → 0–1', high:'High North demand — traffic is heavy', low:'Low North demand' },
-  'S Arrival Rate': { what:'Vehicles arriving per second at South approach', norm:'÷ 1 veh/s → 0–1', high:'High South demand', low:'Low South demand' },
-  'E Arrival Rate': { what:'Vehicles arriving per second at East approach',  norm:'÷ 1 veh/s → 0–1', high:'High East demand',  low:'Low East demand' },
-  'W Arrival Rate': { what:'Vehicles arriving per second at West approach',  norm:'÷ 1 veh/s → 0–1', high:'High West demand',  low:'Low West demand' },
+  'N Arrival Rate': { what: 'Vehicles arriving per second at North approach', norm: '÷ 1 veh/s → 0–1', high: 'High North demand — traffic is heavy', low: 'Low North demand' },
+  'S Arrival Rate': { what: 'Vehicles arriving per second at South approach', norm: '÷ 1 veh/s → 0–1', high: 'High South demand', low: 'Low South demand' },
+  'E Arrival Rate': { what: 'Vehicles arriving per second at East approach', norm: '÷ 1 veh/s → 0–1', high: 'High East demand', low: 'Low East demand' },
+  'W Arrival Rate': { what: 'Vehicles arriving per second at West approach', norm: '÷ 1 veh/s → 0–1', high: 'High West demand', low: 'Low West demand' },
   // Per-arm: Just served
-  'N Just Served': { what:'Was the North arm green in the immediately preceding decision?', norm:'Binary: 1.0 = yes, 0.0 = no', high:'North was just served — switching now costs 6s lost time', low:'North has NOT been served recently — consider giving it green' },
-  'S Just Served': { what:'Was the South arm green last decision?', norm:'Binary: 1.0 = yes, 0.0 = no', high:'South was just served', low:'South not recently served' },
-  'E Just Served': { what:'Was the East arm green last decision?',  norm:'Binary: 1.0 = yes, 0.0 = no', high:'East was just served',  low:'East not recently served' },
-  'W Just Served': { what:'Was the West arm green last decision?',  norm:'Binary: 1.0 = yes, 0.0 = no', high:'West was just served',  low:'West not recently served' },
+  'N Just Served': { what: 'Was the North arm green in the immediately preceding decision?', norm: 'Binary: 1.0 = yes, 0.0 = no', high: 'North was just served — switching now costs 6s lost time', low: 'North has NOT been served recently — consider giving it green' },
+  'S Just Served': { what: 'Was the South arm green last decision?', norm: 'Binary: 1.0 = yes, 0.0 = no', high: 'South was just served', low: 'South not recently served' },
+  'E Just Served': { what: 'Was the East arm green last decision?', norm: 'Binary: 1.0 = yes, 0.0 = no', high: 'East was just served', low: 'East not recently served' },
+  'W Just Served': { what: 'Was the West arm green last decision?', norm: 'Binary: 1.0 = yes, 0.0 = no', high: 'West was just served', low: 'West not recently served' },
   // Delta queues
-  'N Queue Δ': { what:'Change in North queue from previous step', norm:'÷ 60, clipped −1→+1', high:'North queue growing — more arriving than cleared', low:'North queue stable or shrinking — good throughput' },
-  'S Queue Δ': { what:'Change in South queue from previous step', norm:'÷ 60, clipped −1→+1', high:'South queue growing', low:'South queue stable/shrinking' },
-  'E Queue Δ': { what:'Change in East queue from previous step',  norm:'÷ 60, clipped −1→+1', high:'East queue growing',  low:'East queue stable/shrinking' },
-  'W Queue Δ': { what:'Change in West queue from previous step',  norm:'÷ 60, clipped −1→+1', high:'West queue growing',  low:'West queue stable/shrinking' },
+  'N Queue Δ': { what: 'Change in North queue from previous step', norm: '÷ 60, clipped −1→+1', high: 'North queue growing — more arriving than cleared', low: 'North queue stable or shrinking — good throughput' },
+  'S Queue Δ': { what: 'Change in South queue from previous step', norm: '÷ 60, clipped −1→+1', high: 'South queue growing', low: 'South queue stable/shrinking' },
+  'E Queue Δ': { what: 'Change in East queue from previous step', norm: '÷ 60, clipped −1→+1', high: 'East queue growing', low: 'East queue stable/shrinking' },
+  'W Queue Δ': { what: 'Change in West queue from previous step', norm: '÷ 60, clipped −1→+1', high: 'West queue growing', low: 'West queue stable/shrinking' },
   // Phase one-hots
-  'Phase 0 (N+S)': { what:'Is the current active phase N+S (North-South through)?', norm:'One-hot: 1.0 = active, 0.0 = not active', high:'N+S is the current active green phase', low:'N+S is not currently active' },
-  'Phase 1 (E+W)': { what:'Is the current active phase E+W (East-West through)?', norm:'One-hot: 1.0 = active, 0.0 = not active', high:'E+W is currently active', low:'E+W is not active' },
-  'Phase 2 (N+E)': { what:'Is the current active phase N+E (diagonal pair)?', norm:'One-hot: 1.0 = active, 0.0 = not active', high:'N+E diagonal is active', low:'N+E is not active' },
-  'Phase 3 (S+W)': { what:'Is the current active phase S+W (diagonal pair)?', norm:'One-hot: 1.0 = active, 0.0 = not active', high:'S+W diagonal is active', low:'S+W is not active' },
-  'Phase 4 (All-Red)': { what:'Is all-red (no arm served) the current active phase?', norm:'One-hot: 1.0 = active, 0.0 = not active', high:'All-Red is active — no vehicles clearing! Usually bad.', low:'An active phase is serving at least one arm' },
+  'Phase 0 (N+S)': { what: 'Is the current active phase N+S (North-South through)?', norm: 'One-hot: 1.0 = active, 0.0 = not active', high: 'N+S is the current active green phase', low: 'N+S is not currently active' },
+  'Phase 1 (E+W)': { what: 'Is the current active phase E+W (East-West through)?', norm: 'One-hot: 1.0 = active, 0.0 = not active', high: 'E+W is currently active', low: 'E+W is not active' },
+  'Phase 2 (N+E)': { what: 'Is the current active phase N+E (diagonal pair)?', norm: 'One-hot: 1.0 = active, 0.0 = not active', high: 'N+E diagonal is active', low: 'N+E is not active' },
+  'Phase 3 (S+W)': { what: 'Is the current active phase S+W (diagonal pair)?', norm: 'One-hot: 1.0 = active, 0.0 = not active', high: 'S+W diagonal is active', low: 'S+W is not active' },
+  'Phase 4 (All-Red)': { what: 'Is all-red (no arm served) the current active phase?', norm: 'One-hot: 1.0 = active, 0.0 = not active', high: 'All-Red is active — no vehicles clearing! Usually bad.', low: 'An active phase is serving at least one arm' },
   // Progress
-  'Episode Progress': { what:'How far through the 40-decision episode we are', norm:'step ÷ 40 → 0–1', high:'Near episode end — agent may favour conservative actions', low:'Early in episode — agent has time to explore' },
+  'Episode Progress': { what: 'How far through the 40-decision episode we are', norm: 'step ÷ 40 → 0–1', high: 'Near episode end — agent may favour conservative actions', low: 'Early in episode — agent has time to explore' },
 }
 
 // ── Derive actual calculated values from obs array ───────────────────────────
@@ -294,13 +294,13 @@ function getActualCalc(key: string, d: Decision, val: number): string {
 
   switch (key) {
     case 'delta_queue': {
-      const dqNorm   = -val / 2.0
-      const nDelta   = (ov(16) * QUEUE_NORM).toFixed(1)
-      const sDelta   = (ov(17) * QUEUE_NORM).toFixed(1)
-      const eDelta   = (ov(18) * QUEUE_NORM).toFixed(1)
-      const wDelta   = (ov(19) * QUEUE_NORM).toFixed(1)
-      const totalDelta = ((ov(16)+ov(17)+ov(18)+ov(19)) * QUEUE_NORM).toFixed(1)
-      const expArr   = ((ov(2)+ov(6)+ov(10)+ov(14)) * d.action.duration_s).toFixed(1)
+      const dqNorm = -val / 2.0
+      const nDelta = (ov(16) * QUEUE_NORM).toFixed(1)
+      const sDelta = (ov(17) * QUEUE_NORM).toFixed(1)
+      const eDelta = (ov(18) * QUEUE_NORM).toFixed(1)
+      const wDelta = (ov(19) * QUEUE_NORM).toFixed(1)
+      const totalDelta = ((ov(16) + ov(17) + ov(18) + ov(19)) * QUEUE_NORM).toFixed(1)
+      const expArr = ((ov(2) + ov(6) + ov(10) + ov(14)) * d.action.duration_s).toFixed(1)
       return [
         `ΔQueue per arm:  N=${nDelta}  S=${sDelta}  E=${eDelta}  W=${wDelta}`,
         `Total ΔQueue = ${totalDelta} veh  ·  Expected arrivals ≈ ${expArr} veh`,
@@ -309,12 +309,12 @@ function getActualCalc(key: string, d: Decision, val: number): string {
       ].join('\n')
     }
     case 'flow_eff': {
-      const eff      = val / 3.0
-      const dur      = d.action.duration_s
+      const eff = val / 3.0
+      const dur = d.action.duration_s
       const lostTime = val < 0 ? 0 : 0   // no loss if no switch (simplified)
-      const nGreen   = [2,2,2,2,0][d.action.phase] ?? 0
+      const nGreen = [2, 2, 2, 2, 0][d.action.phase] ?? 0
       const capacity = (0.5 * 3 * dur * nGreen).toFixed(1)
-      const served   = (eff * 0.5 * 3 * dur * nGreen).toFixed(1)
+      const served = (eff * 0.5 * 3 * dur * nGreen).toFixed(1)
       return [
         `Phase ${d.action.phase} (${d.action.phase_name}): ${nGreen} arms green`,
         `Green duration = ${dur}s  ·  Lanes = 3  ·  Sat. flow = 0.5 veh/s`,
@@ -334,13 +334,13 @@ function getActualCalc(key: string, d: Decision, val: number): string {
       ].join('\n')
     }
     case 'imbalance': {
-      const penalty  = -val / 1.5
-      const queues   = [0,4,8,12].map(i => ov(i) * QUEUE_NORM)
-      const labels   = ['N','S','E','W']
-      const qStr     = queues.map((q,i) => `${labels[i]}=${q.toFixed(1)}`).join('  ')
-      const maxQ     = Math.max(...queues)
-      const minQ     = Math.min(...queues)
-      const totalQ   = queues.reduce((a,b) => a+b, 0)
+      const penalty = -val / 1.5
+      const queues = [0, 4, 8, 12].map(i => ov(i) * QUEUE_NORM)
+      const labels = ['N', 'S', 'E', 'W']
+      const qStr = queues.map((q, i) => `${labels[i]}=${q.toFixed(1)}`).join('  ')
+      const maxQ = Math.max(...queues)
+      const minQ = Math.min(...queues)
+      const totalQ = queues.reduce((a, b) => a + b, 0)
       return [
         `Queues:  ${qStr}`,
         `Max=${maxQ.toFixed(1)}  Min=${minQ.toFixed(1)}  Total=${totalQ.toFixed(1)}`,
@@ -359,7 +359,7 @@ function getActualCalc(key: string, d: Decision, val: number): string {
     }
     case 'baseline_gap': {
       if (Math.abs(val) < 0.001) return 'No baseline reference set or episode just started\nbonus = 0.000'
-      const ratio    = val / 0.3
+      const ratio = val / 0.3
       const betterPct = (ratio * 100).toFixed(0)
       return [
         `Episode mean wait vs baseline reference`,
@@ -392,7 +392,7 @@ const REWARD_EXPLANATIONS: Record<string, {
     inputs: ['N/S/E/W Queue depth', 'Queue Δ features (obs 16-19)', 'Arrival rate × duration'],
     interpret: v => v < -0.5 ? 'Queues grew significantly — agent served less than arrived'
       : v > -0.1 ? 'Queues stable or shrinking — good signal control'
-      : 'Moderate queue growth — room to improve',
+        : 'Moderate queue growth — room to improve',
   },
   flow_eff: {
     icon: '🚦',
@@ -401,7 +401,7 @@ const REWARD_EXPLANATIONS: Record<string, {
     inputs: ['Served vehicles this step', 'Lanes per arm', 'Effective green duration (after lost time)', 'Phase (which arms are green)'],
     interpret: v => v >= 2.5 ? 'Near-perfect efficiency — almost all green capacity used'
       : v >= 1.5 ? 'Good flow — more than half capacity cleared'
-      : 'Low efficiency — green time wasted on empty arms',
+        : 'Low efficiency — green time wasted on empty arms',
   },
   switch: {
     icon: '🔄',
@@ -418,7 +418,7 @@ const REWARD_EXPLANATIONS: Record<string, {
     inputs: ['N/S/E/W Queue depths', 'Max vs min arm queue comparison'],
     interpret: v => v > -0.05 ? 'Arms balanced — no single arm being starved'
       : v > -0.3 ? 'Mild imbalance — one arm building up'
-      : 'Severe imbalance — one arm heavily starved vs others',
+        : 'Severe imbalance — one arm heavily starved vs others',
   },
   starvation: {
     icon: '⏳',
@@ -435,7 +435,7 @@ const REWARD_EXPLANATIONS: Record<string, {
     inputs: ['Episode mean wait time so far', 'Fixed-time baseline wait reference', 'Cumulative episode progress'],
     interpret: v => v > 0.1 ? 'Beating the baseline — agent is reducing wait vs fixed-time controller'
       : v < -0.05 ? 'Worse than baseline — agent performing below fixed-time reference'
-      : 'Near baseline performance',
+        : 'Near baseline performance',
   },
   all_red: {
     icon: '🚫',
@@ -467,27 +467,27 @@ function InfoBtn({ id, open, onToggle, color = 'rgba(255,255,255,0.15)' }: {
 function DecisionFullDetail({ d }: { d: Decision }) {
   const [openInfo, setOpenInfo] = React.useState<string | null>(null)
   const toggleInfo = (id: string) => setOpenInfo(prev => prev === id ? null : id)
-  const isPos      = d.reward_total >= 0
+  const isPos = d.reward_total >= 0
   const phaseColor = PHASE_HEX[d.action.phase] ?? '#6b7280'
-  const obsLabels  = d.obs.map(o => o.label)
+  const obsLabels = d.obs.map(o => o.label)
 
   // Arm color palette for observation bars
   const OBS_COLORS = [
-    '#10b981','#10b981','#10b981','#10b981',  // N: emerald
-    '#38bdf8','#38bdf8','#38bdf8','#38bdf8',  // S: sky
-    '#fb923c','#fb923c','#fb923c','#fb923c',  // E: orange
-    '#a78bfa','#a78bfa','#a78bfa','#a78bfa',  // W: violet
-    '#6b7280','#6b7280','#6b7280','#6b7280',  // deltas: gray
-    '#f59e0b','#f59e0b','#f59e0b','#f59e0b','#f59e0b', // phases: amber
+    '#10b981', '#10b981', '#10b981', '#10b981',  // N: emerald
+    '#38bdf8', '#38bdf8', '#38bdf8', '#38bdf8',  // S: sky
+    '#fb923c', '#fb923c', '#fb923c', '#fb923c',  // E: orange
+    '#a78bfa', '#a78bfa', '#a78bfa', '#a78bfa',  // W: violet
+    '#6b7280', '#6b7280', '#6b7280', '#6b7280',  // deltas: gray
+    '#f59e0b', '#f59e0b', '#f59e0b', '#f59e0b', '#f59e0b', // phases: amber
     '#64748b',                                           // progress
   ]
 
   // Reward component palette
   const REWARD_COLORS: Record<string, string> = {
-    delta_queue:  '#38bdf8', flow_eff:    '#10b981',
-    switch:       '#f59e0b', imbalance:   '#a78bfa',
-    starvation:   '#fb923c', baseline_gap:'#34d399',
-    all_red:      '#ef4444',
+    delta_queue: '#38bdf8', flow_eff: '#10b981',
+    switch: '#f59e0b', imbalance: '#a78bfa',
+    starvation: '#fb923c', baseline_gap: '#34d399',
+    all_red: '#ef4444',
   }
 
   const maxAbs = Math.max(0.01, ...Object.values(d.reward_parts).map(v => Math.abs(v as number)))
@@ -505,7 +505,7 @@ function DecisionFullDetail({ d }: { d: Decision }) {
           <span className="text-gray-500 text-xs font-mono">Step</span>
           <span className="text-white text-xl font-bold font-mono leading-none">#{d.step}</span>
           <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg"
-            style={{ backgroundColor: phaseColor, color: [1,3].includes(d.action.phase) ? '#000' : '#fff' }}>
+            style={{ backgroundColor: phaseColor, color: [1, 3].includes(d.action.phase) ? '#000' : '#fff' }}>
             {d.action.phase_name}
           </span>
           <span className="text-gray-500 text-xs font-mono">{d.action.duration_s}s</span>
@@ -550,12 +550,12 @@ function DecisionFullDetail({ d }: { d: Decision }) {
               </div>
               {feats.map(feat => {
                 const obsKey = `obs:${feat.label}`
-                const info   = OBS_INFO[feat.label]
+                const info = OBS_INFO[feat.label]
                 const isOpen = openInfo === obsKey
                 const rawVal = (feat.value * (
                   feat.label.includes('Queue (') ? 60
-                  : feat.label.includes('Wait')  ? 120
-                  : feat.label.includes('Progress') ? 40 : 1
+                    : feat.label.includes('Wait') ? 120
+                      : feat.label.includes('Progress') ? 40 : 1
                 ))
                 return (
                   <div key={feat.label} className="mb-1.5">
@@ -611,7 +611,7 @@ function DecisionFullDetail({ d }: { d: Decision }) {
               .map(({ label, v, color, val }) => {
                 const infKey = `inf:${label}`
                 const isOpen = openInfo === infKey
-                const info   = OBS_INFO[label]
+                const info = OBS_INFO[label]
                 return (
                   <div key={label}>
                     <div className="flex items-center gap-1.5">
@@ -647,11 +647,11 @@ function DecisionFullDetail({ d }: { d: Decision }) {
           <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest mb-3">Reward Breakdown</div>
           <div className="space-y-1.5">
             {Object.entries(d.reward_parts).map(([key, rawVal]) => {
-              const val   = rawVal as number
-              const isP   = val >= 0
-              const w     = Math.round(Math.abs(val) / maxAbs * 100)
-              const col   = REWARD_COLORS[key] ?? (isP ? '#10b981' : '#ef4444')
-              const info  = REWARD_EXPLANATIONS[key]
+              const val = rawVal as number
+              const isP = val >= 0
+              const w = Math.round(Math.abs(val) / maxAbs * 100)
+              const col = REWARD_COLORS[key] ?? (isP ? '#10b981' : '#ef4444')
+              const info = REWARD_EXPLANATIONS[key]
               const isOpen = openInfo === key
 
               return (
@@ -740,7 +740,7 @@ function DecisionFullDetail({ d }: { d: Decision }) {
 function PhaseDonut({ decisions }: { decisions: Decision[] }) {
   const counts: Record<number, number> = {}
   decisions.forEach(d => { counts[d.action.phase] = (counts[d.action.phase] ?? 0) + 1 })
-  const total   = decisions.length || 1
+  const total = decisions.length || 1
   const entries = Object.entries(counts).map(([p, c]) => ({ phase: Number(p), c, pct: c / total })).sort((a, b) => b.c - a.c)
   const R = 36; const CX = 44; const CY = 44
   let ang = -Math.PI / 2
@@ -807,7 +807,7 @@ function RewardComponents({ decisions }: { decisions: Decision[] }) {
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-type SortMode  = 'ep_desc' | 'ep_asc' | 'r_desc' | 'r_asc'
+type SortMode = 'ep_desc' | 'ep_asc' | 'r_desc' | 'r_asc'
 type DetailTab = 'timeline' | 'phases' | 'simulate'
 
 export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) {
@@ -863,7 +863,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
 
   const startPopupSim = useCallback(() => {
     if (selectedEp === null) return
-    
+
     // Stop any previous popup sim
     if (popupSidRef.current) {
       emit('sim:stop', { session_id: popupSidRef.current })
@@ -912,7 +912,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
     }
   }, [emit, selectedEp, setPopupPaused])
 
-  const setPopupSimSpeed = useCallback((s: 1|5|10|20) => {
+  const setPopupSimSpeed = useCallback((s: 1 | 5 | 10 | 20 | 50) => {
     if (selectedEp === null) return
     setPopupSpeed(selectedEp, s)
     if (popupSidRef.current) {
@@ -938,26 +938,26 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
     let list = [...liveEpisodeHistory]
     if (filter === 'top10') list = [...list].sort((a, b) => b.total_reward - a.total_reward).slice(0, 10)
     if (filter === 'bot10') list = [...list].sort((a, b) => a.total_reward - b.total_reward).slice(0, 10)
-    if (sortMode === 'ep_asc')  list.sort((a, b) => a.episode - b.episode)
+    if (sortMode === 'ep_asc') list.sort((a, b) => a.episode - b.episode)
     if (sortMode === 'ep_desc') list.sort((a, b) => b.episode - a.episode)
-    if (sortMode === 'r_desc')  list.sort((a, b) => b.total_reward - a.total_reward)
-    if (sortMode === 'r_asc')   list.sort((a, b) => a.total_reward - b.total_reward)
+    if (sortMode === 'r_desc') list.sort((a, b) => b.total_reward - a.total_reward)
+    if (sortMode === 'r_asc') list.sort((a, b) => a.total_reward - b.total_reward)
     return list
   }, [liveEpisodeHistory, sortMode, filter])
 
-  const rewards     = liveEpisodeHistory.map(e => e.total_reward)
-  const chronoHist  = useMemo(() => [...liveEpisodeHistory].sort((a, b) => a.episode - b.episode), [liveEpisodeHistory])
-  const bestReward  = rewards.length ? Math.max(...rewards) : 0
+  const rewards = liveEpisodeHistory.map(e => e.total_reward)
+  const chronoHist = useMemo(() => [...liveEpisodeHistory].sort((a, b) => a.episode - b.episode), [liveEpisodeHistory])
+  const bestReward = rewards.length ? Math.max(...rewards) : 0
   const worstReward = rewards.length ? Math.min(...rewards) : 0
-  const avgReward   = rewards.length ? rewards.reduce((a, b) => a + b, 0) / rewards.length : 0
+  const avgReward = rewards.length ? rewards.reduce((a, b) => a + b, 0) / rewards.length : 0
   const finalReward = rewards.length ? (rewards[rewards.length - 1] ?? 0) : 0
-  const bestEp      = liveEpisodeHistory.find(e => e.total_reward === bestReward)
-  const improvPct   = rewards.length >= 2 ? ((finalReward - rewards[0]) / (Math.abs(rewards[0]) || 1) * 100) : 0
+  const bestEp = liveEpisodeHistory.find(e => e.total_reward === bestReward)
+  const improvPct = rewards.length >= 2 ? ((finalReward - rewards[0]) / (Math.abs(rewards[0]) || 1) * 100) : 0
 
-  const allEpNums     = liveEpisodeHistory.map(e => e.episode)
+  const allEpNums = liveEpisodeHistory.map(e => e.episode)
   const selectedEpData = selectedEp !== null ? liveEpisodeHistory.find(e => e.episode === selectedEp) : null
   // Fallback: try ep-1 for off-by-one in older recorded sessions
-  const selectedDecs  = selectedEp !== null
+  const selectedDecs = selectedEp !== null
     ? (byEp[selectedEp] ?? byEp[selectedEp - 1] ?? [])
     : []
 
@@ -1065,24 +1065,22 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
         </div>
 
         {/* Stats row — hidden in expanded Live Replay mode to use full space */}
-        <div className={`grid grid-cols-6 gap-2 px-5 py-3 border-b border-gray-800 flex-shrink-0 ${
-          liveReplayExpanded && detailTab === 'simulate' ? 'hidden' : ''
-        }`}>
-          <Stat label="Best Reward"    val={`${bestReward >= 0 ? '+' : ''}${bestReward.toFixed(1)}`}   sub={`Ep ${bestEp?.episode ?? '—'}`} color="#fbbf24" />
-          <Stat label="Worst Reward"   val={`${worstReward >= 0 ? '+' : ''}${worstReward.toFixed(1)}`} color="#ef4444" />
-          <Stat label="Avg Reward"     val={`${avgReward >= 0 ? '+' : ''}${avgReward.toFixed(1)}`}     color="#60a5fa" />
-          <Stat label="Final Reward"   val={`${finalReward >= 0 ? '+' : ''}${finalReward.toFixed(1)}`} color="#10b981" />
-          <Stat label="Improvement"    val={`${improvPct >= 0 ? '+' : ''}${improvPct.toFixed(0)}%`}    sub="ep1 → final" color={improvPct >= 0 ? '#34d399' : '#f87171'} />
-          <Stat label="Total Episodes" val={liveEpisodeHistory.length.toLocaleString()}                color="#38bdf8" />
+        <div className={`grid grid-cols-6 gap-2 px-5 py-3 border-b border-gray-800 flex-shrink-0 ${liveReplayExpanded && detailTab === 'simulate' ? 'hidden' : ''
+          }`}>
+          <Stat label="Best Reward" val={`${bestReward >= 0 ? '+' : ''}${bestReward.toFixed(1)}`} sub={`Ep ${bestEp?.episode ?? '—'}`} color="#fbbf24" />
+          <Stat label="Worst Reward" val={`${worstReward >= 0 ? '+' : ''}${worstReward.toFixed(1)}`} color="#ef4444" />
+          <Stat label="Avg Reward" val={`${avgReward >= 0 ? '+' : ''}${avgReward.toFixed(1)}`} color="#60a5fa" />
+          <Stat label="Final Reward" val={`${finalReward >= 0 ? '+' : ''}${finalReward.toFixed(1)}`} color="#10b981" />
+          <Stat label="Improvement" val={`${improvPct >= 0 ? '+' : ''}${improvPct.toFixed(0)}%`} sub="ep1 → final" color={improvPct >= 0 ? '#34d399' : '#f87171'} />
+          <Stat label="Total Episodes" val={liveEpisodeHistory.length.toLocaleString()} color="#38bdf8" />
         </div>
 
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
 
           {/* LEFT: Episode browser — hidden when Live Replay is expanded */}
-          <div className={`w-60 flex flex-col border-r border-gray-800 flex-shrink-0 transition-all duration-200 ${
-            liveReplayExpanded && detailTab === 'simulate' ? 'hidden' : ''
-          }`}>
+          <div className={`w-60 flex flex-col border-r border-gray-800 flex-shrink-0 transition-all duration-200 ${liveReplayExpanded && detailTab === 'simulate' ? 'hidden' : ''
+            }`}>
             {/* Filter + sort controls */}
             <div className="px-3 pt-3 pb-2.5 border-b border-gray-800 flex-shrink-0 space-y-2">
 
@@ -1090,10 +1088,10 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
               <div className="flex items-center gap-1 bg-gray-900 rounded-lg p-0.5"
                 style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
                 {([
-                  { id: 'all',   label: 'All',  icon: null },
-                  { id: 'top10', label: 'Top',  icon: '🏆' },
-                  { id: 'bot10', label: 'Bot',  icon: '⚠️' },
-                ] as { id: 'all'|'top10'|'bot10'; label: string; icon: string|null }[]).map(({ id, label, icon }) => {
+                  { id: 'all', label: 'All', icon: null },
+                  { id: 'top10', label: 'Top', icon: '🏆' },
+                  { id: 'bot10', label: 'Bot', icon: '⚠️' },
+                ] as { id: 'all' | 'top10' | 'bot10'; label: string; icon: string | null }[]).map(({ id, label, icon }) => {
                   const active = filter === id
                   return (
                     <button key={id} onClick={() => setFilter(id)}
@@ -1115,9 +1113,9 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                 <div className="grid grid-cols-4 gap-1">
                   {([
                     ['ep_desc', '↓', 'New'],
-                    ['ep_asc',  '↑', 'Old'],
-                    ['r_desc',  '↓', 'R'],
-                    ['r_asc',   '↑', 'R'],
+                    ['ep_asc', '↑', 'Old'],
+                    ['r_desc', '↓', 'R'],
+                    ['r_asc', '↑', 'R'],
                   ] as [SortMode, string, string][]).map(([m, arrow, lbl]) => {
                     const active = sortMode === m
                     return (
@@ -1138,10 +1136,10 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-1">
               {sortedEps.map(ep => {
-                const isPos  = ep.total_reward >= 0
+                const isPos = ep.total_reward >= 0
                 const isBest = ep.total_reward === bestReward
-                const isSel  = ep.episode === selectedEp
-                const phase  = dominantPhase(ep.episode)
+                const isSel = ep.episode === selectedEp
+                const phase = dominantPhase(ep.episode)
                 return (
                   <button key={ep.episode} onClick={() => handleSelectEp(ep.episode)}
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg my-0.5 transition-all border text-left
@@ -1222,34 +1220,31 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                       <button
                         onClick={handleSimulate}
                         disabled={popupRunning}
-                        className={`ml-auto flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all ${
-                          popupRunning
+                        className={`ml-auto flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all ${popupRunning
                             ? 'bg-gray-900 text-gray-500 border-gray-800 cursor-not-allowed opacity-60 shadow-none'
                             : 'bg-cyan-950 hover:bg-cyan-900 text-cyan-400 hover:text-cyan-200 border-cyan-800 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.15)]'
-                        }`}
+                          }`}
                         title={popupRunning ? "Simulation is currently running" : "Simulate this training episode in the canvas"}
                       >
                         🎬 {popupRunning ? "Simulating..." : "Simulate"}
                       </button>
                     )}
                   </div>
-                 <div className="flex gap-1 mt-2 items-center">
+                  <div className="flex gap-1 mt-2 items-center">
                     {/* Timeline & Phases tabs — always clickable */}
                     {(['timeline', 'phases'] as DetailTab[]).map(t => (
                       <button key={t} onClick={() => { setDetailTab(t); setLiveReplayExpanded(false) }}
-                        className={`text-[10px] font-mono px-3 py-1 rounded-md transition-colors ${
-                          detailTab === t ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                        }`}>
+                        className={`text-[10px] font-mono px-3 py-1 rounded-md transition-colors ${detailTab === t ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                          }`}>
                         {t === 'timeline' ? '⏱ Decision Timeline' : '🎯 Phase Split'}
                       </button>
                     ))}
                     {/* Live Replay tab — shown as a clickable tab once a simulation has run */}
                     {popupSid !== null && (
-                      <div className={`flex items-center gap-1 text-[10px] font-mono pl-3 pr-1.5 py-1 rounded-md border transition-all ${
-                        detailTab === 'simulate'
+                      <div className={`flex items-center gap-1 text-[10px] font-mono pl-3 pr-1.5 py-1 rounded-md border transition-all ${detailTab === 'simulate'
                           ? 'bg-cyan-950 text-cyan-300 border-cyan-800 shadow-[0_0_8px_rgba(6,182,212,0.18)]'
                           : 'bg-gray-800/40 text-gray-400 hover:text-gray-200 border-transparent hover:bg-gray-800 cursor-pointer'
-                      }`} onClick={() => setDetailTab('simulate')}>
+                        }`} onClick={() => setDetailTab('simulate')}>
                         <span>🎬 Live Replay (Ep {selectedEp})</span>
                         <button
                           onClick={(e) => {
@@ -1289,13 +1284,13 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>📋</span> Episode
                               </div>
                               {[
-                                ['Episode #',      selectedEp ?? '—'],
-                                ['Total Reward',   simulatingEpData ? `${simulatingEpData.total_reward >= 0 ? '+' : ''}${simulatingEpData.total_reward.toFixed(3)}` : '—'],
-                                ['Mean Wait',      simulatingEpData ? `${simulatingEpData.mean_wait.toFixed(1)} s` : '—'],
-                                ['Throughput',     simulatingEpData ? `${simulatingEpData.throughput ?? '—'} vph` : '—'],
+                                ['Episode #', selectedEp ?? '—'],
+                                ['Total Reward', simulatingEpData ? `${simulatingEpData.total_reward >= 0 ? '+' : ''}${simulatingEpData.total_reward.toFixed(3)}` : '—'],
+                                ['Mean Wait', simulatingEpData ? `${simulatingEpData.mean_wait.toFixed(1)} s` : '—'],
+                                ['Throughput', simulatingEpData ? `${simulatingEpData.throughput ?? '—'} vph` : '—'],
                                 ['Steps / Length', simulatingEpData ? simulatingEpData.n_decisions : '—'],
-                                ['Decisions',      simulatingDecs.length],
-                                ['Rank vs Best',   bestReward > 0 ? `${((simulatingEpData?.total_reward ?? 0) / bestReward * 100).toFixed(1)}%` : '—'],
+                                ['Decisions', simulatingDecs.length],
+                                ['Rank vs Best', bestReward > 0 ? `${((simulatingEpData?.total_reward ?? 0) / bestReward * 100).toFixed(1)}%` : '—'],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1310,14 +1305,14 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>🤖</span> Model &amp; Algorithm
                               </div>
                               {[
-                                ['Model Key',        modelKey?.toUpperCase() ?? '—'],
-                                ['RL Algorithm',     simConfig.rl_algorithm],
-                                ['Learning Rate',    simConfig.learning_rate],
-                                ['Discount (γ)',     simConfig.discount_factor],
-                                ['Hidden Layer',     `${simConfig.hidden_layer_size} units`],
-                                ['Total Timesteps',  simConfig.total_timesteps?.toLocaleString() ?? '—'],
-                                ['Replay Speed',     `${popupSpeed}× real-time`],
-                                ['Replay Duration',  popupDuration < 60 ? `${popupDuration}s` : `${popupDuration/60} min`],
+                                ['Model Key', modelKey?.toUpperCase() ?? '—'],
+                                ['RL Algorithm', simConfig.rl_algorithm],
+                                ['Learning Rate', simConfig.learning_rate],
+                                ['Discount (γ)', simConfig.discount_factor],
+                                ['Hidden Layer', `${simConfig.hidden_layer_size} units`],
+                                ['Total Timesteps', simConfig.total_timesteps?.toLocaleString() ?? '—'],
+                                ['Replay Speed', `${popupSpeed}× real-time`],
+                                ['Replay Duration', popupDuration < 60 ? `${popupDuration}s` : `${popupDuration / 60} min`],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1332,21 +1327,21 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>🚦</span> Traffic Setup
                               </div>
                               {[
-                                ['Intersection',    simConfig.intersection_type?.replace('_', ' ')],
-                                ['Lanes / Arm',     simConfig.n_lanes],
-                                ['Total Flow',      `${simConfig.total_vph?.toLocaleString()} vph`],
-                                ['Pattern',         simConfig.traffic_pattern],
-                                ['Arrivals',        simConfig.arrival_distribution],
-                                ['Cars',            `${simConfig.pct_car}%`],
-                                ['2-Wheelers',      `${simConfig.pct_two_wheeler}%`],
-                                ['EV Scooters',     `${simConfig.pct_ev_scooter}%`],
-                                ['Auto-Rickshaw',   `${simConfig.pct_auto_rickshaw}%`],
-                                ['E-Rickshaw',      `${simConfig.pct_e_rickshaw}%`],
-                                ['Cabs',            `${simConfig.pct_cab}%`],
-                                ['Delivery Bikes',  `${simConfig.pct_delivery_bike}%`],
-                                ['TSRTC Bus',       `${simConfig.pct_tsrtc_bus}%`],
-                                ['School Bus',      `${simConfig.pct_school_bus}%`],
-                                ['Trucks',          `${simConfig.pct_truck}%`],
+                                ['Intersection', simConfig.intersection_type?.replace('_', ' ')],
+                                ['Lanes / Arm', simConfig.n_lanes],
+                                ['Total Flow', `${simConfig.total_vph?.toLocaleString()} vph`],
+                                ['Pattern', simConfig.traffic_pattern],
+                                ['Arrivals', simConfig.arrival_distribution],
+                                ['Cars', `${simConfig.pct_car}%`],
+                                ['2-Wheelers', `${simConfig.pct_two_wheeler}%`],
+                                ['EV Scooters', `${simConfig.pct_ev_scooter}%`],
+                                ['Auto-Rickshaw', `${simConfig.pct_auto_rickshaw}%`],
+                                ['E-Rickshaw', `${simConfig.pct_e_rickshaw}%`],
+                                ['Cabs', `${simConfig.pct_cab}%`],
+                                ['Delivery Bikes', `${simConfig.pct_delivery_bike}%`],
+                                ['TSRTC Bus', `${simConfig.pct_tsrtc_bus}%`],
+                                ['School Bus', `${simConfig.pct_school_bus}%`],
+                                ['Trucks', `${simConfig.pct_truck}%`],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1361,13 +1356,13 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>⏱</span> Signal Timing
                               </div>
                               {[
-                                ['Phases',          simConfig.n_phases],
-                                ['Min Green',       `${simConfig.phase_min_green_s} s`],
-                                ['Max Green',       `${simConfig.phase_max_green_s} s`],
-                                ['Yellow Time',     `${simConfig.yellow_time_s} s`],
-                                ['All-Red Time',    `${simConfig.all_red_time_s} s`],
-                                ['Cycle Length',    `${simConfig.cycle_length_s} s`],
-                                ['Warm-up Period',  `${simConfig.warm_up_s} s`],
+                                ['Phases', simConfig.n_phases],
+                                ['Min Green', `${simConfig.phase_min_green_s} s`],
+                                ['Max Green', `${simConfig.phase_max_green_s} s`],
+                                ['Yellow Time', `${simConfig.yellow_time_s} s`],
+                                ['All-Red Time', `${simConfig.all_red_time_s} s`],
+                                ['Cycle Length', `${simConfig.cycle_length_s} s`],
+                                ['Warm-up Period', `${simConfig.warm_up_s} s`],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1382,13 +1377,13 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>⚖</span> Reward Weights
                               </div>
                               {[
-                                ['Queue penalty',   simConfig.reward_wt_queue],
-                                ['Wait penalty',    simConfig.reward_wt_wait],
-                                ['Throughput',      simConfig.reward_wt_throughput],
-                                ['Collision',       simConfig.reward_wt_collision],
-                                ['Pedestrian',      simConfig.reward_wt_pedestrian],
-                                ['Emergency',       simConfig.reward_wt_emergency],
-                                ['Phase switch',    simConfig.reward_wt_switch],
+                                ['Queue penalty', simConfig.reward_wt_queue],
+                                ['Wait penalty', simConfig.reward_wt_wait],
+                                ['Throughput', simConfig.reward_wt_throughput],
+                                ['Collision', simConfig.reward_wt_collision],
+                                ['Pedestrian', simConfig.reward_wt_pedestrian],
+                                ['Emergency', simConfig.reward_wt_emergency],
+                                ['Phase switch', simConfig.reward_wt_switch],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1408,15 +1403,15 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <span>⚠</span> Adverse Conditions
                               </div>
                               {[
-                                ['Collision Prob',        `${(adverseConfig.collision_probability * 100).toFixed(1)}%`],
-                                ['Rear-end Risk',         adverseConfig.rear_end_risk_factor],
-                                ['Red-light Run',         `${(adverseConfig.red_light_run_prob * 100).toFixed(1)}%`],
-                                ['Signal Failure',        `${(adverseConfig.signal_failure_prob * 100).toFixed(1)}%`],
-                                ['Failure Mode',          adverseConfig.signal_failure_mode?.replace('_', ' ')],
-                                ['Waterlogging',          adverseConfig.waterlogging_enabled ? `Yes — severity ${adverseConfig.waterlogging_severity}` : 'Disabled'],
-                                ['VIP Convoy',            adverseConfig.vip_convoy_enabled ? `Yes — ${adverseConfig.vip_convoy_frequency_hr}×/hr` : 'Disabled'],
-                                ['Camera Dropout',        adverseConfig.camera_dropout_prob > 0 ? `${(adverseConfig.camera_dropout_prob*100).toFixed(1)}%` : 'None'],
-                                ['Sensor Noise σ',        adverseConfig.sensor_noise_std > 0 ? adverseConfig.sensor_noise_std : 'None'],
+                                ['Collision Prob', `${(adverseConfig.collision_probability * 100).toFixed(1)}%`],
+                                ['Rear-end Risk', adverseConfig.rear_end_risk_factor],
+                                ['Red-light Run', `${(adverseConfig.red_light_run_prob * 100).toFixed(1)}%`],
+                                ['Signal Failure', `${(adverseConfig.signal_failure_prob * 100).toFixed(1)}%`],
+                                ['Failure Mode', adverseConfig.signal_failure_mode?.replace('_', ' ')],
+                                ['Waterlogging', adverseConfig.waterlogging_enabled ? `Yes — severity ${adverseConfig.waterlogging_severity}` : 'Disabled'],
+                                ['VIP Convoy', adverseConfig.vip_convoy_enabled ? `Yes — ${adverseConfig.vip_convoy_frequency_hr}×/hr` : 'Disabled'],
+                                ['Camera Dropout', adverseConfig.camera_dropout_prob > 0 ? `${(adverseConfig.camera_dropout_prob * 100).toFixed(1)}%` : 'None'],
+                                ['Sensor Noise σ', adverseConfig.sensor_noise_std > 0 ? adverseConfig.sensor_noise_std : 'None'],
                               ].map(([k, v]) => (
                                 <div key={String(k)} className="flex items-start justify-between py-1 border-b border-gray-800/40">
                                   <span className="text-[10px] text-gray-500 font-mono">{k}</span>
@@ -1458,12 +1453,12 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                               <div className="flex items-center justify-between mb-1.5">
                                 <span className="text-[8px] text-gray-500 font-mono uppercase tracking-widest">⏱ Sim Time</span>
                                 <span className="text-[9px] text-gray-500 font-mono">
-                                  of {Math.floor(popupDuration/60).toString().padStart(2,'0')}:{(popupDuration%60).toString().padStart(2,'0')}
+                                  of {Math.floor(popupDuration / 60).toString().padStart(2, '0')}:{(popupDuration % 60).toString().padStart(2, '0')}
                                 </span>
                               </div>
                               <div className="flex items-baseline justify-between gap-1 mb-2">
                                 <span className="text-xl font-bold font-mono text-white tabular-nums leading-none">
-                                  {Math.floor(popupSimTime / 60).toString().padStart(2,'0')}:{Math.floor(popupSimTime % 60).toString().padStart(2,'0')}
+                                  {Math.floor(popupSimTime / 60).toString().padStart(2, '0')}:{Math.floor(popupSimTime % 60).toString().padStart(2, '0')}
                                 </span>
                                 <span className="text-[9px] font-mono text-cyan-400 font-semibold">{Math.min(100, Math.round((popupSimTime / (popupDuration || 1)) * 100))}% complete</span>
                               </div>
@@ -1476,10 +1471,9 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                             {/* Status badge */}
                             <div className="flex items-center justify-between border-t border-b border-gray-800/40 py-2">
                               <div className="flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full ${
-                                  popupRunning && !popupPaused ? 'bg-emerald-400 animate-pulse' :
-                                  popupPaused ? 'bg-amber-400' : 'bg-gray-500'
-                                }`} />
+                                <span className={`w-2 h-2 rounded-full ${popupRunning && !popupPaused ? 'bg-emerald-400 animate-pulse' :
+                                    popupPaused ? 'bg-amber-400' : 'bg-gray-500'
+                                  }`} />
                                 <span className="text-[10px] font-bold tracking-wider font-mono uppercase text-gray-400">
                                   {popupRunning && !popupPaused ? 'Running' : popupPaused ? 'Paused' : 'Idle'}
                                 </span>
@@ -1494,21 +1488,20 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                             {/* Traffic metrics grid */}
                             <div className="grid grid-cols-2 gap-2">
                               {([
-                                { label: 'On Canvas',    icon: '🚗', val: popupFrame?.stats?.on_canvas ?? popupFrame?.vehicles.length ?? '—', color: '#60a5fa', span: false },
-                                { label: 'In Queue',     icon: '🟥', val: popupFrame?.stats?.in_queue ?? '—', color: '#f87171', span: false },
-                                { label: 'Exited',       icon: '✅',  val: popupFrame?.stats?.exited ?? '—', color: '#34d399', span: false },
-                                { label: 'Avg Wait',     icon: '⏳',  val: popupFrame?.stats ? `${popupFrame.stats.avg_wait_s.toFixed(1)}s` : '—', color: '#fbbf24', span: false },
-                                { label: 'Instant Wait', icon: '⚡',  val: popupFrame?.stats ? `${popupFrame.stats.instant_wait_s.toFixed(1)}s` : '—', color: '#fb923c', span: false },
-                                { label: 'Throughput',   icon: '📈',  val: popupFrame?.stats ? `${popupFrame.stats.throughput_vph} vph` : '—', color: '#a78bfa', span: false },
-                                { label: 'Instant Flow', icon: '🏹',  val: popupFrame?.stats ? `${popupFrame.stats.instant_tput_vph} vph` : '—', color: '#c084fc', span: false },
-                                { label: 'Tick Time',    icon: '🕰',  val: popupFrame?.stats ? `${popupFrame.stats.tick_ms.toFixed(1)}ms` : '—', color: '#94a3b8', span: false },
-                                { label: 'Render FPS',   icon: '🎥',  val: popupFrame?.stats ? `${popupFrame.stats.fps} fps` : '—', color: '#67e8f9', span: true },
+                                { label: 'On Canvas', icon: '🚗', val: popupFrame?.stats?.on_canvas ?? popupFrame?.vehicles.length ?? '—', color: '#60a5fa', span: false },
+                                { label: 'In Queue', icon: '🟥', val: popupFrame?.stats?.in_queue ?? '—', color: '#f87171', span: false },
+                                { label: 'Exited', icon: '✅', val: popupFrame?.stats?.exited ?? '—', color: '#34d399', span: false },
+                                { label: 'Avg Wait', icon: '⏳', val: popupFrame?.stats ? `${popupFrame.stats.avg_wait_s.toFixed(1)}s` : '—', color: '#fbbf24', span: false },
+                                { label: 'Instant Wait', icon: '⚡', val: popupFrame?.stats ? `${popupFrame.stats.instant_wait_s.toFixed(1)}s` : '—', color: '#fb923c', span: false },
+                                { label: 'Throughput', icon: '📈', val: popupFrame?.stats ? `${popupFrame.stats.throughput_vph} vph` : '—', color: '#a78bfa', span: false },
+                                { label: 'Instant Flow', icon: '🏹', val: popupFrame?.stats ? `${popupFrame.stats.instant_tput_vph} vph` : '—', color: '#c084fc', span: false },
+                                { label: 'Tick Time', icon: '🕰', val: popupFrame?.stats ? `${popupFrame.stats.tick_ms.toFixed(1)}ms` : '—', color: '#94a3b8', span: false },
+                                { label: 'Render FPS', icon: '🎥', val: popupFrame?.stats ? `${popupFrame.stats.fps} fps` : '—', color: '#67e8f9', span: true },
                               ] as const).map(m => (
                                 <div
                                   key={m.label}
-                                  className={`bg-gray-900 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-between min-h-[56px] transition-all hover:border-gray-700/80 ${
-                                    m.span ? 'col-span-2' : ''
-                                  }`}
+                                  className={`bg-gray-900 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-between min-h-[56px] transition-all hover:border-gray-700/80 ${m.span ? 'col-span-2' : ''
+                                    }`}
                                 >
                                   <span className="text-[9px] text-gray-500 font-mono truncate">{m.icon} {m.label}</span>
                                   <span className="text-xs font-bold font-mono tabular-nums leading-none mt-1" style={{ color: m.color }}>{m.val}</span>
@@ -1522,8 +1515,8 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <div className="text-[8px] text-gray-500 font-mono uppercase tracking-widest mb-2.5">🚦 Signal Phases</div>
                                 <div className="space-y-2">
                                   {popupFrame.signals.map(sig => {
-                                    const phaseName = ['N→S Green','E→W Green','N→E Turn','S→W Turn','All-Red'][sig.phase] ?? `Phase ${sig.phase}`
-                                    const phaseColor = ['#10b981','#fbbf24','#2dd4bf','#fb923c','#ef4444'][sig.phase] ?? '#9ca3af'
+                                    const phaseName = ['N→S Green', 'E→W Green', 'N→E Turn', 'S→W Turn', 'All-Red'][sig.phase] ?? `Phase ${sig.phase}`
+                                    const phaseColor = ['#10b981', '#fbbf24', '#2dd4bf', '#fb923c', '#ef4444'][sig.phase] ?? '#9ca3af'
                                     return (
                                       <div key={sig.tl_id} className="border-b border-gray-800/45 pb-1.5 last:border-0 last:pb-0">
                                         <div className="flex items-center justify-between mb-0.5">
@@ -1544,7 +1537,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                             {!popupFrame && (
                               <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <div className="text-2xl mb-2">🎬</div>
-                                <p className="text-[10px] text-gray-600">Simulation loading...<br/>Press Simulate to begin</p>
+                                <p className="text-[10px] text-gray-600">Simulation loading...<br />Press Simulate to begin</p>
                               </div>
                             )}
                           </div>
@@ -1565,12 +1558,11 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                             <div className="grid grid-cols-2 gap-1">
                               {([30, 300, 600, 1800] as const).map(d => (
                                 <button key={d} onClick={() => selectedEp !== null && setPopupDuration(selectedEp, d)} disabled={popupRunning}
-                                  className={`text-[10px] font-mono py-1.5 rounded-lg border transition-all ${
-                                    popupDuration === d
+                                  className={`text-[10px] font-mono py-1.5 rounded-lg border transition-all ${popupDuration === d
                                       ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
                                       : 'bg-gray-900 text-gray-500 border-gray-800 hover:text-gray-300 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed'
-                                  }`}>
-                                  {d < 60 ? `${d}s` : `${d/60}m`}
+                                    }`}>
+                                  {d < 60 ? `${d}s` : `${d / 60}m`}
                                 </button>
                               ))}
                             </div>
@@ -1586,12 +1578,12 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 <div className="flex items-center justify-between mb-1.5">
                                   <span className="text-[8px] text-gray-500 font-mono uppercase tracking-widest">⏱ Sim Time</span>
                                   <span className="text-[9px] text-gray-500 font-mono">
-                                    of {Math.floor(popupDuration/60).toString().padStart(2,'0')}:{(popupDuration%60).toString().padStart(2,'0')}
+                                    of {Math.floor(popupDuration / 60).toString().padStart(2, '0')}:{(popupDuration % 60).toString().padStart(2, '0')}
                                   </span>
                                 </div>
                                 <div className="flex items-baseline justify-between gap-1 mb-2">
                                   <span className="text-xl font-bold font-mono text-white tabular-nums leading-none">
-                                    {Math.floor(popupSimTime / 60).toString().padStart(2,'0')}:{Math.floor(popupSimTime % 60).toString().padStart(2,'0')}
+                                    {Math.floor(popupSimTime / 60).toString().padStart(2, '0')}:{Math.floor(popupSimTime % 60).toString().padStart(2, '0')}
                                   </span>
                                   <span className="text-[9px] font-mono text-cyan-400 font-semibold">{Math.min(100, Math.round((popupSimTime / (popupDuration || 1)) * 100))}% complete</span>
                                 </div>
@@ -1604,10 +1596,9 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                               {/* Status badge */}
                               <div className="flex items-center justify-between border-t border-b border-gray-800/40 py-2">
                                 <div className="flex items-center gap-2">
-                                  <span className={`w-2 h-2 rounded-full ${
-                                    popupRunning && !popupPaused ? 'bg-emerald-400 animate-pulse' :
-                                    popupPaused ? 'bg-amber-400' : 'bg-gray-500'
-                                  }`} />
+                                  <span className={`w-2 h-2 rounded-full ${popupRunning && !popupPaused ? 'bg-emerald-400 animate-pulse' :
+                                      popupPaused ? 'bg-amber-400' : 'bg-gray-500'
+                                    }`} />
                                   <span className="text-[10px] font-bold tracking-wider font-mono uppercase text-gray-400">
                                     {popupRunning && !popupPaused ? 'Running' : popupPaused ? 'Paused' : 'Idle'}
                                   </span>
@@ -1622,21 +1613,20 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                               {/* Traffic metrics grid */}
                               <div className="grid grid-cols-2 gap-2">
                                 {([
-                                  { label: 'On Canvas',    icon: '🚗', val: popupFrame?.stats?.on_canvas ?? popupFrame?.vehicles.length ?? '—', color: '#60a5fa', span: false },
-                                  { label: 'In Queue',     icon: '🟥', val: popupFrame?.stats?.in_queue ?? '—', color: '#f87171', span: false },
-                                  { label: 'Exited',       icon: '✅',  val: popupFrame?.stats?.exited ?? '—', color: '#34d399', span: false },
-                                  { label: 'Avg Wait',     icon: '⏳',  val: popupFrame?.stats ? `${popupFrame.stats.avg_wait_s.toFixed(1)}s` : '—', color: '#fbbf24', span: false },
-                                  { label: 'Instant Wait', icon: '⚡',  val: popupFrame?.stats ? `${popupFrame.stats.instant_wait_s.toFixed(1)}s` : '—', color: '#fb923c', span: false },
-                                  { label: 'Throughput',   icon: '📈',  val: popupFrame?.stats ? `${popupFrame.stats.throughput_vph} vph` : '—', color: '#a78bfa', span: false },
-                                  { label: 'Instant Flow', icon: '🏹',  val: popupFrame?.stats ? `${popupFrame.stats.instant_tput_vph} vph` : '—', color: '#c084fc', span: false },
-                                  { label: 'Tick Time',    icon: '🕰',  val: popupFrame?.stats ? `${popupFrame.stats.tick_ms.toFixed(1)}ms` : '—', color: '#94a3b8', span: false },
-                                  { label: 'Render FPS',   icon: '🎥',  val: popupFrame?.stats ? `${popupFrame.stats.fps} fps` : '—', color: '#67e8f9', span: true },
+                                  { label: 'On Canvas', icon: '🚗', val: popupFrame?.stats?.on_canvas ?? popupFrame?.vehicles.length ?? '—', color: '#60a5fa', span: false },
+                                  { label: 'In Queue', icon: '🟥', val: popupFrame?.stats?.in_queue ?? '—', color: '#f87171', span: false },
+                                  { label: 'Exited', icon: '✅', val: popupFrame?.stats?.exited ?? '—', color: '#34d399', span: false },
+                                  { label: 'Avg Wait', icon: '⏳', val: popupFrame?.stats ? `${popupFrame.stats.avg_wait_s.toFixed(1)}s` : '—', color: '#fbbf24', span: false },
+                                  { label: 'Instant Wait', icon: '⚡', val: popupFrame?.stats ? `${popupFrame.stats.instant_wait_s.toFixed(1)}s` : '—', color: '#fb923c', span: false },
+                                  { label: 'Throughput', icon: '📈', val: popupFrame?.stats ? `${popupFrame.stats.throughput_vph} vph` : '—', color: '#a78bfa', span: false },
+                                  { label: 'Instant Flow', icon: '🏹', val: popupFrame?.stats ? `${popupFrame.stats.instant_tput_vph} vph` : '—', color: '#c084fc', span: false },
+                                  { label: 'Tick Time', icon: '🕰', val: popupFrame?.stats ? `${popupFrame.stats.tick_ms.toFixed(1)}ms` : '—', color: '#94a3b8', span: false },
+                                  { label: 'Render FPS', icon: '🎥', val: popupFrame?.stats ? `${popupFrame.stats.fps} fps` : '—', color: '#67e8f9', span: true },
                                 ] as const).map(m => (
                                   <div
                                     key={m.label}
-                                    className={`bg-gray-900 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-between min-h-[56px] transition-all hover:border-gray-700/80 ${
-                                      m.span ? 'col-span-2' : ''
-                                    }`}
+                                    className={`bg-gray-900 border border-gray-800/50 rounded-xl p-2.5 flex flex-col justify-between min-h-[56px] transition-all hover:border-gray-700/80 ${m.span ? 'col-span-2' : ''
+                                      }`}
                                   >
                                     <span className="text-[9px] text-gray-500 font-mono truncate">{m.icon} {m.label}</span>
                                     <span className="text-xs font-bold font-mono tabular-nums leading-none mt-1" style={{ color: m.color }}>{m.val}</span>
@@ -1650,8 +1640,8 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                   <div className="text-[8px] text-gray-500 font-mono uppercase tracking-widest mb-2.5">🚦 Signal Phases</div>
                                   <div className="space-y-2">
                                     {popupFrame.signals.map(sig => {
-                                      const phaseName = ['N→S Green','E→W Green','N→E Turn','S→W Turn','All-Red'][sig.phase] ?? `Phase ${sig.phase}`
-                                      const phaseColor = ['#10b981','#fbbf24','#2dd4bf','#fb923c','#ef4444'][sig.phase] ?? '#9ca3af'
+                                      const phaseName = ['N→S Green', 'E→W Green', 'N→E Turn', 'S→W Turn', 'All-Red'][sig.phase] ?? `Phase ${sig.phase}`
+                                      const phaseColor = ['#10b981', '#fbbf24', '#2dd4bf', '#fb923c', '#ef4444'][sig.phase] ?? '#9ca3af'
                                       return (
                                         <div key={sig.tl_id} className="border-b border-gray-800/45 pb-1.5 last:border-0 last:pb-0">
                                           <div className="flex items-center justify-between mb-0.5">
@@ -1672,7 +1662,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                               {!popupFrame && (
                                 <div className="flex flex-col items-center justify-center py-8 text-center">
                                   <div className="text-2xl mb-2">🎬</div>
-                                  <p className="text-[10px] text-gray-600">Simulation loading...<br/>Press Simulate to begin</p>
+                                  <p className="text-[10px] text-gray-600">Simulation loading...<br />Press Simulate to begin</p>
                                 </div>
                               )}
                             </div>

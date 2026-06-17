@@ -70,7 +70,9 @@ export function useSimulation() {
       // In single view restrict to the active model so unused worlds don't waste CPU.
       const effectiveModelKey = viewMode === 'split' ? 'all' : modelKey
 
-      const mergedConfig = getMergedConfig(simConfig, modelKey)
+      const currentSimConfig = useConfigStore.getState().simConfig
+      const currentAdverseConfig = useConfigStore.getState().adverseConfig
+      const mergedConfig = getMergedConfig(currentSimConfig, modelKey)
       const runtimeSimConfig = {
         ...mergedConfig,
         simulation_duration_s: durationSeconds ?? mergedConfig.simulation_duration_s ?? 1800,
@@ -80,7 +82,7 @@ export function useSimulation() {
         session_id: sid,
         model_key: effectiveModelKey,
         sim_config: runtimeSimConfig,
-        adverse_config: adverseConfig,
+        adverse_config: currentAdverseConfig,
       })
 
       // When Baseline tab simulation starts, also trigger baseline computation
@@ -89,11 +91,11 @@ export function useSimulation() {
         emit('baseline:compute', {
           session_id: sid,
           sim_config: runtimeSimConfig,
-          adverse_config: adverseConfig,
+          adverse_config: currentAdverseConfig,
         })
       }
     },
-    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed, getMergedConfig]
+    [emit, resetSimulation, setSessionId, setActiveSession, setSimSpeed, getMergedConfig]
   )
 
   const startEpisodeSimulation = useCallback(
@@ -124,7 +126,9 @@ export function useSimulation() {
       const START_SPEED = 5
       setSimSpeed(START_SPEED)
 
-      const mergedConfig = getMergedConfig(simConfig, modelKey)
+      const currentSimConfig = useConfigStore.getState().simConfig
+      const currentAdverseConfig = useConfigStore.getState().adverseConfig
+      const mergedConfig = getMergedConfig(currentSimConfig, modelKey)
       const runtimeSimConfig = {
         ...mergedConfig,
         simulation_duration_s: mergedConfig.simulation_duration_s ?? 1800,
@@ -135,11 +139,11 @@ export function useSimulation() {
         session_id: sid,
         model_key: modelKey,
         sim_config: runtimeSimConfig,
-        adverse_config: adverseConfig,
+        adverse_config: currentAdverseConfig,
         replay_episode: episodeNumber,
       })
     },
-    [emit, resetSimulation, simConfig, adverseConfig, setSessionId, setActiveSession, setSimSpeed, setTraining, setTrainingPaused, setTrainingModelKey, getMergedConfig]
+    [emit, resetSimulation, setSessionId, setActiveSession, setSimSpeed, setTraining, setTrainingPaused, setTrainingModelKey, getMergedConfig]
   )
 
   const stopSimulation = useCallback(() => {
@@ -161,7 +165,7 @@ export function useSimulation() {
   }, [emit, sessionId, setPaused])
 
   const startTraining = useCallback(
-    (totalTimesteps = 500_000, trainingMode: TrainingMode = 'stage1') => {
+    (totalTimesteps = 20_000, trainingMode: TrainingMode = 'stage1') => {
       setTrainingMode(trainingMode)
       // Clean reload training curve and metrics first
       resetSession()
@@ -189,7 +193,9 @@ export function useSimulation() {
       setTrainingPaused(false)
       setConverged(false)
 
-      const mergedConfig = getMergedConfig(simConfig, trainingModel)
+      const currentSimConfig = useConfigStore.getState().simConfig
+      const currentAdverseConfig = useConfigStore.getState().adverseConfig
+      const mergedConfig = getMergedConfig(currentSimConfig, trainingModel)
       emit('training:start', {
         session_id: sid,
         total_timesteps: totalTimesteps,
@@ -199,10 +205,10 @@ export function useSimulation() {
           simulation_duration_s: 1800,
           sim_speed_multiplier: START_SPEED,
         },
-        adverse_config: adverseConfig,
+        adverse_config: currentAdverseConfig,
       })
     },
-    [emit, setTraining, setConverged, simConfig, adverseConfig, setSessionId, setActiveSession, resetSession, setSimSpeed, resetSimulation, setTrainingPaused, setTrainingModelKey, getMergedConfig]
+    [emit, setTraining, setConverged, setSessionId, setActiveSession, resetSession, setSimSpeed, resetSimulation, setTrainingPaused, setTrainingModelKey, getMergedConfig]
   )
 
 
@@ -226,7 +232,7 @@ export function useSimulation() {
     emit('training:resume', { session_id: sessionId })
   }, [emit, sessionId, setTrainingPaused])
 
-  const setSpeed = useCallback((multiplier: 1 | 5 | 10 | 20) => {
+  const setSpeed = useCallback((multiplier: 1 | 5 | 10 | 20 | 50) => {
     // Always read sessionId live from store — avoids stale closure when the
     // callback is created before sessionId is set (React timing edge-case).
     const sid = useSimulationStore.getState().sessionId

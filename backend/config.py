@@ -17,6 +17,8 @@ class SimulationConfig:
     # 5A - Intersection & Road Network
     intersection_type: str = "4way_cross"       # 4way_cross|four_way|t_junction|y_junction|6arm_complex|six_arm|roundabout|four_way_free_left|t_junction_free_left|roundabout_free_left
     lanes_per_arm: int = 3
+    n_lanes: int = 3
+    lane_config: Optional[dict] = None
     dedicated_turn_lanes: str = "right_only"    # off|left_only|right_only|both
     u_turn_phase: bool = True
     pedestrian_crossings: str = "major_arms"    # disabled|major_arms|all_arms
@@ -70,7 +72,7 @@ class SimulationConfig:
     random_seed: int = 42
     use_transfer_learning: bool = False
     base_model_preset_id: Optional[str] = None
-    early_stopping: bool = True
+    early_stopping: bool = False
 
     # Dynamic Reward Weights
     reward_wt_queue: float = 1.0

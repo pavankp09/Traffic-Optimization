@@ -102,15 +102,20 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
   // Get active values or mock them if idle
   const latestEpisode = episodes.length > 0 ? episodes[episodes.length - 1] : null
   const currentEpNum = latestEpisode?.episode ?? 0
+  const resolvedTrainingMode = simConfig.training_mode ?? trainingMode
   
-  const totalSteps = Number(simConfig.total_timesteps ?? 500000)
+  const totalSteps = Number(simConfig.total_timesteps ?? 20000)
   let totalEpisodes = 500
-  if (trainingMode === 'stage1' || trainingMode === 'stage2') {
+  let stepsPerEpText = '40 steps/ep'
+  if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
     totalEpisodes = Math.round(totalSteps / 40)
-  } else if (trainingMode === 'stage3') {
+    stepsPerEpText = '40 steps/ep'
+  } else if (resolvedTrainingMode === 'stage3') {
     totalEpisodes = Math.round(totalSteps / 360)
-  } else if (trainingMode === 'stage4') {
+    stepsPerEpText = '360 steps/ep'
+  } else if (resolvedTrainingMode === 'stage4') {
     totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360)
+    stepsPerEpText = 'mixed steps/ep'
   }
   const progressPct = Math.min(100, (currentEpNum / totalEpisodes) * 100)
 
@@ -127,9 +132,11 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
   const loss = -0.012 - (1.0 - progress) * 0.025 + Math.sin(currentEpNum) * 0.003
   const entropy = Math.max(0.15, 1.0 - progress * 0.85)
 
+  const showActivePanel = isTraining || isConverged || useSimulationStore.getState().trainedModels.includes(modelKey)
+
   return (
     <div
-      className={`w-[560px] h-[560px] bg-gradient-to-b from-[#0e131c] to-[#0a0e15] backdrop-blur-lg border border-white/[0.07] rounded-2xl flex flex-col justify-between p-6 shadow-2xl relative overflow-hidden transition-all duration-300 select-none hover:border-white/[0.12]`}
+      className={`w-[560px] ${showActivePanel ? 'h-[560px]' : 'h-auto min-h-[380px] gap-6'} bg-gradient-to-b from-[#0e131c] to-[#0a0e15] backdrop-blur-lg border border-white/[0.07] rounded-2xl flex flex-col justify-between p-6 shadow-2xl relative overflow-hidden transition-all duration-300 select-none hover:border-white/[0.12]`}
       style={{
         boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px -8px ${meta.color}33`,
       }}
@@ -153,7 +160,9 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
             <h3 className="text-sm font-black font-mono uppercase tracking-widest text-gray-200">
               {meta.label} Setup
             </h3>
-            <p className="text-[10px] text-gray-500 font-mono">Neural Weights HUD</p>
+            <p className="text-[10px] text-gray-500 font-mono">
+              Neural Weights HUD · {resolvedTrainingMode === 'stage1' ? 'Stage 1 (Mock)' : resolvedTrainingMode === 'stage2' ? 'Stage 2 (Enriched Mock)' : resolvedTrainingMode === 'stage3' ? 'Stage 3 (SUMO)' : 'Stage 4 (Curriculum)'}
+            </p>
           </div>
         </div>
 
@@ -181,38 +190,36 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
 
       {/* ── BODY HUD INTERACTIVE PANEL ── */}
       <div className="flex-1 flex items-center justify-center py-4 z-10 overflow-hidden">
-        {!isTraining && !isConverged && !useSimulationStore.getState().trainedModels.includes(modelKey) ? (
+        {!showActivePanel ? (
           /* IDLE UNTRAINED HUD */
-          <div className="w-full flex flex-col items-center justify-center space-y-3 animate-fadeIn">
-            <div className="text-center space-y-1 max-w-[420px]">
+          <div className="w-full flex flex-col items-center justify-center space-y-4 animate-fadeIn">
+            <div className="text-center space-y-2 max-w-[420px]">
               <span className="text-[9px] uppercase tracking-wider text-gray-500">Status</span>
               <h4 className="text-[11px] font-mono font-black tracking-widest text-gray-300 uppercase">
                 Neural Weights Uninitialized
               </h4>
-              {!onTrainingModeChange && (
-                <p className="text-[10px] text-gray-400 font-medium leading-relaxed">
-                  {meta.description} Select a training mode and start the training session first.
-                </p>
-              )}
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                {meta.description} To initialize learning, configure Stage parameters in the <strong>Config</strong> panel, then click <strong>Start Training</strong> in the dashboard control bar.
+              </p>
             </div>
 
             {/* Config Specs Checked */}
             <div className="w-full grid grid-cols-2 gap-x-6 gap-y-1.5 bg-gray-900/40 border border-gray-800/60 rounded-xl p-2.5 px-5 text-[10px] font-mono text-gray-400">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-bold">Ready</span>
-                <span>Algorithm Preset Loaded</span>
+                <span>Algorithm: {simConfig.rl_algorithm}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-bold">Ready</span>
-                <span>Hyperparameters Ready</span>
+                <span>Steps: {totalSteps.toLocaleString()} ({totalEpisodes.toLocaleString()} ep)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-bold">Ready</span>
-                <span>Shaping Weights Pre-set</span>
+                <span>LR: {simConfig.learning_rate} | γ: {simConfig.discount_factor ?? 0.99}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-bold">Ready</span>
-                <span>Simulator Connection Established</span>
+                <span>MLP Nodes: {simConfig.hidden_layer_size ?? 64}x{simConfig.hidden_layer_size ?? 64}</span>
               </div>
             </div>
 
@@ -261,34 +268,6 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                 )}
               </div>
             </div>
-
-            {/* Training mode selector */}
-            {onTrainingModeChange && (
-              <div className="w-full">
-                <TrainingModeSelector selected={trainingMode} onChange={onTrainingModeChange} />
-              </div>
-            )}
-
-            {/* Glowing start training button */}
-            <button
-              className="px-6 py-2.5 rounded-xl text-xs font-bold font-mono tracking-widest text-white border transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              style={{
-                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%), #111827',
-                borderColor: `${meta.color}aa`,
-                boxShadow: `0 4px 20px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1), 0 0 10px ${meta.color}22`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = meta.color;
-                e.currentTarget.style.boxShadow = `0 4px 24px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 0 16px ${meta.color}44`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = `${meta.color}aa`;
-                e.currentTarget.style.boxShadow = `0 4px 20px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1), 0 0 10px ${meta.color}22`;
-              }}
-              onClick={() => startTraining(simConfig.total_timesteps, trainingMode)}
-            >
-              START AGENT TRAINING
-            </button>
           </div>
         ) : (
           /* ACTIVE TRAINING PROGRESS PANEL WITH PULSING BRAIN */
@@ -540,7 +519,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
           <div className="space-y-3 animate-fadeIn">
             <div className="flex justify-between items-center text-[10px] font-mono text-gray-400">
               <span className="flex items-center gap-1 font-bold">
-                Training Convergence Progress
+                Progress ({totalSteps.toLocaleString()} steps · {stepsPerEpText})
               </span>
               <span className="font-extrabold text-cyan-400 text-[11px]">
                 Episode {currentEpNum} / {totalEpisodes}
