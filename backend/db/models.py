@@ -28,6 +28,7 @@ class TrainingSession(Base):
     metrics = relationship("MetricRecord", back_populates="session", cascade="all, delete-orphan")
     adverse_events = relationship("AdverseEventRecord", back_populates="session", cascade="all, delete-orphan")
     insights = relationship("InsightCard", back_populates="session", cascade="all, delete-orphan")
+    vehicle_crossings = relationship("VehicleCrossing", back_populates="session", cascade="all, delete-orphan")
 
 
 class Episode(Base):
@@ -115,8 +116,37 @@ class InsightCard(Base):
     session = relationship("TrainingSession", back_populates="insights")
 
 
+class VehicleCrossing(Base):
+    __tablename__ = "vehicle_crossings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("training_sessions.id"), nullable=False)
+    vehicle_id = Column(String(50), nullable=False)
+    vehicle_type = Column(String(30), nullable=False)
+    number_plate = Column(String(20), nullable=False)
+    entry_time = Column(Float, nullable=False)
+    exit_time = Column(Float, nullable=False)
+    crossing_duration = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    session = relationship("TrainingSession", back_populates="vehicle_crossings")
+
+
 def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
     """Create all tables. Safe to call multiple times."""
+    import os
+    if database_url.startswith("sqlite:///"):
+        path = database_url[10:]
+        if path and not path.startswith(":") and not os.path.isabs(path):
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if path.startswith("backend/"):
+                path = path[8:]
+            elif path.startswith("backend\\"):
+                path = path[8:]
+            abs_path = os.path.abspath(os.path.join(backend_dir, path))
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            database_url = f"sqlite:///{abs_path}"
+
     engine = create_engine(database_url, echo=False)
     Base.metadata.create_all(engine)
     return engine

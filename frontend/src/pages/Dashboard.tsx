@@ -38,15 +38,19 @@ const PANEL_BTN_ICONS: Record<string, string> = {
   Config: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-3.84c-.24 0-.43.17-.47.39l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L3.32 9.13a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
 }
 
-function PanelBtn({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function PanelBtn({ active, label, onClick, disabled }: { active: boolean; label: string; onClick: () => void; disabled?: boolean }) {
   const path = PANEL_BTN_ICONS[label] ?? ''
   return (
     <button
-      onClick={onClick}
-      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${active
-        ? 'bg-[#8fb8ce]/[0.12] border-[#8fb8ce]/35 text-[#8fb8ce]'
-        : 'bg-transparent border-white/[0.07] text-slate-500 hover:border-white/[0.14] hover:text-slate-300'
-        }`}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
+        disabled
+          ? 'bg-transparent border-white/[0.04] text-slate-650 opacity-40 cursor-not-allowed'
+          : active
+            ? 'bg-[#8fb8ce]/[0.12] border-[#8fb8ce]/35 text-[#8fb8ce]'
+            : 'bg-transparent border-white/[0.07] text-slate-500 hover:border-white/[0.14] hover:text-slate-300'
+      }`}
     >
       {path && (
         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 opacity-70" fill="currentColor">
@@ -54,39 +58,12 @@ function PanelBtn({ active, label, onClick }: { active: boolean; label: string; 
         </svg>
       )}
       {label}
-      {active && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3 h-0.5 rounded-full bg-[#8fb8ce]/60" />}
+      {active && !disabled && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3 h-0.5 rounded-full bg-[#8fb8ce]/60" />}
     </button>
   )
 }
 
-// Speed overlay — renders on top of a canvas wrapper; receives callbacks from Dashboard
-function SpeedOverlay({
-  simSpeed, isRunning, setSpeed,
-}: {
-  simSpeed: 1 | 5 | 10 | 20
-  isRunning: boolean
-  setSpeed: (s: 1 | 5 | 10 | 20) => void
-}) {
-  if (!isRunning) return null
-  return (
-    <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-lg px-2 py-1.5 border border-white/[0.07]">
-      <span className="text-[7px] font-mono font-bold uppercase tracking-widest text-slate-600 mr-1">SPD</span>
-      {([1, 5, 10, 20] as const).map((spd) => (
-        <button
-          key={spd}
-          type="button"
-          onClick={() => setSpeed(spd)}
-          className={`w-8 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${simSpeed === spd
-            ? 'bg-white text-[#0a0d14] border-white shadow-[0_0_8px_rgba(255,255,255,0.18)]'
-            : 'border-white/[0.10] text-slate-500 hover:border-white/[0.30] hover:text-slate-200'
-            }`}
-        >
-          {spd}×
-        </button>
-      ))}
-    </div>
-  )
-}
+
 
 export default function Dashboard() {
   useSocket()
@@ -96,6 +73,7 @@ export default function Dashboard() {
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('stage1')
   const [activePanel, setActivePanel] = useState<Panel | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState(false)
+  const [configModalMode, setConfigModalMode] = useState<'simulation' | 'training'>('simulation')
   const [simDurationMin, setSimDurationMin] = useState<15 | 30 | 45 | 60>(60)
   const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(true)
   const [isLearningCollapsed, setIsLearningCollapsed] = useState(true)
@@ -138,9 +116,10 @@ export default function Dashboard() {
   const { simConfig, updateSimConfig } = useConfigStore()
 
   const handleUpdateSim = () => {
+    const latestConfig = useConfigStore.getState().simConfig
     if (isTraining) {
       stopTraining()
-      setTimeout(() => startTraining(simConfig.total_timesteps), 150)
+      setTimeout(() => startTraining(latestConfig.total_timesteps, latestConfig.training_mode ?? 'stage1'), 150)
     } else {
       stopSimulation()
       setTimeout(() => {
@@ -149,6 +128,11 @@ export default function Dashboard() {
         setRightColumnTab('stats')
       }, 150)
     }
+  }
+
+  const handleStartTraining = () => {
+    const latestConfig = useConfigStore.getState().simConfig
+    startTraining(latestConfig.total_timesteps, latestConfig.training_mode ?? 'stage1')
   }
 
   const isRunning = useSimulationStore((s) => s.isRunning)
@@ -398,7 +382,10 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 animate-fadeIn">
                   <button
                     className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide"
-                    onClick={() => setConfigModalOpen(true)}
+                    onClick={() => {
+                      setConfigModalMode('simulation')
+                      setConfigModalOpen(true)
+                    }}
                   >
                     <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
@@ -408,24 +395,26 @@ export default function Dashboard() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 animate-fadeIn">
-                  <button
-                    className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.10] hover:border-white/[0.20] text-slate-300 hover:text-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                    onClick={isPaused ? resumeSimulation : pauseSimulation}
-                  >
-                    {isPaused
-                      ? <><svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg> Resume</>
-                      : <><svg viewBox="0 0 10 10" className="w-2.5 h-2 fill-current" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="0" width="3" height="10" /><rect x="6" y="0" width="3" height="10" /></svg> Pause</>
-                    }
-                  </button>
-                  <button
-                    className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#160b0b] border border-[#ef4444]/18 hover:border-[#ef4444]/35 text-[#ef4444]/70 hover:text-[#ef4444] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                    onClick={stopSimulation}
-                  >
-                    <svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><rect x="0.5" y="0.5" width="9" height="9" rx="1" /></svg>
-                    Stop
-                  </button>
-                </div>
+                viewMode === 'split' && (
+                  <div className="flex items-center gap-1.5 animate-fadeIn">
+                    <button
+                      className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.10] hover:border-white/[0.20] text-slate-300 hover:text-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      onClick={isPaused ? resumeSimulation : pauseSimulation}
+                    >
+                      {isPaused
+                        ? <><svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg> Resume</>
+                        : <><svg viewBox="0 0 10 10" className="w-2.5 h-2 fill-current" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="0" width="3" height="10" /><rect x="6" y="0" width="3" height="10" /></svg> Pause</>
+                      }
+                    </button>
+                    <button
+                      className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#160b0b] border border-[#ef4444]/18 hover:border-[#ef4444]/35 text-[#ef4444]/70 hover:text-[#ef4444] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      onClick={stopSimulation}
+                    >
+                      <svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><rect x="0.5" y="0.5" width="9" height="9" rx="1" /></svg>
+                      Stop
+                    </button>
+                  </div>
+                )
               )
             )}
 
@@ -440,13 +429,29 @@ export default function Dashboard() {
               </button>
             )}
 
+            {/* Start Training button — shown when on an untrained RL model and not currently training */}
+            {viewMode === 'single' && selectedModelSingle !== 'baseline' && !trainedModels.includes(selectedModelSingle) && !isTraining && (
+              <button
+                className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide animate-fadeIn"
+                onClick={() => {
+                  setConfigModalMode('training')
+                  setConfigModalOpen(true)
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Start Training
+              </button>
+            )}
+
             {/* Convergence badge removed from header — shown in NRAL panel only */}
 
             {/* Speed controls for split grid — shared across all canvases */}
             {viewMode === 'split' && isRunning && (
               <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1">
                 <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Speed</span>
-                {([1, 5, 10, 20] as const).map((spd) => (
+                {([1, 5, 20, 50] as const).map((spd) => (
                   <button
                     key={spd}
                     type="button"
@@ -464,27 +469,17 @@ export default function Dashboard() {
 
             {/* Panel toggles */}
             <div className="ml-auto flex gap-2">
-              <PanelBtn
-                active={activePanel === 'stats'}
-                label="Stats"
-                onClick={() => togglePanel('stats')}
-              />
-              <PanelBtn
-                active={activePanel === 'xai'}
-                label="XAI"
-                onClick={() => togglePanel('xai')}
-              />
               {/* Config opens a full modal dialog */}
               <button
                 type="button"
-                onClick={() => setConfigModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
+                disabled={true}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all opacity-40 cursor-not-allowed"
                 style={{
-                  background: configModalOpen ? 'rgba(99,179,237,0.12)' : 'transparent',
-                  borderColor: configModalOpen ? 'rgba(99,179,237,0.35)' : 'rgba(255,255,255,0.08)',
-                  color: configModalOpen ? '#7dd3fc' : '#64748b',
+                  background: 'transparent',
+                  borderColor: 'rgba(255,255,255,0.04)',
+                  color: '#475569',
                 }}
-                title="Open Simulation Configuration"
+                title="Simulation configuration is currently disabled"
               >
                 <svg viewBox="0 0 20 20" className="w-3 h-3 flex-shrink-0" fill="currentColor">
                   <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-4c-.24 0-.43.17-.47.39l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L3.32 9.13a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
@@ -494,8 +489,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* KPI Cards */}
-          <KpiCards />
+          {/* KPI Cards — only shown when not training */}
+          {!isTraining && <KpiCards />}
 
 
           {/* Canvas */}
@@ -511,54 +506,57 @@ export default function Dashboard() {
                         <>
                           {/* Left Column: SimCanvas */}
                           <div className="relative flex items-center justify-center bg-black/20 rounded-xl p-1.5 border border-white/[0.05] flex-shrink-0 animate-fadeIn">
-                            <SpeedOverlay simSpeed={simSpeed} isRunning={isRunning} setSpeed={setSpeed} />
                             <SimCanvas
                               key="baseline"
                               width={720}
                               height={560}
                               label="Baseline"
                               frameOverride={baselineFrame}
+                              speedValue={simSpeed}
+                              onSpeedChange={setSpeed}
+                              onPlayPause={isPaused ? resumeSimulation : pauseSimulation}
+                              onStop={stopSimulation}
+                              isPaused={isPaused}
+                              isRunning={isRunning}
                             />
                           </div>
 
-                          {/* Right Column: Live Stats or Config Panel */}
-                          <div className="animate-fadeIn flex-shrink-0">
-                            {baselineRightTab === 'stats' ? (
-                              <SimLiveStatsPanel />
-                            ) : (
-                              <RLConfigDetailsPanel modelKey="baseline" />
-                            )}
-                          </div>
+                           <div className="animate-fadeIn flex-shrink-0">
+                             {baselineRightTab === 'stats' ? (
+                               <SimLiveStatsPanel />
+                             ) : (
+                               <RLConfigDetailsPanel modelKey="baseline" />
+                             )}
+                           </div>
 
-                          {/* Vertical toggle — CFG on top, SIM LIVE below */}
-                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
-                              <button
-                                type="button"
-                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
-                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                  }`}
-                                onClick={() => setBaselineRightTab('config')}
-                                title="Configuration Specs"
-                              >
-                                <span className="text-[13px] leading-none font-bold">CFG</span>
-                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
-                              </button>
-                              <button
-                                type="button"
-                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
-                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                  }`}
-                                onClick={() => setBaselineRightTab('stats')}
-                                title="Live Stats Panel"
-                              >
-                                <span className="text-[13px] leading-none font-bold">SIM</span>
-                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
-                              </button>
-                            </div>
-                          </div>
+                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
+                               <button
+                                 type="button"
+                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
+                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                   }`}
+                                 onClick={() => setBaselineRightTab('config')}
+                                 title="Configuration Specs"
+                               >
+                                 <span className="text-[13px] leading-none font-bold">CFG</span>
+                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
+                               </button>
+                               <button
+                                 type="button"
+                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
+                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                   }`}
+                                 onClick={() => setBaselineRightTab('stats')}
+                                 title="Live Stats Panel"
+                               >
+                                 <span className="text-[13px] leading-none font-bold">SIM</span>
+                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
+                               </button>
+                             </div>
+                           </div>
                         </>
                       )
                     }
@@ -568,11 +566,8 @@ export default function Dashboard() {
                     const showToggles = isActiveModelTraining || isTrained
 
                     if (!showToggles) {
-                      // State 1: Untrained / Setup
-                      // Left: RLTrainingHUD (with embedded mode selector)  |  Right: Config
                       return (
                         <>
-                          {/* Left Column: Setup Screen — mode selector is inside RLTrainingHUD */}
                           <div className="animate-fadeIn flex-shrink-0">
                             <RLTrainingHUD
                               modelKey={selectedModelSingle}
@@ -580,19 +575,13 @@ export default function Dashboard() {
                               onTrainingModeChange={setTrainingMode}
                             />
                           </div>
-                          {/* Right Column: Config Panel */}
                           <div className="animate-fadeIn flex-shrink-0">
                             <RLConfigDetailsPanel modelKey={selectedModelSingle} />
                           </div>
-                          {/* Spacer */}
                           <div className="w-[56px] flex-shrink-0" />
                         </>
                       )
                     } else {
-                      // State 2: Active / Trained
-                      // Left Column: ALWAYS SimCanvas (Simulation Board)
-                      // Right Column: RLTrainingHUD (Setup HUD) OR RLConfigDetailsPanel (Specs Panel) - Dynamic Tab!
-                      // Plus next to the right column: Cyberpunk Specs vs Sim Vertical Toggle Buttons in the spacer slot
                       const labelMap: Record<string, string> = {
                         rl1: 'RL Agent 1 (PPO)',
                         rl2: 'RL Agent 2 (DQN)',
@@ -604,51 +593,48 @@ export default function Dashboard() {
 
                       return (
                         <>
-                          {/* Left Column: XaiLiveCanvas during training, SimCanvas otherwise */}
                           <div className="relative flex items-center justify-center bg-black/20 rounded-xl p-1.5 border border-white/[0.05] flex-shrink-0 animate-fadeIn">
                             {isActiveModelTraining ? (
-                              /* During training: show live XAI canvas instead of dummy sim */
                               <XaiLiveCanvas />
                             ) : (
-                              /* After training / simulation: normal SimCanvas */
-                              <>
-                                <SpeedOverlay simSpeed={simSpeed} isRunning={isRunning} setSpeed={setSpeed} />
-                                <SimCanvas
-                                  key={selectedModelSingle}
-                                  width={720}
-                                  height={560}
-                                  label={activeLabel}
-                                  frameOverride={
-                                    selectedModelSingle === 'rl1' ? rl1Frame :
-                                      selectedModelSingle === 'rl2' ? rl2Frame :
-                                        selectedModelSingle === 'rl3' ? rl3Frame :
-                                          selectedModelSingle === 'rl4' ? rl4Frame :
-                                            selectedModelSingle === 'custom' ? customFrame :
-                                              null
-                                  }
-                                />
-                              </>
+                              <SimCanvas
+                                key={selectedModelSingle}
+                                width={720}
+                                height={560}
+                                label={activeLabel}
+                                frameOverride={
+                                  selectedModelSingle === 'rl1' ? rl1Frame :
+                                    selectedModelSingle === 'rl2' ? rl2Frame :
+                                      selectedModelSingle === 'rl3' ? rl3Frame :
+                                        selectedModelSingle === 'rl4' ? rl4Frame :
+                                          selectedModelSingle === 'custom' ? customFrame :
+                                            null
+                                }
+                                speedValue={simSpeed}
+                                onSpeedChange={setSpeed}
+                                onPlayPause={isPaused ? resumeSimulation : pauseSimulation}
+                                onStop={stopSimulation}
+                                isPaused={isPaused}
+                                isRunning={isRunning}
+                              />
                             )}
                           </div>
 
-                          {/* Right Column: 4-tab panel */}
-                          <div className="animate-fadeIn flex-shrink-0">
-                            {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
-                            {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
-                            {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
-                            {/* XAI tab removed — Training Intel is inside NRAL panel */}
-                          </div>
+                           <div className="animate-fadeIn flex-shrink-0">
+                             {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
+                             {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
+                             {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
+                           </div>
 
-                          {/* 4-tab vertical toggle — CFG / SIM / STATS / NEURAL */}
-                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
-                              {(
-                                [
-                                  { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
-                                  { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
-                                  { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
-                                ] as const
-                              ).map(({ key, label, sub, title }) => (
+                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
+                               {(
+                                 [
+                                   { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
+                                   { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
+                                   { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
+                                 ] as const
+                               ).map(({ key, label, sub, title }) => (
                                 <button
                                   key={key}
                                   type="button"
@@ -676,122 +662,130 @@ export default function Dashboard() {
             </div>{/* /p-4 inner */}
           </div>
 
-          {/* Analytics row */}
-          <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between focus:outline-none group"
-              onClick={() => setIsAnalyticsCollapsed(!isAnalyticsCollapsed)}
-            >
-              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
-                <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
-                Live Optimization Analytics
-                <HelpPopover text="### Real-Time Analytics\nTelemetrical charts detailing signal optimization improvements:\n- **Before vs After**: Live wait time comparisons (Baseline vs Active Agent).\n- **Queue Heatmap**: Spatial density representing backlog build-up per arm (North, South, East, West).\n- **Phase Timeline**: Chronological track of phase intervals executed by the controller." position="right" />
-              </h3>
-              <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
-                {isAnalyticsCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
-              </span>
-            </button>
+          {/* Analytics row — only shown when not training */}
+          {!isTraining && (
+            <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between focus:outline-none group"
+                onClick={() => setIsAnalyticsCollapsed(!isAnalyticsCollapsed)}
+              >
+                <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
+                  <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
+                  Live Optimization Analytics
+                  <HelpPopover text="### Real-Time Analytics\nTelemetrical charts detailing signal optimization improvements:\n- **Before vs After**: Live wait time comparisons (Baseline vs Active Agent).\n- **Queue Heatmap**: Spatial density representing backlog build-up per arm (North, South, East, West).\n- **Phase Timeline**: Chronological track of phase intervals executed by the controller." position="right" />
+                </h3>
+                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                  {isAnalyticsCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
+                </span>
+              </button>
 
-            {!isAnalyticsCollapsed && (
-              <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-3 gap-4 animate-fadeIn">
-                <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
-                  <BeforeAfterChart />
+              {!isAnalyticsCollapsed && (
+                <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-3 gap-4 animate-fadeIn">
+                  <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
+                    <BeforeAfterChart />
+                  </div>
+                  <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
+                    <QueueHeatmap />
+                  </div>
+                  <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
+                    <PhaseTimeline />
+                  </div>
                 </div>
-                <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
-                  <QueueHeatmap />
+              )}
+            </div>
+          )}
+
+          {/* How the AI learns — only shown when training */}
+          {isTraining && (
+            <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between focus:outline-none group"
+                onClick={() => setIsLearningCollapsed(!isLearningCollapsed)}
+              >
+                <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
+                  <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
+                  How the AI Learns
+                  <HelpPopover text={getRlExplainerHelp()} position="right" />
+                </h3>
+                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                  {isLearningCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
+                </span>
+              </button>
+
+              {!isLearningCollapsed && (
+                <div className="mt-4 border-t border-white/[0.05] pt-4 space-y-3 animate-fadeIn">
+                  <TrainingExplainer />
                 </div>
-                <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4">
-                  <PhaseTimeline />
+              )}
+            </div>
+          )}
+
+          {/* Training + Insights — only shown when training */}
+          {isTraining && (
+            <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between focus:outline-none group"
+                onClick={() => setIsTrainingCollapsed(!isTrainingCollapsed)}
+              >
+                <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
+                  <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
+                  Training Progress &amp; Insights
+                  <HelpPopover text="### Neural Net Training Progress\nStreams real-time episodes and strategy milestones:\n- **Value Chart**: Renders training reward scores over episodes. A value flattening toward zero represents convergence.\n- **Milestone Insights**: Highlight events where the agent beats baseline rules or learns specific priorities." position="right" />
+                </h3>
+                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                  {isTrainingCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
+                </span>
+              </button>
+
+              {!isTrainingCollapsed && (
+                <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-2 gap-4 animate-fadeIn">
+                  <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4 space-y-2">
+                    <h3 className="text-[10px] font-bold text-slate-500 font-mono flex items-center gap-1 uppercase tracking-widest">
+                      TRAINING EPISODES VALUE CHART
+                      <HelpPopover text="### Training Episodes Value Chart\nStreams learning convergence metrics in real time:\n- **Cyan (Reward)**: Cumulative reinforcement reward score per episode. Escalating score signifies active learning.\n- **Orange (Wait s)**: Average vehicle delay seconds. Shrinking delay signals signal splits optimization." position="top" />
+                    </h3>
+                    <TrainingChart />
+                  </div>
+                  <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4 space-y-2">
+                    <h3 className="text-[10px] font-bold text-slate-500 font-mono flex items-center gap-1 uppercase tracking-widest">
+                      STRATEGY MILESTONES
+                      <HelpPopover text="### Strategy Milestones\nIdentifies specific qualitative traffic strategy accomplishments unlocked during learning, such as learning to clear major bottlenecks or prioritizing high vehicle occupancy lanes." position="top" />
+                    </h3>
+                    <InsightCards />
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          {/* How the AI learns */}
-          <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between focus:outline-none group"
-              onClick={() => setIsLearningCollapsed(!isLearningCollapsed)}
-            >
-              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
-                <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
-                How the AI Learns
-                <HelpPopover text={getRlExplainerHelp()} position="right" />
-              </h3>
-              <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
-                {isLearningCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
-              </span>
-            </button>
+          {/* Economic projector — only shown when not training */}
+          {!isTraining && (
+            <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between focus:outline-none group"
+                onClick={() => setIsEconomicCollapsed(!isEconomicCollapsed)}
+              >
+                <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
+                  <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
+                  Economic Impact Projections
+                  <HelpPopover text="### Blended Fleet Economic Impact\nDynamic projector calculating environmental and economic savings:\n- **Fuel Saved**: Blended fleet idle fuel reductions ($0.7$ liters/hour rate).\n- **CO2 Avoided**: $2.31$ kg per liter reduction factor.\n- **Financial Gains**: Sum of time-value wages ($\mathbb{INR}\ 150$/hour) and fuel savings ($\mathbb{INR}\ 105$/liter)." position="right" />
+                </h3>
+                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                  {isEconomicCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
+                </span>
+              </button>
 
-            {!isLearningCollapsed && (
-              <div className="mt-4 border-t border-white/[0.05] pt-4 space-y-3 animate-fadeIn">
-                <TrainingExplainer />
-              </div>
-            )}
-          </div>
-
-          {/* Training + Insights */}
-          <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between focus:outline-none group"
-              onClick={() => setIsTrainingCollapsed(!isTrainingCollapsed)}
-            >
-              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
-                <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
-                Training Progress &amp; Insights
-                <HelpPopover text="### Neural Net Training Progress\nStreams real-time episodes and strategy milestones:\n- **Value Chart**: Renders training reward scores over episodes. A value flattening toward zero represents convergence.\n- **Milestone Insights**: Highlight events where the agent beats baseline rules or learns specific priorities." position="right" />
-              </h3>
-              <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
-                {isTrainingCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
-              </span>
-            </button>
-
-            {!isTrainingCollapsed && (
-              <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-2 gap-4 animate-fadeIn">
-                <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4 space-y-2">
-                  <h3 className="text-[10px] font-bold text-slate-500 font-mono flex items-center gap-1 uppercase tracking-widest">
-                    TRAINING EPISODES VALUE CHART
-                    <HelpPopover text="### Training Episodes Value Chart\nStreams learning convergence metrics in real time:\n- **Cyan (Reward)**: Cumulative reinforcement reward score per episode. Escalating score signifies active learning.\n- **Orange (Wait s)**: Average vehicle delay seconds. Shrinking delay signals signal splits optimization." position="top" />
-                  </h3>
-                  <TrainingChart />
+              {!isEconomicCollapsed && (
+                <div className="mt-4 border-t border-white/[0.05] pt-3 animate-fadeIn">
+                  <EconomicProjector economic={economic} />
                 </div>
-                <div className="bg-black/20 rounded-xl border border-white/[0.04] p-4 space-y-2">
-                  <h3 className="text-[10px] font-bold text-slate-500 font-mono flex items-center gap-1 uppercase tracking-widest">
-                    STRATEGY MILESTONES
-                    <HelpPopover text="### Strategy Milestones\nIdentifies specific qualitative traffic strategy accomplishments unlocked during learning, such as learning to clear major bottlenecks or prioritizing high vehicle occupancy lanes." position="top" />
-                  </h3>
-                  <InsightCards />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Economic projector */}
-          <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between focus:outline-none group"
-              onClick={() => setIsEconomicCollapsed(!isEconomicCollapsed)}
-            >
-              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
-                <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
-                Economic Impact Projections
-                <HelpPopover text="### Blended Fleet Economic Impact\nDynamic projector calculating environmental and economic savings:\n- **Fuel Saved**: Blended fleet idle fuel reductions ($0.7$ liters/hour rate).\n- **CO2 Avoided**: $2.31$ kg per liter reduction factor.\n- **Financial Gains**: Sum of time-value wages ($\mathbb{INR}\ 150$/hour) and fuel savings ($\mathbb{INR}\ 105$/liter)." position="right" />
-              </h3>
-              <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
-                {isEconomicCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
-              </span>
-            </button>
-
-            {!isEconomicCollapsed && (
-              <div className="mt-4 border-t border-white/[0.05] pt-3 animate-fadeIn">
-                <EconomicProjector economic={economic} />
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
         </div>
 
@@ -883,9 +877,11 @@ export default function Dashboard() {
       {/* ── Config Modal ── */}
       <ConfigModal
         open={configModalOpen}
+        mode={configModalMode}
         onClose={() => setConfigModalOpen(false)}
-        onApply={handleUpdateSim}
+        onApply={configModalMode === 'training' ? handleStartTraining : handleUpdateSim}
         isBaselineView={selectedModelSingle === 'baseline'}
+        activeModelKey={selectedModelSingle}
       />
 
     </div>

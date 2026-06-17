@@ -18,7 +18,10 @@ const PHASE_COLORS: Record<number, string> = {
   1: 'bg-amber-500/20  text-amber-400  border-amber-500/30',
   2: 'bg-teal-500/20   text-teal-400   border-teal-500/30',
   3: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  4: 'bg-red-500/20    text-red-400    border-red-500/30',
+  4: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', // EW Straight/Left Green
+  5: 'bg-amber-500/20  text-amber-400  border-amber-500/30', // EW Straight/Left Yellow
+  6: 'bg-teal-500/20   text-teal-400   border-teal-500/30', // EW Right Green
+  7: 'bg-orange-500/20 text-orange-400 border-orange-500/30', // EW Right Yellow
 }
 
 export default function DecisionReplay() {

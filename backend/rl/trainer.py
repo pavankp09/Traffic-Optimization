@@ -45,7 +45,17 @@ class EpisodeMetricsCallback(BaseCallback):
         self.session_id = session_id
         self.db_url = db_url
         self.emit_fn = emit_fn
-        self._engine = create_engine(db_url, echo=False)
+        self._engine = create_engine(
+            db_url,
+            echo=False,
+            connect_args={"timeout": 5, "check_same_thread": False},
+        )
+        # Enable WAL mode once so concurrent readers/writers don't block
+        try:
+            with self._engine.connect() as conn:
+                conn.execute(__import__('sqlalchemy').text("PRAGMA journal_mode=WAL"))
+        except Exception:
+            pass
 
         self._episode_num = 0
         self._episode_reward = 0.0
@@ -136,6 +146,7 @@ class ConvergenceCallback(BaseCallback):
         session_id: str,
         emit_fn: Optional[Callable] = None,
         verbose: int = 0,
+        early_stopping: bool = False,
     ):
         super().__init__(verbose=verbose)
         self.session_id = session_id
@@ -144,6 +155,7 @@ class ConvergenceCallback(BaseCallback):
         self._window: deque[float] = deque(maxlen=self.WINDOW)
         self._episode_reward = 0.0
         self._episode_num = 0
+        self.early_stopping = early_stopping
 
     def _on_step(self) -> bool:
         reward = self.locals.get("rewards", [0.0])
@@ -178,7 +190,8 @@ class ConvergenceCallback(BaseCallback):
                         self._episode_num,
                         cv,
                     )
-                    return False  # Stop training
+                    if self.early_stopping:
+                        return False  # Stop training
 
         return True
 
@@ -201,7 +214,17 @@ class InsightCallback(BaseCallback):
         self.session_id = session_id
         self.db_url = db_url
         self.emit_fn = emit_fn
-        self._engine = create_engine(db_url, echo=False)
+        self._engine = create_engine(
+            db_url,
+            echo=False,
+            connect_args={"timeout": 5, "check_same_thread": False},
+        )
+        # Enable WAL mode once so concurrent readers/writers don't block
+        try:
+            with self._engine.connect() as conn:
+                conn.execute(__import__('sqlalchemy').text("PRAGMA journal_mode=WAL"))
+        except Exception:
+            pass
 
         self._episode_num = 0
         self._episode_reward = 0.0
@@ -382,9 +405,15 @@ class DecisionCaptureCallback(BaseCallback):
                 features = self.model.policy.extract_features(obs_t_grad)
                 latent_pi, _ = self.model.policy.mlp_extractor(features)
                 action_logits = self.model.policy.action_net(latent_pi)
-                action_logits[0, action].backward()
-                if obs_t_grad.grad is not None:
-                    raw = obs_t_grad.grad[0].abs().cpu().tolist()
+                
+                grads = torch.autograd.grad(
+                    outputs=action_logits[0, action],
+                    inputs=obs_t_grad,
+                    only_inputs=True,
+                    retain_graph=False
+                )
+                if grads[0] is not None:
+                    raw = grads[0][0].abs().cpu().tolist()
                     max_val = max(raw) + 1e-8
                     importance = [v / max_val for v in raw]
 
@@ -577,7 +606,11 @@ class PPOTrainer:
     # ------------------------------------------------------------------
 
     def _get_engine(self):
-        return create_engine(self.db_url, echo=False)
+        return create_engine(
+            self.db_url,
+            echo=False,
+            connect_args={"timeout": 5, "check_same_thread": False},
+        )
 
     def _ensure_db(self) -> None:
         """Create tables if they don't exist."""
@@ -634,13 +667,21 @@ class PPOTrainer:
                 seed=42,
             )
         else:
+            # Check if environment is MockTrafficEnv to adjust hyperparameters dynamically
+            is_mock = "MockTrafficEnv" in str(type(env.unwrapped)) or "MockTrafficEnv" in str(type(env))
+            n_steps = 128 if is_mock else 2048
+            batch_size = 64
+            # SB3 PPO n_epochs is optimization epochs per update. 500 is extremely high
+            # and leads to severe overfitting. We use 10 for MockTrafficEnv.
+            n_epochs = 10 if is_mock else getattr(self.sim_config, "ppo_epochs", 500)
+
             return PPO(
                 policy="MlpPolicy",
                 env=env,
                 learning_rate=lr,
-                n_steps=2048,
-                batch_size=64,
-                n_epochs=getattr(self.sim_config, "ppo_epochs", 500),
+                n_steps=n_steps,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
                 gamma=gamma,
                 gae_lambda=0.95,
                 clip_range=0.2,
@@ -747,6 +788,7 @@ class PPOTrainer:
         self.convergence_cb = ConvergenceCallback(
             session_id=self.session_id,
             emit_fn=self.emit_fn,
+            early_stopping=getattr(self.sim_config, "early_stopping", False),
         )
         self.insight_cb = InsightCallback(
             session_id=self.session_id,

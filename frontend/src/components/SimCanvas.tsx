@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useCallback, useState } from 'react'
 import { useSimulationStore } from '../store/simulationStore'
 import { useConfigStore } from '../store/configStore'
-import type { SimFrame } from '../types'
+import type { SimFrame, VehicleFrame } from '../types'
 import {
   clearCanvas,
   drawGrid,
@@ -12,7 +12,24 @@ import {
   drawSignalIndicator,
   drawAdverseOverlay,
   getDefaultRenderConfig,
+  worldToCanvas,
 } from '../canvas/renderer'
+
+const humanReadableVehicleType = (typeId: string): string => {
+  const mapping: Record<string, string> = {
+    car: 'Car',
+    two_wheeler: 'Two Wheeler',
+    ev_scooter: 'EV Scooter',
+    auto_rickshaw: 'Auto Rickshaw',
+    e_rickshaw: 'E-Rickshaw',
+    cab: 'Cab',
+    delivery_bike: 'Delivery Bike',
+    tsrtc_bus: 'TSRTC Bus',
+    school_bus: 'School Bus',
+    truck: 'Truck',
+  }
+  return mapping[typeId] || typeId.toUpperCase()
+}
 
 interface SimCanvasProps {
   width?: number
@@ -22,8 +39,8 @@ interface SimCanvasProps {
   className?: string
   frameOverride?: SimFrame | null
   // Optional speed/playback overlay rendered on the canvas
-  speedValue?:    1 | 5 | 10 | 20
-  onSpeedChange?: (s: 1 | 5 | 10 | 20) => void
+  speedValue?:    1 | 5 | 10 | 20 | 50
+  onSpeedChange?: (s: 1 | 5 | 10 | 20 | 50) => void
   onPlayPause?:   () => void
   onStop?:        () => void
   isPaused?:      boolean
@@ -95,8 +112,64 @@ export default function SimCanvas({
   const adverseEvents = useSimulationStore((s) => s.adverseEvents)
   const trainedModels = useSimulationStore((s) => s.trainedModels)
   const intersectionType = useConfigStore((s) => s.simConfig.intersection_type)
+  const nLanes = useConfigStore((s) => s.simConfig.n_lanes)
+  const laneConfig = useConfigStore((s) => s.simConfig.lane_config)
 
   const frame = frameOverride !== undefined ? frameOverride : currentFrame
+
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+  const [selectedVehicleData, setSelectedVehicleData] = useState<VehicleFrame | null>(null)
+
+  // Track the selected vehicle and update its state as the simulation updates
+  useLayoutEffect(() => {
+    if (!selectedVehicleId || !frame) return
+    const currentVeh = frame.vehicles.find(v => v.id === selectedVehicleId)
+    if (currentVeh) {
+      setSelectedVehicleData(currentVeh)
+    }
+  }, [frame, selectedVehicleId])
+
+  // Reset selection when simulation stops or resets
+  useLayoutEffect(() => {
+    if (!isRunning) {
+      setSelectedVehicleId(null)
+      setSelectedVehicleData(null)
+    }
+  }, [isRunning])
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    
+    // Scale client coords to match canvas design width/height (activeWidth/activeHeight)
+    // because canvas element might be scaled down by CSS/responsive wrapper
+    const cx = (e.clientX - rect.left) * (activeWidth / rect.width)
+    const cy = (e.clientY - rect.top) * (activeHeight / rect.height)
+
+    if (!frame) return
+
+    const cfg = getDefaultRenderConfig(activeWidth, activeHeight)
+    let closestVehicle: VehicleFrame | null = null
+    let minDistance = 25 // 25 canvas pixels threshold
+
+    for (const v of frame.vehicles) {
+      const [vx, vy] = worldToCanvas(v.x, v.y, cfg)
+      const dist = Math.hypot(vx - cx, vy - cy)
+      if (dist < minDistance) {
+        minDistance = dist
+        closestVehicle = v
+      }
+    }
+
+    if (closestVehicle) {
+      setSelectedVehicleId(closestVehicle.id)
+      setSelectedVehicleData(closestVehicle)
+    } else {
+      setSelectedVehicleId(null)
+      setSelectedVehicleData(null)
+    }
+  }
 
   const render = useCallback(() => {
     const canvas = canvasRef.current
@@ -121,17 +194,36 @@ export default function SimCanvas({
 
     clearCanvas(ctx, cfg)
     drawGrid(ctx, cfg)
-    drawIntersection(ctx, cfg, intersectionType)
+    drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
 
     if (frame) {
-      drawTrafficSignals(ctx, frame.signals, cfg, frame.vehicles, intersectionType)
+      drawTrafficSignals(ctx, frame.signals, cfg, frame.vehicles, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
       frame.vehicles.forEach((v) => drawVehicle(ctx, v, cfg))
+
+      // Highlight selected vehicle on canvas
+      if (selectedVehicleId) {
+        const selectedVeh = frame.vehicles.find(v => v.id === selectedVehicleId)
+        if (selectedVeh) {
+          const [vx, vy] = worldToCanvas(selectedVeh.x, selectedVeh.y, cfg)
+          ctx.save()
+          ctx.strokeStyle = '#22d3ee' // bright steel-blue/cyan
+          ctx.lineWidth = 1.75
+          ctx.setLineDash([4, 4])
+          ctx.shadowColor = 'rgba(34, 211, 238, 0.45)'
+          ctx.shadowBlur = 6
+          ctx.beginPath()
+          ctx.arc(vx, vy, 18, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.restore()
+        }
+      }
+
       // Draw pedestrian agents (Indian traffic)
       if (frame.pedestrians) {
         frame.pedestrians.forEach((p) => drawPedestrian(ctx, p, cfg))
       }
       // Phase HUD stays — it's compact and shows signal timing at a glance
-      frame.signals.forEach((s) => drawSignalIndicator(ctx, s, cfg))
+      frame.signals.forEach((s) => drawSignalIndicator(ctx, s, cfg, intersectionType))
       drawAdverseOverlay(ctx, adverseEvents, cfg)
       // drawStats intentionally removed — t/moving/waiting shown in side panel
     }
@@ -216,7 +308,7 @@ export default function SimCanvas({
     }
 
     ctx.restore()  // pop the dpr scale
-  }, [frame, adverseEvents, activeWidth, activeHeight, showTrails, label, trainedModels, intersectionType])
+  }, [frame, adverseEvents, activeWidth, activeHeight, showTrails, label, trainedModels, intersectionType, nLanes, laneConfig, selectedVehicleId])
 
   useLayoutEffect(() => {
     render()
@@ -225,7 +317,8 @@ export default function SimCanvas({
   const canvas = (
     <canvas
       ref={canvasRef}
-      style={{ width: activeWidth, height: activeHeight, imageRendering: 'auto', display: 'block' }}
+      onClick={handleCanvasClick}
+      style={{ width: activeWidth, height: activeHeight, imageRendering: 'auto', display: 'block', cursor: 'pointer' }}
       className={`rounded-xl border border-white/[0.06] ${className}`}
     />
   )
@@ -233,45 +326,177 @@ export default function SimCanvas({
   // If no speed controls requested and not responsive, render the bare canvas
   if (!responsive && !onSpeedChange && !onPlayPause) return canvas
 
+  // isCompact: use cycling speed badge when canvas is too narrow for the full row
+  // Below 680px, full bar (play+stop+5 speeds) would overlap the road arms
+  const isCompact = activeWidth < 680;
+
   const mainContent = (
-    <div className="relative inline-block" style={{ width: activeWidth, height: activeHeight }}>
+    <div style={{ position: 'relative', display: 'inline-block', width: activeWidth, height: activeHeight }}>
       {canvas}
 
-      {/* Speed + playback overlay — top-right of canvas */}
-      {(onSpeedChange || onPlayPause) && (
-        <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-black/75 backdrop-blur-sm border border-white/10 rounded-full px-1.5 py-1 shadow-lg z-10">
-          {/* Playback buttons */}
+      {/* Speed + playback controller bar — rendered on top right of the canvas itself */}
+      {isRunning && (onSpeedChange || onPlayPause) && (
+        <div
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}
+          className="flex items-center gap-1 bg-[#07090f] border border-white/[0.10] rounded-full px-2.5 py-1 shadow-[0_2px_12px_rgba(0,0,0,0.55)] animate-fadeIn"
+        >
+          {/* Play/Pause — always show unless canvas is tiny */}
           {onPlayPause && (
             <button
               onClick={onPlayPause}
-              className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
+              type="button"
+              className="w-[22px] h-[22px] flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all flex-shrink-0"
+              title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
             >
-              {isPaused ? '▶' : '⏸'}
+              {isPaused ? (
+                <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current"><path d="M8 5v14l11-7z" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+              )}
             </button>
           )}
-          {onStop && isRunning && (
+
+          {/* Stop */}
+          {onStop && (
             <button
               onClick={onStop}
-              className="text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-colors"
+              type="button"
+              className="w-[22px] h-[22px] flex items-center justify-center rounded-full text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-all flex-shrink-0"
+              title="Stop Simulation"
             >
-              ⏹
+              <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current"><rect x="5" y="5" width="14" height="14" rx="1.5" /></svg>
             </button>
           )}
-          {(onPlayPause || onStop) && <div className="w-px h-3 bg-white/15 mx-0.5" />}
-          {/* Speed buttons */}
-          {([1, 5, 10, 20] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => onSpeedChange?.(s)}
-              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full transition-all ${
-                speedValue === s
-                  ? 'bg-cyan-500/25 text-cyan-300 ring-1 ring-cyan-500/50'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.06]'
-              }`}
-            >
-              {s}x
-            </button>
-          ))}
+
+          {/* Separator */}
+          {(onPlayPause || onStop) && onSpeedChange && (
+            <div className="w-[1px] h-4 bg-white/[0.12] mx-0.5 flex-shrink-0" />
+          )}
+
+          {/* Speed Controls */}
+          {onSpeedChange && (
+            isCompact ? (
+              /* Compact: single cycling badge */
+              <button
+                onClick={() => {
+                  const speeds: (1 | 5 | 20 | 50)[] = [1, 5, 20, 50];
+                  const idx = speeds.indexOf((speedValue as any) ?? 5);
+                  onSpeedChange(speeds[(idx + 1) % speeds.length]);
+                }}
+                type="button"
+                className="px-2 py-0.5 text-[9px] font-bold font-mono rounded-full bg-[#0e2a35] text-cyan-400 border border-cyan-400/35 hover:border-cyan-400/65 transition-all shadow-[0_0_6px_rgba(34,211,238,0.12)] flex-shrink-0"
+                title="Cycle Speed"
+              >
+                {speedValue ?? 5}x
+              </button>
+            ) : (
+              /* Full: individual speed badges */
+              <div className="flex items-center gap-0.5">
+                {([1, 5, 20, 50] as const).map(s => {
+                  const isActive = speedValue === s;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => onSpeedChange(s)}
+                      type="button"
+                      className={`px-2 py-0.5 text-[10px] font-bold font-mono rounded-full transition-all duration-150 flex-shrink-0 ${
+                        isActive
+                          ? 'bg-[#0e2a35] text-cyan-400 border border-cyan-400/45 shadow-[0_0_8px_rgba(34,211,238,0.22)]'
+                          : 'text-slate-500 hover:text-slate-300 border border-transparent hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      {s}x
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Vehicle details overlay */}
+      {selectedVehicleId && selectedVehicleData && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 12,
+            width: 240,
+            zIndex: 30,
+          }}
+          className="glass-card rounded-xl p-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.6)] text-white font-sans text-xs animate-fadeIn"
+        >
+          {/* Close button */}
+          <button
+            onClick={() => {
+              setSelectedVehicleId(null)
+              setSelectedVehicleData(null)
+            }}
+            type="button"
+            className="absolute top-2.5 right-2.5 text-slate-400 hover:text-white transition-colors p-0.5"
+            title="Dismiss Inspector"
+          >
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-none stroke-current stroke-2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+
+          {/* Indian Number Plate & Status */}
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="bg-[#facc15] text-[#07090f] px-2 py-0.5 rounded border border-yellow-500/30 font-bold tracking-wider text-[10px] uppercase font-mono shadow-[0_2px_8px_rgba(250,204,21,0.25)] flex items-center gap-1">
+              <span className="text-[7px] border border-black/20 rounded px-0.5 py-0">IND</span>
+              <span>{selectedVehicleData.number_plate || 'TS09EX1234'}</span>
+            </div>
+            
+            {frame?.vehicles.some(v => v.id === selectedVehicleId) ? (
+              <span className="flex items-center gap-1.5 text-[9px] text-green-400 font-semibold font-mono uppercase bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                Active
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold font-mono uppercase bg-slate-500/10 px-2 py-0.5 rounded-full border border-white/5">
+                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full" />
+                Exited
+              </span>
+            )}
+          </div>
+
+          {/* Telemetry info */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between border-b border-white/[0.04] pb-1">
+              <span className="text-slate-400 text-[10px]">Type</span>
+              <span className="font-semibold text-slate-200">{humanReadableVehicleType(selectedVehicleData.type_id)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/[0.04] pb-1">
+              <span className="text-slate-400 text-[10px]">ID</span>
+              <span className="font-mono text-slate-300">{selectedVehicleData.id}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/[0.04] pb-1">
+              <span className="text-slate-400 text-[10px]">Speed</span>
+              <span className={`font-semibold font-mono ${frame?.vehicles.some(v => v.id === selectedVehicleId) && selectedVehicleData.speed < 0.5 ? 'text-amber-400' : 'text-cyan-400'}`}>
+                {frame?.vehicles.some(v => v.id === selectedVehicleId) ? `${(selectedVehicleData.speed * 3.6).toFixed(1)} km/h` : '0.0 km/h'}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-white/[0.04] pb-1">
+              <span className="text-slate-400 text-[10px]">Wait Time</span>
+              <span className={`font-semibold font-mono ${selectedVehicleData.wait_time > 15 ? 'text-red-400' : selectedVehicleData.wait_time > 5 ? 'text-amber-400' : 'text-green-400'}`}>
+                {selectedVehicleData.wait_time.toFixed(1)}s
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-white/[0.04] pb-1">
+              <span className="text-slate-400 text-[10px]">Lane</span>
+              <span className="text-slate-300 font-mono">{selectedVehicleData.lane || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 text-[10px]">Route</span>
+              <span className="text-slate-300 capitalize flex items-center gap-1 font-medium font-mono text-[10px]">
+                {selectedVehicleData.arm || 'N/A'} Arm → {
+                  selectedVehicleData.turn === 'straight' ? 'Straight ⬆' :
+                  selectedVehicleData.turn === 'right' ? 'Right Turn ↗' :
+                  selectedVehicleData.turn === 'left' ? 'Left Turn ↖' : 'Straight ⬆'
+                }
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -287,4 +512,3 @@ export default function SimCanvas({
 
   return mainContent
 }
-

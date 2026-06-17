@@ -166,9 +166,12 @@ class WebstersController(BaseController):
 
     def _compute_green(self, obs: np.ndarray, phase_idx: int) -> int:
         """Compute Webster-optimal green time for *phase_idx* given obs."""
-        # obs[0:4] are normalised queue values in [-1, 1] / [0, 1]
-        # Scale to vehicles/hr equivalent (treat 1.0 → 600 veh/hr)
-        queues_raw = np.clip(obs[0:4], 0.0, 1.0)  # clamp to non-negative
+        # Extract queue values: support 26-dim (mock env) vs 22-dim (SUMO / synthetic test) observation spaces.
+        if len(obs) == 26:
+            queues_raw = np.array([obs[0], obs[4], obs[8], obs[12]], dtype=np.float32)
+        else:
+            queues_raw = obs[0:4]
+        queues_raw = np.clip(queues_raw, 0.0, 1.0)  # clamp to non-negative
         demands = queues_raw * 600.0  # veh/hr equivalent
 
         # Assign demand to phases: phases 0-3 map to arms 0-3 directly;
@@ -298,9 +301,13 @@ class SemiActuatedController(BaseController):
     def predict(self, obs: np.ndarray) -> Tuple[int, Dict[str, Any]]:
         phase_idx = self._phase_idx
 
-        # Map phase to arm index (phase 4 uses arm 0 as proxy)
-        arm_idx = phase_idx % 4
-        queue_value = float(obs[arm_idx]) if len(obs) > arm_idx else 0.0
+        # Support both 26-dim (mock env) and 22-dim (SUMO / synthetic test) formats
+        if len(obs) == 26:
+            arm_indices = [0, 4, 8, 12]
+            queue_idx = arm_indices[phase_idx % 4]
+        else:
+            queue_idx = phase_idx % 4
+        queue_value = float(obs[queue_idx]) if len(obs) > queue_idx else 0.0
         queue_value = max(0.0, queue_value)  # clamp negative
 
         vehicle_detected = queue_value > self._detection_threshold

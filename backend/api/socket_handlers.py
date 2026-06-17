@@ -329,6 +329,16 @@ _MIN_BIKE_GAP = 2.8   # minimum lateral gap (wu) a bike needs to pass through
 _LAT_STEER_RATE = 6.0 # wu/s lateral steering speed for gap-seeking (aggressive Indian weave)
 
 
+def generate_number_plate() -> str:
+    import string
+    states = ["TS", "AP", "MH", "KA", "DL", "HR", "UP", "TN", "KL", "GJ"]
+    state = random.choice(states)
+    district = f"{random.randint(1, 99):02d}"
+    letters = "".join(random.choice(string.ascii_uppercase) for _ in range(2))
+    digits = f"{random.randint(1000, 9999)}"
+    return f"{state}{district}{letters}{digits}"
+
+
 class _MockVehicle:
     """Synthetic vehicle with per-length stopping, turning, and bezier path support."""
 
@@ -342,6 +352,8 @@ class _MockVehicle:
         self.intersection_type = intersection_type
         self.angle: float | None = None  # overrides frontend ARM_ANGLE when set
         self.stuck_s = 0.0  # accumulated sim-seconds at speed=0 (ghost-creep safety counter)
+        self.number_plate = generate_number_plate()
+        self.spawn_time = 0.0
 
         # Per-vehicle stop distances — front of vehicle aligns with stop line
         half_len = _VEH_LEN.get(self.type_id, 4.0) / 2.0
@@ -1016,6 +1028,7 @@ class _MockVehicle:
             "lane":      f"{self.arm.lower()}_{self.lane}",
             "arm":       self.arm,
             "turn":      self.turn_dir,
+            "number_plate": getattr(self, "number_plate", ""),
         }
         if self.angle is not None:
             d["angle"] = round(self.angle, 4)
@@ -1133,7 +1146,23 @@ _DEMAND_ARMS = ["N", "S", "E", "W"]
 _DEMAND_WEIGHTS = [0.32, 0.32, 0.18, 0.18]
 
 
-def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = None, intersection_type: str = "four_way", type_weights: dict | None = None) -> dict:
+def _lane_layout_from_config(config: dict) -> dict:
+    return {
+        "n_lanes": config.get("n_lanes", 3),
+        "lane_config": config.get("lane_config")
+    }
+
+
+def _lane_count(layout: dict, arm: str) -> int:
+    if not layout:
+        return 3
+    lane_config = layout.get("lane_config")
+    if lane_config and arm in lane_config:
+        return lane_config[arm]
+    return layout.get("n_lanes", 3)
+
+
+def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = None, intersection_type: str = "four_way", type_weights: dict | None = None, lane_layout: dict | None = None) -> dict:
     # 1. Determine active arms and weights based on intersection type
     if intersection_type in ("t_junction", "t_junction_free_left", "y_junction", "y_junction_free_left"):
         # T-junction and Y-junction: North, East, West. No South!
@@ -1146,6 +1175,11 @@ def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = Non
 
     arm = arm or random.choices(arms, weights=weights, k=1)[0]
     
+    n_lanes = _lane_count(lane_layout, arm) if lane_layout is not None else 3
+
+    if lane is not None:
+        lane = lane % n_lanes
+
     has_free_left = intersection_type in ("four_way_free_left", "t_junction_free_left", "roundabout_free_left")
     left_allowed = True
     if intersection_type in ("t_junction", "t_junction_free_left") and arm == "E":
@@ -1183,14 +1217,14 @@ def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = Non
                 turn = "straight" if r < 0.75 else ("right" if r < 0.85 else "left")
 
             # Assign lane based on turn — left-turners go to lane 2, others stay in 0-1
-            if turn == "left":
+            if turn == "left" and n_lanes > 2:
                 lane = 2
             else:
-                lane = random.randint(0, 1)
+                lane = random.randint(0, min(1, n_lanes - 1))
     else:
         # No free left or left is not allowed on this arm (e.g. E arm of T-junction)
         if lane is None:
-            lane = random.randint(0, _N_LANES - 1)
+            lane = random.randint(0, n_lanes - 1)
         
         if intersection_type in ("t_junction", "t_junction_free_left"):
             if arm == "N":
@@ -1220,6 +1254,7 @@ def _spawn_spec(vid_counter: int, arm: str | None = None, lane: int | None = Non
         "type_id": type_id,
         "turn": turn,
         "intersection_type": intersection_type,
+        "number_plate": generate_number_plate(),
     }
 
 
@@ -1232,6 +1267,7 @@ def _vehicle_from_spec(spec: dict) -> _MockVehicle:
     v.stop_zone = _STOP_DIST + half + 1.0
     v.through_dist = _STOP_DIST + half - 1.5
     v.turn_dir = spec["turn"]
+    v.number_plate = spec.get("number_plate", "")
     return v
 
 
@@ -1802,6 +1838,17 @@ class _SimWorld:
                 self.total_wait_time += v.wait_time
                 self.exited_history.append((self.sim_clock, 1))
                 self.wait_history.append((self.sim_clock, v.wait_time))
+                if getattr(self, "session_store", None) and getattr(self, "session_id", None):
+                    crossing_time = self.sim_clock - getattr(v, "spawn_time", 0.0)
+                    self.session_store.save_vehicle_crossing(
+                        session_id=self.session_id,
+                        vehicle_id=v.id,
+                        vehicle_type=v.type_id,
+                        number_plate=getattr(v, "number_plate", ""),
+                        entry_time=getattr(v, "spawn_time", 0.0),
+                        exit_time=self.sim_clock,
+                        crossing_duration=crossing_time
+                    )
 
         # ── Pedestrian spawn ──────────────────────────────────────────────
         ped_enabled = self.intersection_type not in (
@@ -2313,6 +2360,8 @@ def _run_mock_sim(sio, session_id: str) -> None:
 
     for w in _WORLDS.values():
         w.max_sim_s = max_sim_s
+        w.session_id = session_id
+        w.session_store = store
 
     step = 0
     vid_counter = 0

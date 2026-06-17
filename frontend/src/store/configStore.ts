@@ -26,10 +26,10 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   all_red_time_s: 2,
   cycle_length_s: 120,
   rl_algorithm: 'PPO',
-  total_timesteps: 500000,
+  total_timesteps: 20000,
   learning_rate: 0.0003,
   ppo_epochs: 500,
-  early_stopping: true,
+  early_stopping: false,
   hidden_layer_size: 64,
   discount_factor: 0.99,
   reward_wt_queue: 1.0,
@@ -50,6 +50,7 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   baseline_green_util: 85,
   baseline_coordination: 83,
   same_as_baseline: false,
+  training_mode: 'stage1',
 }
 
 const DEFAULT_ADVERSE_CONFIG: AdverseConfig = {

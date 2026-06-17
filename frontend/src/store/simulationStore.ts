@@ -35,7 +35,7 @@ interface SimulationState {
   sessionId: string | null
   simTimeS: number
   throughputCount: number   // cumulative vehicles that have exited the scene
-  simSpeed: 1 | 5 | 10 | 20  // current speed multiplier
+  simSpeed: 1 | 5 | 10 | 20 | 50  // current speed multiplier
 
   // Last stored simulation metrics per model key
   lastSimulationMetrics: Record<string, EpisodeMetrics>
@@ -44,7 +44,7 @@ interface SimulationState {
   popupFrames: Record<number, SimFrame | null>
   popupRunning: Record<number, boolean>
   popupPaused: Record<number, boolean>
-  popupSpeeds: Record<number, 1 | 5 | 10 | 20>
+  popupSpeeds: Record<number, 1 | 5 | 10 | 20 | 50>
   popupDurations: Record<number, number>
   popupSimTimes: Record<number, number>
   popupSids: Record<number, string | null>
@@ -74,7 +74,7 @@ interface SimulationState {
   setRunning: (running: boolean) => void
   setPaused: (paused: boolean) => void
   setSessionId: (id: string | null) => void
-  setSimSpeed: (speed: 1 | 5 | 10 | 20) => void
+  setSimSpeed: (speed: 1 | 5 | 10 | 20 | 50) => void
   resetSimulation: () => void
   clearFrames: () => void
   clearRlFrames: () => void
@@ -85,7 +85,7 @@ interface SimulationState {
   setPopupFrame: (ep: number, frame: SimFrame | null) => void
   setPopupRunning: (ep: number, running: boolean) => void
   setPopupPaused: (ep: number, paused: boolean) => void
-  setPopupSpeed: (ep: number, speed: 1 | 5 | 10 | 20) => void
+  setPopupSpeed: (ep: number, speed: 1 | 5 | 10 | 20 | 50) => void
   setPopupDuration: (ep: number, duration: number) => void
   setPopupSimTime: (ep: number, time: number) => void
   setPopupSid: (ep: number, sid: string | null) => void

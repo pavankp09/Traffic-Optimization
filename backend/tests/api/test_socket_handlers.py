@@ -177,6 +177,31 @@ def test_sim_start_missing_session_id(client):
     assert "error" in payload
 
 
+def test_spawn_spec_respects_uniform_lane_count():
+    """A 2-lane config should not create lane index 2."""
+    from backend.api import socket_handlers as sh
+
+    layout = sh._lane_layout_from_config({"n_lanes": 2})
+    seen = {
+        sh._spawn_spec(i, arm="N", intersection_type="four_way", lane_layout=layout)["lane"]
+        for i in range(1, 100)
+    }
+
+    assert seen <= {0, 1}
+
+
+def test_spawn_spec_respects_per_arm_lane_override():
+    """Per-arm lane overrides allow North=3 while other arms remain at 2."""
+    from backend.api import socket_handlers as sh
+
+    layout = sh._lane_layout_from_config({"n_lanes": 2, "lane_config": {"N": 3}})
+
+    assert sh._lane_count(layout, "N") == 3
+    assert sh._lane_count(layout, "S") == 2
+    assert sh._spawn_spec(1, arm="N", lane=2, intersection_type="four_way", lane_layout=layout)["lane"] == 2
+    assert sh._spawn_spec(2, arm="S", lane=2, intersection_type="four_way", lane_layout=layout)["lane"] == 0
+
+
 def test_preset_count():
     """Sanity check: ALL_PRESETS contains at least 34 presets."""
     from backend.config_presets import ALL_PRESETS

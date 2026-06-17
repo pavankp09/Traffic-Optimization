@@ -5,14 +5,16 @@ import { useConfigStore } from '../store/configStore'
 import { useSimulationStore } from '../store/simulationStore'
 import HelpPopover from './HelpPopover'
 import type { SimConfig, AdverseConfig } from '../types'
+import { TrainingModeSelector } from './TrainingModeSelector'
 
 // ─── Nav Section Definitions ─────────────────────────────────────────────────
-const NAV_GROUPS = [
+const ALL_NAV_GROUPS = [
   {
     id: 'start',
     label: 'Start Here',
     sections: [
       { id: 'J', label: 'Scenario Packs', hint: 'City presets & custom builder', icon: '🗺️' },
+      { id: 'L', label: 'Road Layout', hint: 'Configure intersection geometry', icon: '🛣️' },
     ],
   },
   {
@@ -25,13 +27,6 @@ const NAV_GROUPS = [
     ],
   },
   {
-    id: 'benchmarks',
-    label: 'Benchmarks',
-    sections: [
-      { id: 'G', label: 'Baseline Targets', hint: 'Comparison reference values', icon: '🎯' },
-    ],
-  },
-  {
     id: 'risk',
     label: 'Data & Risk',
     sections: [
@@ -41,7 +36,7 @@ const NAV_GROUPS = [
   },
 ]
 
-const ALL_SECTIONS = NAV_GROUPS.flatMap((g) => g.sections)
+const ALL_SECTIONS = ALL_NAV_GROUPS.flatMap((g) => g.sections)
 
 const QUICK_PRESETS = [
   { id: 'vp_offpeak', scale: 'Very Light', name: 'Very Light - Off Peak', vehicles: 2000, durationMin: 60, pattern: 'uniform', canvas: 'regular', multipliers: { bike: 4.0, car: 3.0, auto: 2.0, bus: 1.5, truck: 1.0 } },
@@ -84,11 +79,16 @@ function NumberInput({ value, onChange, min, max, step = 1 }: {
   )
 }
 
-function SelectInput({ value, onChange, options }: {
-  value: string; onChange: (v: string) => void; options: { value: string; label: string }[]
+function SelectInput({ value, onChange, options, disabled }: {
+  value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; disabled?: boolean
 }) {
   return (
-    <select className={selectCls} value={value} onChange={(e) => onChange(e.target.value)}>
+    <select
+      className={`${selectCls} ${disabled ? 'opacity-50 cursor-not-allowed select-none bg-slate-900/40 text-slate-500 border-white/[0.04]' : ''}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+    >
       {options.map((o) => <option key={o.value} value={o.value} className="bg-[#0c0c0e] text-slate-200">{o.label}</option>)}
     </select>
   )
@@ -96,17 +96,33 @@ function SelectInput({ value, onChange, options }: {
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button type="button"
-      className="relative w-11.5 h-6.5 rounded-full transition-all duration-300 p-0.5 border"
+    <button
+      type="button"
+      className="relative rounded-full transition-all duration-300 border focus:outline-none flex-shrink-0 cursor-pointer"
       style={{
-        backgroundColor: value ? '#8fb8ce' : '#070b15',
-        borderColor: value ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)',
+        width: '42px',
+        height: '24px',
+        padding: '2px',
+        backgroundColor: value ? 'rgba(143, 184, 206, 0.95)' : 'rgba(15, 23, 42, 0.6)',
+        borderColor: value ? 'rgba(143, 184, 206, 0.4)' : 'rgba(255, 255, 255, 0.08)',
+        boxShadow: value ? '0 0 10px rgba(143, 184, 206, 0.25)' : 'none',
       }}
-      onClick={() => onChange(!value)}>
-      <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+      onClick={() => onChange(!value)}
+    >
+      <span
+        className="block rounded-full bg-white shadow transition-transform duration-300 ease-out"
+        style={{
+          width: '18px',
+          height: '18px',
+          transform: value ? 'translateX(18px)' : 'translateX(0px)',
+        }}
+      />
     </button>
   )
 }
+
+const ToggleInput = Toggle
+
 
 function SliderRow({ label, help, value, onChange, min, max, step, display, accent }: {
   label: string; help: string; value: number; onChange: (v: number) => void
@@ -181,9 +197,37 @@ function SectionD({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
   )
 }
 
-function SectionE({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
+function SectionE({ simConfig, updateSimConfig, activeModelKey }: {
+  simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void; activeModelKey: string
+}) {
+  const isPredefinedRl = ['rl1', 'rl2', 'rl3', 'rl4'].includes(activeModelKey)
+
+  const totalSteps = Number(simConfig.total_timesteps ?? 20000)
+  const resolvedTrainingMode = simConfig.training_mode ?? 'stage1'
+
+  let stepsPerEp = 40;
+  if (resolvedTrainingMode === 'stage3') {
+    stepsPerEp = 360;
+  } else if (resolvedTrainingMode === 'stage4') {
+    stepsPerEp = Math.round(0.6 * 40 + 0.4 * 360);
+  }
+  const totalEpisodes = Math.round(totalSteps / stepsPerEp)
+
   return (
     <div className="space-y-7">
+      <div>
+        <h5 className="text-[10.5px] font-bold text-[#8fb8ce] uppercase tracking-wider mb-4 flex items-center gap-2 font-mono">
+          <span className="w-1.5 h-3 rounded-sm bg-[#8fb8ce] inline-block" />
+          Training Mode Setup
+        </h5>
+        <div className="mb-6 bg-black/20 p-4 border border-white/[0.04] rounded-xl">
+          <TrainingModeSelector
+            selected={(simConfig.training_mode as any) ?? 'stage1'}
+            onChange={(m) => updateSimConfig({ training_mode: m })}
+          />
+        </div>
+      </div>
+
       <div>
         <h5 className="text-[10.5px] font-bold text-[#8fb8ce] uppercase tracking-wider mb-4 flex items-center gap-2 font-mono">
           <span className="w-1.5 h-3 rounded-sm bg-[#8fb8ce] inline-block" />
@@ -191,15 +235,26 @@ function SectionE({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
         </h5>
         <div className="grid grid-cols-2 gap-5">
           <FormRow label="RL Algorithm" help="Reinforcement learning algorithm. PPO is state-of-the-art for traffic control">
-            <SelectInput value={simConfig.rl_algorithm} onChange={(v) => updateSimConfig({ rl_algorithm: v })}
+            <SelectInput
+              value={simConfig.rl_algorithm}
+              onChange={(v) => updateSimConfig({ rl_algorithm: v })}
+              disabled={isPredefinedRl}
               options={[
                 { value: 'PPO', label: 'PPO (Recommended)' },
                 { value: 'A2C', label: 'A2C' },
                 { value: 'DQN', label: 'DQN (Discrete)' },
-              ]} />
+                { value: 'SAC', label: 'SAC (Continuous)' },
+              ]}
+            />
           </FormRow>
-          <FormRow label="Total Timesteps" help="Training steps. 500k is default — more = better but slower. Quick demo: 80k" required>
-            <NumberInput value={simConfig.total_timesteps} onChange={(v) => updateSimConfig({ total_timesteps: v })} min={1000} max={5000000} step={1000} />
+          <FormRow label="Total Episodes" help="The total number of episodes to train. Default is 500 episodes (20k steps). For better convergence: 2,000 episodes (80k steps)." required>
+            <NumberInput
+              value={totalEpisodes}
+              onChange={(v) => updateSimConfig({ total_timesteps: v * stepsPerEp })}
+              min={10}
+              max={125000}
+              step={10}
+            />
           </FormRow>
           <FormRow label="Learning Rate" help="Model learning rate. Default 0.0003 is well-tuned for traffic environments" required>
             <input type="number" className={inputCls} value={simConfig.learning_rate} min={0.00001} max={0.01} step={0.00001}
@@ -222,7 +277,7 @@ function SectionE({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
             <NumberInput value={simConfig.ppo_epochs ?? 500} onChange={(v) => updateSimConfig({ ppo_epochs: v })} min={1} max={2000} />
           </FormRow>
           <FormRow label="Early Stopping" help="Declare convergence and stop training early when reward gains level off. Turn off to run full timesteps.">
-            <ToggleInput value={simConfig.early_stopping ?? true} onChange={(v) => updateSimConfig({ early_stopping: v })} />
+            <ToggleInput value={simConfig.early_stopping ?? false} onChange={(v) => updateSimConfig({ early_stopping: v })} />
           </FormRow>
         </div>
       </div>
@@ -267,37 +322,12 @@ function SectionF({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
   )
 }
 
-function SectionG({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
-  return (
-    <div className="space-y-6">
-      <div className="text-[11.5px] rounded-xl px-4.5 py-3.5 bg-gradient-to-br from-amber-950/15 to-orange-950/5 border border-amber-500/15 space-y-1.5 leading-relaxed shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]">
-        <p className="font-bold text-amber-400 font-mono uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-          <span className="text-[12px]">📐</span> Baseline Reference
-        </p>
-        <p className="text-slate-400">These values are the calibrated yardstick for the pre-timed Webster controller. All RL improvements are measured against these.</p>
-      </div>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-        <SliderRow label="Avg Wait Delay" help="The calibrated benchmark average stopped wait time for the pre-timed baseline cycle."
-          value={simConfig.baseline_wait_delay ?? 85} onChange={(v) => updateSimConfig({ baseline_wait_delay: v })}
-          min={10} max={200} step={5} display={`${simConfig.baseline_wait_delay ?? 85}s`} accent="amber" />
-        <SliderRow label="Flow Throughput" help="The benchmark baseline intersection vehicle throughput per hour."
-          value={simConfig.baseline_throughput ?? 440} onChange={(v) => updateSimConfig({ baseline_throughput: v })}
-          min={50} max={1000} step={10} display={`${simConfig.baseline_throughput ?? 440} vph`} accent="amber" />
-        <SliderRow label="Green Utilisation" help="The percentage of green light duration actively discharged under fixed cycles."
-          value={simConfig.baseline_green_util ?? 85} onChange={(v) => updateSimConfig({ baseline_green_util: v })}
-          min={10} max={100} step={1} display={`${simConfig.baseline_green_util ?? 85}%`} accent="amber" />
-        <SliderRow label="Signal Coordination" help="The synchronization efficiency rating of vehicle arrival platoons in fixed cycles."
-          value={simConfig.baseline_coordination ?? 83} onChange={(v) => updateSimConfig({ baseline_coordination: v })}
-          min={10} max={100} step={1} display={`${simConfig.baseline_coordination ?? 83}%`} accent="amber" />
-      </div>
-    </div>
-  )
-}
+
 
 function SectionH({ simConfig, updateSimConfig }: { simConfig: SimConfig; updateSimConfig: (u: Partial<SimConfig>) => void }) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between p-4.5 bg-gradient-to-r from-white/[0.01] to-white/[0.02] border border-white/[0.05] rounded-xl hover:border-white/[0.08] transition-colors">
+      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-white/[0.01] to-white/[0.02] border border-white/[0.05] rounded-xl hover:border-white/[0.08] transition-colors">
         <div>
           <p className="text-[12.5px] font-bold text-slate-200">Enable RTSP Camera</p>
           <p className="text-[10px] text-slate-500 mt-1 leading-normal">Use live CCTV/IP camera feed for real vehicle counts instead of synthetic demand</p>
@@ -323,7 +353,7 @@ function SectionH({ simConfig, updateSimConfig }: { simConfig: SimConfig; update
 function SectionI({ adverseConfig, updateAdverseConfig }: { adverseConfig: AdverseConfig; updateAdverseConfig: (u: Partial<AdverseConfig>) => void }) {
   return (
     <div className="space-y-5">
-      <div className="text-[11.5px] rounded-xl px-4.5 py-3.5 bg-gradient-to-br from-red-950/15 to-rose-950/5 border border-red-500/15 space-y-1.5 leading-relaxed shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]">
+      <div className="text-[11.5px] rounded-xl p-4 bg-gradient-to-br from-red-950/15 to-rose-950/5 border border-red-500/15 space-y-1.5 leading-relaxed shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]">
         <p className="font-bold text-red-400 font-mono uppercase tracking-wider text-[10px] flex items-center gap-1.5">
           <span className="inline-block animate-pulse text-[12px]">⚠️</span> Adverse Event Injection
         </p>
@@ -391,19 +421,40 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
 
   // Duration Choice logic
   const durationSec = activeConfig.simulation_duration_s ?? 3600
-  const durationChoice = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
+  const computedChoice = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
+
+  const [durationChoice, setDurationChoiceState] = useState<'30' | '60' | '90' | 'custom'>(computedChoice)
+  const [customDurationMin, setCustomDurationMinState] = useState<number>(() => Math.round(durationSec / 60))
+
+  useEffect(() => {
+    if (durationChoice === 'custom') {
+      if (durationSec !== customDurationMin * 60) {
+        const computed = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
+        setDurationChoiceState(computed)
+        setCustomDurationMinState(Math.round(durationSec / 60))
+      }
+    } else {
+      setDurationChoiceState(computedChoice)
+      setCustomDurationMinState(Math.round(durationSec / 60))
+    }
+  }, [durationSec])
 
   const setDurationChoice = (choice: '30' | '60' | '90' | 'custom') => {
     if (isSyncActive) return
+    setDurationChoiceState(choice)
     if (choice === '30') updateSimConfig({ simulation_duration_s: 1800 })
     else if (choice === '60') updateSimConfig({ simulation_duration_s: 3600 })
     else if (choice === '90') updateSimConfig({ simulation_duration_s: 5400 })
+    else if (choice === 'custom') {
+      updateSimConfig({ simulation_duration_s: customDurationMin * 60 })
+    }
   }
 
-  const customDurationMin = Math.round(durationSec / 60)
   const setCustomDurationMin = (min: number) => {
     if (isSyncActive) return
-    updateSimConfig({ simulation_duration_s: Math.max(5, min) * 60 })
+    const val = Math.max(5, min)
+    setCustomDurationMinState(val)
+    updateSimConfig({ simulation_duration_s: val * 60 })
   }
 
   // Driving Behavior logic
@@ -430,20 +481,7 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
     })
   }
 
-  // Custom JSON override
-  const [customJsonText, setCustomJsonText] = useState('{}')
-  const handleJsonChange = (text: string) => {
-    if (isSyncActive) return
-    setCustomJsonText(text)
-    try {
-      const parsed = JSON.parse(text)
-      if (parsed && typeof parsed === 'object') {
-        updateSimConfig(parsed)
-      }
-    } catch {
-      // Keep silent
-    }
-  }
+  // Removed old custom JSON state (moved to SectionL)
 
   const getNormalizedMix = (mults: { bike: number; car: number; auto: number; bus: number; truck: number }) => {
     const bases = {
@@ -532,9 +570,9 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
     <div className="space-y-6 pb-4">
       {/* Same as Baseline Toggle Box (Only for RL views) */}
       {!isBaseline && (
-        <div className={`p-4.5 bg-gradient-to-r from-blue-950/20 to-indigo-950/10 border rounded-2xl flex items-center justify-between gap-4 transition-all duration-300 ${simConfig.same_as_baseline
-            ? 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] bg-blue-950/25'
-            : 'border-white/[0.06] hover:border-white/[0.12]'
+        <div className={`p-4 bg-gradient-to-r from-blue-950/20 to-indigo-950/10 border rounded-2xl flex items-center justify-between gap-4 transition-all duration-300 ${simConfig.same_as_baseline
+          ? 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] bg-blue-950/25'
+          : 'border-white/[0.06] hover:border-white/[0.12]'
           }`}>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -553,13 +591,24 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
           <button
             type="button"
             onClick={() => updateSimConfig({ same_as_baseline: !simConfig.same_as_baseline })}
-            className={`relative w-11 h-6.5 rounded-full transition-all duration-300 p-0.5 border flex-shrink-0 ${simConfig.same_as_baseline
-                ? 'bg-blue-500 border-blue-400/30'
-                : 'bg-[#070b15] border-white/[0.06]'
-              }`}
+            className="relative rounded-full transition-all duration-300 border focus:outline-none flex-shrink-0 cursor-pointer"
+            style={{
+              width: '42px',
+              height: '24px',
+              padding: '2px',
+              backgroundColor: simConfig.same_as_baseline ? 'rgba(59, 130, 246, 0.95)' : 'rgba(15, 23, 42, 0.6)',
+              borderColor: simConfig.same_as_baseline ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255, 255, 255, 0.08)',
+              boxShadow: simConfig.same_as_baseline ? '0 0 10px rgba(59, 130, 246, 0.25)' : 'none',
+            }}
           >
-            <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${simConfig.same_as_baseline ? 'translate-x-4.5' : 'translate-x-0'
-              }`} />
+            <span
+              className="block rounded-full bg-white shadow transition-transform duration-300 ease-out"
+              style={{
+                width: '18px',
+                height: '18px',
+                transform: simConfig.same_as_baseline ? 'translateX(18px)' : 'translateX(0px)',
+              }}
+            />
           </button>
         </div>
       )}
@@ -587,8 +636,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   type="button"
                   onClick={() => setPresetScale(scale)}
                   className={`relative px-3 py-1.5 rounded-lg text-[9.5px] font-mono font-semibold uppercase tracking-wider transition-all ${isActive
-                      ? 'text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] bg-white/[0.05]'
-                      : 'text-slate-500 hover:text-slate-300'
+                    ? 'text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] bg-white/[0.05]'
+                    : 'text-slate-500 hover:text-slate-300'
                     }`}
                 >
                   <span className="relative z-10 inline-flex items-center gap-1.5">
@@ -615,8 +664,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   type="button"
                   onClick={() => applyQuickPreset(preset.id)}
                   className={`group rounded-xl border p-3.5 text-left transition-all duration-200 relative overflow-hidden bg-gradient-to-b ${isActive
-                      ? 'border-white/[0.14] bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_16px_rgba(0,0,0,0.4)]'
-                      : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-white/[0.10] hover:bg-[#0c0e14]/80'
+                    ? 'border-white/[0.14] bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_16px_rgba(0,0,0,0.4)]'
+                    : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-white/[0.10] hover:bg-[#0c0e14]/80'
                     }`}
                 >
                   <div
@@ -653,43 +702,7 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
           </div>
         </div>
 
-        {/* Road Layout */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Road Layout</h4>
-          </div>
-          <div className="grid grid-cols-2 gap-5">
-            <FormRow label="Intersection Type" help="Road geometry — 4-way cross is most common in Hyderabad" required>
-              <SelectInput value={activeConfig.intersection_type} onChange={(v) => updateSimConfig({ intersection_type: v as SimConfig['intersection_type'] })}
-                options={[
-                  { value: 'four_way', label: '4-Way Cross' },
-                  { value: 'four_way_free_left', label: '4-Way (Free Left)' },
-                  { value: 't_junction', label: 'T-Junction' },
-                  { value: 't_junction_free_left', label: 'T-Junction (Free Left)' },
-                  { value: 'y_junction', label: 'Y-Junction' },
-                  { value: 'six_arm', label: '6-Arm Complex' },
-                  { value: 'roundabout', label: 'Roundabout' },
-                  { value: 'roundabout_free_left', label: 'Roundabout (Free Left)' },
-                  { value: 'custom', label: 'Custom Config (JSON)' },
-                ]} />
-            </FormRow>
-            <FormRow label="Lanes per Arm" help="Number of lanes per approach (1-5). Hyderabad major roads: 3-4 lanes" required>
-              <NumberInput value={activeConfig.n_lanes} onChange={(v) => updateSimConfig({ n_lanes: v })} min={1} max={5} />
-            </FormRow>
-            {activeConfig.intersection_type === 'custom' && (
-              <div className="col-span-2">
-                <label className="text-[11.5px] text-slate-400 font-semibold mb-1 block">Custom JSON Config</label>
-                <textarea
-                  className="w-full bg-black/40 border border-white/[0.08] rounded-xl p-3.5 text-[11px] text-slate-300 focus:outline-none focus:border-[#8fb8ce]/40 font-mono leading-relaxed"
-                  rows={3}
-                  value={customJsonText}
-                  onChange={(e) => handleJsonChange(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Road Layout moved to dedicated tab */}
 
         {/* Traffic Demand */}
         <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
@@ -763,8 +776,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
 
           <div className="grid grid-cols-2 gap-5">
             <div className={`flex items-center justify-between text-xs rounded-xl px-4 py-2.5 border transition-all duration-300 col-span-2 ${vehicleMixTotal === 100
-                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
-                : 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
+              : 'bg-amber-500/5 border-amber-500/20 text-amber-400'
               }`}>
               <span className="font-mono font-bold tracking-wide flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${vehicleMixTotal === 100 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
@@ -815,8 +828,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   type="button"
                   onClick={() => setDurationChoice(opt.id as any)}
                   className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                      ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                      : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                    : 'text-slate-500 hover:text-slate-300'
                     }`}
                 >
                   {opt.label}
@@ -825,13 +838,29 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
             })}
           </div>
           {durationChoice === 'custom' && (
-            <div className="mt-3 animate-fadeIn">
-              <NumberInput
-                value={customDurationMin}
-                onChange={setCustomDurationMin}
-                min={5}
-                max={1440}
-              />
+            <div className="mt-4 animate-fadeIn space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-slate-500">Custom Duration</span>
+                <span className="text-[#8fb8ce] font-bold">{customDurationMin} min</span>
+              </div>
+              <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
+                <div
+                  className="absolute inset-y-0 left-0 bg-[#8fb8ce] rounded-full transition-all"
+                  style={{ width: `${((customDurationMin - 10) / (1440 - 10)) * 100}%` }}
+                />
+                <input
+                  type="range"
+                  min={10}
+                  max={1440}
+                  step={10}
+                  value={customDurationMin}
+                  onChange={(e) => setCustomDurationMin(Number(e.target.value))}
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+                />
+              </div>
+              <div className="flex justify-between text-[8.5px] text-slate-600 font-mono">
+                <span>10 min</span><span>1440 min</span>
+              </div>
             </div>
           )}
         </div>
@@ -856,41 +885,11 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   type="button"
                   onClick={() => setDrivingBehavior(opt.id as any)}
                   className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                      ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                      : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                    : 'text-slate-500 hover:text-slate-300'
                     }`}
                 >
                   {opt.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Canvas Size */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Canvas Size</h4>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { id: 'regular', label: '1110 × 800', sub: 'Standard viewport' },
-              { id: 'large', label: '1600 × 1000', sub: 'Extended simulation grid' },
-            ].map((opt) => {
-              const isActive = canvasSize === opt.id
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setCanvasSize(opt.id as any)}
-                  className={`w-full rounded-xl border p-4 text-left transition-all ${isActive
-                      ? 'border-white/[0.14] bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                      : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-white/[0.10]'
-                    }`}
-                >
-                  <div className={`text-[10.5px] font-mono font-bold ${isActive ? 'text-slate-100' : 'text-slate-500'}`}>{opt.label}</div>
-                  <div className="text-[9px] text-slate-600 font-semibold font-sans mt-1 leading-normal">{opt.sub}</div>
                 </button>
               )
             })}
@@ -902,19 +901,245 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
   )
 }
 
+const LAYOUT_OPTIONS = [
+  {
+    category: 'Standard Intersections',
+    items: [
+      { id: 'four_way', name: '4-Way Cross', emoji: '➕', desc: 'Standard cross junction with standard phases.' },
+      { id: 't_junction', name: 'T-Junction', emoji: '┳', desc: 'Three-arm T-junction connecting a minor road to a major road.' },
+      { id: 'y_junction', name: 'Y-Junction', emoji: '丫', desc: 'Three-arm junction merging/diverging lanes at an angle.' },
+    ]
+  },
+  {
+    category: 'Indian Style / Specialized',
+    items: [
+      { id: 'four_way_arrow', name: '4-Way Arrow Signals', emoji: '🔀', desc: 'Indian style arrow signal lights (straight, left, right).' },
+      { id: 'four_way_protected_right', name: '4-Way Protected Right', emoji: '🛡️', desc: 'Indian style junction with dedicated protected right phases.' },
+    ]
+  },
+  {
+    category: 'Free-Left & Roundabouts',
+    items: [
+      { id: 'four_way_free_left', name: '4-Way (Free Left)', emoji: '↖️', desc: 'Standard cross with continuous slip lanes for left-turning traffic.' },
+      { id: 't_junction_free_left', name: 'T-Junction (Free Left)', emoji: '🪓', desc: 'T-junction featuring a left-turn slip road to bypass signal timing.' },
+      { id: 'roundabout', name: 'Roundabout', emoji: '🔄', desc: 'Traffic circle where entering traffic yields to vehicles in the circle.' },
+    ]
+  },
+  {
+    category: 'Advanced / Custom',
+    items: [
+      { id: 'custom', name: 'Custom Config (JSON)', emoji: '🛠️', desc: 'Direct JSON geometry definition for advanced designs.' }
+    ]
+  }
+]
+
+function SectionL({ isBaseline }: { isBaseline: boolean }) {
+  const { simConfig, updateSimConfig, tabConfigs } = useConfigStore()
+
+  const baselineConfig = tabConfigs.baseline || simConfig
+  const isSyncActive = !isBaseline && !!simConfig.same_as_baseline
+  const activeConfig = isSyncActive ? baselineConfig : simConfig
+
+  const [customJsonText, setCustomJsonText] = useState(() => {
+    return activeConfig.intersection_type === 'custom' ? JSON.stringify(activeConfig, null, 2) : '{}'
+  })
+
+  useEffect(() => {
+    setCustomJsonText(activeConfig.intersection_type === 'custom' ? JSON.stringify(activeConfig, null, 2) : '{}')
+  }, [activeConfig.intersection_type])
+
+  const handleJsonChange = (text: string) => {
+    if (isSyncActive) return
+    setCustomJsonText(text)
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed && typeof parsed === 'object') {
+        updateSimConfig(parsed)
+      }
+    } catch {
+      // Keep silent
+    }
+  }
+
+  return (
+    <div className="space-y-6 pb-4 animate-fadeIn">
+      {/* Lanes per Arm Selector */}
+      <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Lanes per Arm</h4>
+        </div>
+        <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5 max-w-md">
+          {[1, 2, 3, 4, 5].map((num) => {
+            const isActive = (activeConfig.n_lanes ?? 3) === num
+            return (
+              <button
+                key={num}
+                type="button"
+                disabled={isSyncActive}
+                onClick={() => updateSimConfig({ n_lanes: num, lane_config: undefined })}
+                className={`flex-grow py-2 rounded-lg text-center text-[11px] font-mono font-semibold transition-all ${isActive
+                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                    : isSyncActive
+                      ? 'text-slate-655 opacity-40 cursor-not-allowed'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+              >
+                {num} {num === 3 ? 'Lanes (Std)' : num === 1 ? 'Lane' : 'Lanes'}
+              </button>
+            )
+          })}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {(['N', 'S', 'E', 'W'] as const).map((arm) => {
+            const laneConfig = activeConfig.lane_config ?? {}
+            const active = laneConfig[arm] ?? activeConfig.n_lanes ?? 3
+            return (
+              <div key={arm} className="flex items-center gap-1.5 rounded-lg border border-white/[0.04] bg-black/20 px-2 py-1.5">
+                <span className="w-4 text-[10px] font-bold font-mono text-slate-400">{arm}</span>
+                <div className="flex flex-1 gap-1">
+                  {[1, 2, 3, 4, 5].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      disabled={isSyncActive}
+                      onClick={() => updateSimConfig({ lane_config: { ...laneConfig, [arm]: num } })}
+                      className={`h-5 flex-1 rounded text-[9px] font-bold font-mono transition-all ${active === num
+                          ? 'bg-[#8fb8ce]/20 text-[#c5e3f0] border border-[#8fb8ce]/35'
+                          : isSyncActive
+                            ? 'text-slate-700 cursor-not-allowed border border-transparent'
+                            : 'text-slate-600 hover:text-slate-300 border border-transparent'
+                        }`}
+                      title={`${arm} arm ${num} lane${num === 1 ? '' : 's'}`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-slate-500 font-sans leading-normal">
+          Defines the number of approach and departure lanes per arm. Hyderabad corridors average 3–4 lanes.
+        </p>
+      </div>
+
+      {/* Grid of visual cards categorized */}
+      <div className="space-y-5">
+        {LAYOUT_OPTIONS.map((cat) => (
+          <div key={cat.category} className="space-y-3">
+            <h5 className="text-[10.5px] font-bold text-slate-500 uppercase tracking-widest font-mono pl-1">
+              {cat.category}
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {cat.items.map((opt) => {
+                const isActive = activeConfig.intersection_type === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={isSyncActive}
+                    onClick={() => updateSimConfig({ intersection_type: opt.id as any })}
+                    className={`group rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden flex items-start gap-3.5 ${isActive
+                        ? 'border-[#8fb8ce]/40 bg-[#8fb8ce]/[0.06] shadow-[0_0_20px_rgba(143,184,206,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]'
+                        : isSyncActive
+                          ? 'border-white/[0.02] bg-[#0c0e14]/20 opacity-40 cursor-not-allowed select-none'
+                          : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-[#8fb8ce]/20 hover:bg-[#0c0e14]/80'
+                      }`}
+                  >
+                    <div className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center border transition-all flex-shrink-0 ${isActive
+                        ? 'bg-[#8fb8ce]/20 border-[#8fb8ce]/30 text-white'
+                        : 'bg-black/30 border-white/[0.04] text-slate-500'
+                      }`}>
+                      {opt.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[12.5px] font-bold ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>
+                          {opt.name}
+                        </span>
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#8fb8ce] animate-pulse" />
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed line-clamp-2 font-medium">
+                        {opt.desc}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Custom JSON TEXTAREA if custom is selected */}
+      {activeConfig.intersection_type === 'custom' && (
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-3 animate-fadeIn">
+          <label className="text-[11.5px] text-slate-400 font-semibold block font-mono">Custom JSON Config</label>
+          <textarea
+            className="w-full bg-[#050508] border border-white/[0.06] rounded-xl p-3.5 text-[11px] text-slate-350 focus:outline-none focus:border-[#8fb8ce]/40 font-mono leading-relaxed shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.5)]"
+            rows={5}
+            value={customJsonText}
+            onChange={(e) => handleJsonChange(e.target.value)}
+            disabled={isSyncActive}
+          />
+          <p className="text-[9.5px] text-slate-500 font-sans">
+            Specify customized links, lanes, phase signals, and coordinates in standard simulator-compatible format.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main ConfigModal ─────────────────────────────────────────────────────────
 interface ConfigModalProps {
   open: boolean
+  mode?: 'simulation' | 'training'
   onClose: () => void
   onApply?: () => void
   isBaselineView?: boolean
+  activeModelKey?: string
 }
 
-export default function ConfigModal({ open, onClose, onApply, isBaselineView = false }: ConfigModalProps) {
+export default function ConfigModal({ open, mode = 'simulation', onClose, onApply, isBaselineView = false, activeModelKey = 'custom' }: ConfigModalProps) {
   const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, isDirty } = useConfigStore()
   const isRunning = useSimulationStore((s) => s.isRunning)
 
   const [activeSection, setActiveSection] = useState('J')
+
+  // Ensure correct tab active when opening/switching view modes
+  useEffect(() => {
+    if (open) {
+      if (mode === 'training') {
+        setActiveSection('E')
+      } else if (isBaselineView && activeSection === 'E') {
+        setActiveSection('D')
+      } else if (!isBaselineView && activeSection === 'D') {
+        setActiveSection('E')
+      }
+    }
+  }, [open, isBaselineView, activeSection, mode])
+
+  // Dynamically filter sections in NAV_GROUPS based on baseline view
+  const navGroups = ALL_NAV_GROUPS.map((group) => {
+    if (group.id === 'control') {
+      return {
+        ...group,
+        sections: group.sections.filter((s) => {
+          if (isBaselineView) {
+            return s.id !== 'E' // hide RL Training for baseline
+          } else {
+            return s.id !== 'D' // hide Signal Timing for RL
+          }
+        }),
+      }
+    }
+    return group
+  })
 
   // Snapshot taken when modal opens — used for revert
   const snapshot = useRef<{ simConfig: SimConfig; adverseConfig: AdverseConfig } | null>(null)
@@ -1003,7 +1228,7 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
           {/* Sidebar header - aligned to h-[72px] */}
           <div className="px-5 border-b border-white/[0.05] flex items-center h-[72px] flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-8.5 h-8.5 rounded-xl flex items-center justify-center text-base border border-white/[0.06] bg-white/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base border border-white/[0.06] bg-white/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
                 ⚙️
               </div>
               <div>
@@ -1015,7 +1240,7 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
 
           {/* Nav items */}
           <div className="flex-1 overflow-y-auto custom-scrollbar py-3">
-            {NAV_GROUPS.map((group) => (
+            {navGroups.map((group) => (
               <div key={group.id} className="mb-3">
                 <p className="text-[8.5px] font-bold uppercase tracking-[0.2em] px-5 py-1.5 font-mono text-slate-500">
                   {group.label}
@@ -1027,8 +1252,8 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
                       key={section.id}
                       onClick={() => setActiveSection(section.id)}
                       className={`w-full text-left flex items-center gap-3 px-5 py-2 transition-all duration-200 relative ${isActive
-                          ? 'text-slate-100 font-bold bg-[#8fb8ce]/[0.08]'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.015]'
+                        ? 'text-slate-100 font-bold bg-[#8fb8ce]/[0.08]'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.015]'
                         }`}
                     >
                       {isActive && (
@@ -1059,8 +1284,8 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
               onClick={handleRevert}
               disabled={changesCount === 0}
               className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11.5px] font-bold transition-all duration-300 border ${changesCount > 0
-                  ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-orange-500/5 text-amber-400 hover:from-amber-500/20 hover:to-orange-500/10 hover:border-amber-500/45 hover:shadow-[0_0_12px_rgba(245,158,11,0.15)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]'
-                  : 'border-white/[0.04] bg-transparent text-slate-600 cursor-not-allowed'
+                ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-orange-500/5 text-amber-400 hover:from-amber-500/20 hover:to-orange-500/10 hover:border-amber-500/45 hover:shadow-[0_0_12px_rgba(245,158,11,0.15)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]'
+                : 'border-white/[0.04] bg-transparent text-slate-600 cursor-not-allowed'
                 }`}
             >
               <span>↩</span>
@@ -1078,9 +1303,9 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
         <div className="flex-1 flex flex-col min-w-0 bg-[#08080b]">
 
           {/* Modal header - aligned to h-[72px] */}
-          <div className="flex items-center justify-between px-6.5 border-b border-white/[0.05] flex-shrink-0 bg-black/5 h-[72px]">
+          <div className="flex items-center justify-between px-6 border-b border-white/[0.05] flex-shrink-0 bg-black/5 h-[72px]">
             <div className="flex items-center gap-3.5">
-              <div className="w-8.5 h-8.5 rounded-xl flex items-center justify-center text-base border border-white/[0.06] bg-white/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base border border-white/[0.06] bg-white/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
                 {activeMeta?.icon}
               </div>
               <div>
@@ -1109,18 +1334,18 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
           </div>
 
           {/* Section content */}
-          <div className={`flex-1 overflow-y-auto custom-scrollbar px-7 py-6 ${isRunning ? 'pointer-events-none opacity-40 select-none' : ''}`}>
+          <div className={`flex-1 overflow-y-auto custom-scrollbar px-6 py-6 ${isRunning ? 'pointer-events-none opacity-40 select-none' : ''}`}>
             {activeSection === 'D' && <SectionD simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'E' && <SectionE simConfig={simConfig} updateSimConfig={updateSimConfig} />}
+            {activeSection === 'E' && <SectionE simConfig={simConfig} updateSimConfig={updateSimConfig} activeModelKey={activeModelKey} />}
             {activeSection === 'F' && <SectionF simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'G' && <SectionG simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'H' && <SectionH simConfig={simConfig} updateSimConfig={updateSimConfig} />}
             {activeSection === 'I' && <SectionI adverseConfig={adverseConfig} updateAdverseConfig={updateAdverseConfig} />}
             {activeSection === 'J' && <SectionJ isBaseline={isBaselineView} />}
+            {activeSection === 'L' && <SectionL isBaseline={isBaselineView} />}
           </div>
 
           {/* Footer: Apply */}
-          <div className="flex-shrink-0 px-7 py-4 border-t border-white/[0.05] flex items-center justify-between bg-[#050508]"
+          <div className="flex-shrink-0 px-6 py-4 border-t border-white/[0.05] flex items-center justify-between bg-[#050508]"
             style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.01)' }}>
             <div className="text-[10.5px] font-mono flex items-center gap-2">
               {changesCount > 0 ? (
@@ -1150,14 +1375,22 @@ export default function ConfigModal({ open, onClose, onApply, isBaselineView = f
                 onClick={handleApply}
                 disabled={isRunning}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[12px] font-bold transition-all duration-300 border shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] ${isRunning
-                    ? 'bg-white/[0.01] border-white/[0.03] text-slate-600 cursor-not-allowed'
-                    : 'bg-[#8fb8ce]/[0.09] border-[#8fb8ce]/25 text-[#8fb8ce]/90 hover:bg-[#8fb8ce]/[0.15] hover:border-[#8fb8ce]/45 hover:text-[#8fb8ce] hover:shadow-[0_0_16px_rgba(143,184,206,0.15)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                  ? 'bg-white/[0.01] border-white/[0.03] text-slate-600 cursor-not-allowed'
+                  : mode === 'training'
+                    ? 'bg-emerald-950/70 border-emerald-400/20 text-emerald-400 hover:bg-emerald-900/60 hover:border-emerald-400/45 hover:text-emerald-300 hover:shadow-[0_0_16px_rgba(52,211,153,0.15)] cursor-pointer'
+                    : 'bg-[#8fb8ce]/[0.09] border-[#8fb8ce]/25 text-[#8fb8ce]/90 hover:bg-[#8fb8ce]/[0.15] hover:border-[#8fb8ce]/45 hover:text-[#8fb8ce] hover:shadow-[0_0_16px_rgba(143,184,206,0.15)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] cursor-pointer'
                   }`}
               >
-                <svg viewBox="0 0 14 14" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="2,7 6,11 12,3" />
-                </svg>
-                Apply & Update Simulation
+                {mode === 'training' ? (
+                  <svg viewBox="0 0 14 14" className="w-3.5 h-3.5" fill="currentColor">
+                    <polygon points="3,2 11,7 3,12" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 14 14" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="2,7 6,11 12,3" />
+                  </svg>
+                )}
+                {mode === 'training' ? 'Apply & Start Training' : 'Apply & Update Simulation'}
               </button>
             </div>
           </div>
