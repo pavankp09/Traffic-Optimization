@@ -15,8 +15,8 @@ BACKEND_REQUIREMENTS = PROJECT_ROOT / "backend" / "requirements.txt"
 TORCH_PACKAGES = {"torch", "torchvision", "torchaudio"}
 BACKEND_MARKER = VENV_DIR / ".uv-backend"
 TORCH_REQUIREMENTS = {
-    "cuda": ["torch", "torchvision", "torchaudio"],
-    "cpu": ["torch", "torchvision", "torchaudio"],
+    "cuda": ["torch==2.11.0+cu128", "torchvision==0.26.0+cu128", "torchaudio==2.11.0+cu128"],
+    "cpu": ["torch==2.11.0", "torchvision==0.26.0", "torchaudio==2.11.0"],
 }
 
 
@@ -125,6 +125,8 @@ def build_uv_install_commands(
             "https://download.pytorch.org/whl/cu128",
             "--extra-index-url",
             "https://pypi.org/simple",
+            "--index-strategy",
+            "unsafe-best-match",
         ])
     else:
         cmd.extend([
@@ -186,7 +188,16 @@ def ensure_local_runtime() -> None:
 
     desired_backend = choose_torch_backend()
     marker_backend = read_backend_marker()
-    if marker_backend == desired_backend and runtime_ready(python_path, marker_backend):
+
+    # Check if the runtime is already functional with the marker backend (or CPU fallback)
+    # to avoid endlessly attempting to re-install CUDA packages if CUDA is unavailable.
+    is_ready = False
+    if marker_backend and runtime_ready(python_path, marker_backend):
+        is_ready = True
+    elif marker_backend is None and runtime_ready(python_path, "cpu"):
+        is_ready = True
+
+    if is_ready:
         if not in_project_venv():
             script_path = str(Path(__file__).resolve())
             result = subprocess.run([str(python_path), script_path], cwd=PROJECT_ROOT, check=False)
@@ -195,13 +206,12 @@ def ensure_local_runtime() -> None:
 
     marker_path = uv_marker_path()
 
-    if not marker_path.exists() or not runtime_ready(python_path, desired_backend) or marker_backend != desired_backend:
-        print(f"[Bootstrap] Installing Python dependencies with uv ({desired_backend})...")
-        for command in build_uv_install_commands(python_path, desired_backend):
-            subprocess.run(command, cwd=PROJECT_ROOT, check=True)
-        marker_path.write_text("uv-managed\n", encoding="utf-8")
-        actual_backend = desired_backend if runtime_ready(python_path, desired_backend) else "cpu"
-        write_backend_marker(actual_backend)
+    print(f"[Bootstrap] Installing Python dependencies with uv ({desired_backend})...")
+    for command in build_uv_install_commands(python_path, desired_backend):
+        subprocess.run(command, cwd=PROJECT_ROOT, check=True)
+    marker_path.write_text("uv-managed\n", encoding="utf-8")
+    actual_backend = desired_backend if runtime_ready(python_path, desired_backend) else "cpu"
+    write_backend_marker(actual_backend)
 
     if not in_project_venv():
         script_path = str(Path(__file__).resolve())
@@ -225,12 +235,12 @@ def start_backend() -> None:
     from backend.rl.device import get_torch_runtime_info
 
     app = create_app()
-    print("[OK] Backend running at http://localhost:5050")
+    print("[OK] Backend running at http://localhost:8004")
     runtime = get_torch_runtime_info()
     device_label = "CUDA" if runtime.get("device") == "cuda" else "CPU"
     extra = f" ({runtime.get('device_name')})" if runtime.get("device_name") else ""
     print(f"[OK] Torch runtime: {device_label}{extra}")
-    socketio.run(app, host="0.0.0.0", port=5050, debug=False)
+    socketio.run(app, host="0.0.0.0", port=8004, debug=False)
 
 
 def shutil_which(command: str) -> str | None:
