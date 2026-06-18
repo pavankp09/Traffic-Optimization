@@ -25,6 +25,10 @@ def get_db():
 def create_app(config=None) -> Flask:
     global _db_engine, _SessionLocal
 
+    # Silence Werkzeug HTTP request logs (keep only errors)
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
     app = Flask(__name__)
     app.config["SECRET_KEY"] = APP_CONFIG.secret_key
 
@@ -61,6 +65,7 @@ def create_app(config=None) -> Flask:
         app,
         cors_allowed_origins=cors_origins,
         async_mode=None,   # Auto-detect best async mode (eventlet/gevent/threading)
+        allow_upgrades=False,
         logger=False,
         engineio_logger=False,
         ping_interval=25,

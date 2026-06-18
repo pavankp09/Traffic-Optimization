@@ -71,6 +71,9 @@ export default function BeforeAfterChart() {
       const util = Math.min(0.95, 0.60 + (modelKey === 'rl1' ? 0.22 : modelKey === 'rl2' ? 0.18 : modelKey === 'rl3' ? 0.15 : 0.25))
       const eff = Math.min(0.95, 0.55 + (modelKey === 'rl1' ? 0.26 : modelKey === 'rl2' ? 0.20 : modelKey === 'rl3' ? 0.18 : 0.28))
       
+      const fuelVal = 0.7 * (avgWait / 3.6)
+      const carbonVal = fuelVal * 2.31
+      
       return {
         episode_id: modelKey,
         session_id: 'live',
@@ -87,6 +90,8 @@ export default function BeforeAfterChart() {
         avg_phase_duration_s: 28,
         adverse_events_count: 0,
         total_delay_veh_hrs: (avgWait * tput) / 3600,
+        fuel_index_ml_veh: fuelVal,
+        carbon_index_g_veh: carbonVal,
       }
     }
 
@@ -130,18 +135,18 @@ export default function BeforeAfterChart() {
       }, {} as Record<string, number>),
     },
     {
-      metric: 'Efficiency %',
+      metric: 'Fuel /10',
       ...activeKeys.reduce((acc, key) => {
         const m = getMetricsForModel(key)
-        if (m) acc[key] = parseFloat((m.signal_efficiency * 100).toFixed(1))
+        if (m) acc[key] = parseFloat((m.fuel_index_ml_veh / 10).toFixed(1))
         return acc
       }, {} as Record<string, number>),
     },
     {
-      metric: 'Collisions ×5',
+      metric: 'Carbon /10',
       ...activeKeys.reduce((acc, key) => {
         const m = getMetricsForModel(key)
-        if (m) acc[key] = m.collision_count * 5
+        if (m) acc[key] = parseFloat((m.carbon_index_g_veh / 10).toFixed(1))
         return acc
       }, {} as Record<string, number>),
     },
@@ -151,7 +156,7 @@ export default function BeforeAfterChart() {
     <div className="space-y-2">
       <h3 className="text-xs text-gray-400 font-extrabold font-mono uppercase tracking-wider flex items-center gap-1">
         Comparative Performance Chart
-        <HelpPopover text="### Comparative Performance Chart\nStreams live telemetrical comparisons across models:\n- **Avg Wait (s)**: Average commuter delay.\n- **Throughput /100**: Scaled hourly vehicle clearance flow.\n- **Green Util %**: Ratio of active green timings.\n- **Efficiency %**: Synchronization quality.\n- **Collisions ×5**: Conflict count indicator." position="top" />
+        <HelpPopover text="### Comparative Performance Chart\nStreams live telemetrical comparisons across models:\n- **Avg Wait (s)**: Average commuter delay.\n- **Throughput /100**: Scaled hourly vehicle clearance flow.\n- **Green Util %**: Ratio of active green timings.\n- **Fuel /10**: Fuel Index (mL/veh) scaled down by 10.\n- **Carbon /10**: Carbon footprint (g CO₂/veh) scaled down by 10." position="top" />
       </h3>
       
       <ResponsiveContainer width="100%" height={210}>

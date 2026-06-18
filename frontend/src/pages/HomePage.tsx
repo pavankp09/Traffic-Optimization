@@ -37,7 +37,7 @@ export default function HomePage() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <a href="/studio" target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-2 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Open Platform</a>
+            <Link to="/studio" className="text-xs px-3 py-2 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Open Platform</Link>
             <a href="#cta" className="text-xs px-3 py-2 rounded-lg bg-white text-black font-semibold">Request Pilot</a>
           </div>
         </div>
@@ -191,4 +191,3 @@ function Tech({ title, value }: { title: string; value: string }) {
     </div>
   )
 }
-

@@ -71,8 +71,10 @@ export default function Dashboard() {
   const [baselineRightTab, setBaselineRightTab] = useState<'config' | 'stats'>('config')
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('stage1')
   const [activePanel, setActivePanel] = useState<Panel | null>(null)
-  const [configModalOpen, setConfigModalOpen] = useState(false)
-  const [configModalMode, setConfigModalMode] = useState<'simulation' | 'training'>('simulation')
+  const configModalOpen = useSimulationStore((s) => s.configModalOpen)
+  const setConfigModalOpen = useSimulationStore((s) => s.setConfigModalOpen)
+  const configModalMode = useSimulationStore((s) => s.configModalMode)
+  const setConfigModalMode = useSimulationStore((s) => s.setConfigModalMode)
   const [simDurationMin, setSimDurationMin] = useState<15 | 30 | 45 | 60>(60)
   const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(true)
   const [isLearningCollapsed, setIsLearningCollapsed] = useState(true)
@@ -136,6 +138,9 @@ export default function Dashboard() {
 
   const isRunning = useSimulationStore((s) => s.isRunning)
   const isPaused = useSimulationStore((s) => s.isPaused)
+  const runtimeDevice = useSimulationStore((s) => s.runtimeDevice)
+  const runtimeDeviceName = useSimulationStore((s) => s.runtimeDeviceName)
+  const runtimeTorchVersion = useSimulationStore((s) => s.runtimeTorchVersion)
   const splitIsRunning = useSimulationStore((s) => s.splitIsRunning)
   const splitIsPaused = useSimulationStore((s) => s.splitIsPaused)
   const splitSimSpeed = useSimulationStore((s) => s.splitSimSpeed)
@@ -172,12 +177,50 @@ export default function Dashboard() {
   const fmtClock = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
+  const runtimeLabel = runtimeDevice === 'cuda'
+    ? `CUDA${runtimeDeviceName ? ` · ${runtimeDeviceName}` : ''}`
+    : runtimeDevice === 'cpu'
+      ? 'CPU'
+      : 'Runtime unknown'
+  const runtimeTone = runtimeDevice === 'cuda'
+    ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+    : runtimeDevice === 'cpu'
+      ? 'text-slate-300 border-slate-500/30 bg-slate-500/10'
+      : 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+
   // Keep Neural Processing tab while training is active
   useEffect(() => {
     if (isTraining) {
       setRightColumnTab('neural')
     }
   }, [isTraining])
+
+  // Fetch trained models on disk on mount
+  useEffect(() => {
+    const ALGO_TO_KEY: Record<string, string> = {
+      PPO: 'rl1',
+      DQN: 'rl2',
+      SAC: 'rl3',
+      A2C: 'rl4',
+      Custom: 'custom',
+    }
+    fetch('/api/models')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          const store = useSimulationStore.getState()
+          res.data.forEach((m: any) => {
+            if (m.name) {
+              const modelKey = ALGO_TO_KEY[m.name] || m.name
+              if (['rl1', 'rl2', 'rl3', 'rl4', 'custom'].includes(modelKey)) {
+                store.addTrainedModel(modelKey)
+              }
+            }
+          })
+        }
+      })
+      .catch((err) => console.error('Failed to load models list:', err))
+  }, [])
 
   // (XAI tab removed — Training Intelligence is now inside the NRAL panel)
 
@@ -210,6 +253,14 @@ export default function Dashboard() {
                 <p className="text-[10px] text-slate-500 font-mono">
                   {(viewMode === 'split' ? splitIsRunning : isRunning) ? 'SIMULATION ACTIVE' : 'READY'}
                 </p>
+                {runtimeDevice && (
+                  <span
+                    className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest ${runtimeTone}`}
+                    title={runtimeTorchVersion ? `PyTorch ${runtimeTorchVersion}` : undefined}
+                  >
+                    {runtimeLabel}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -219,14 +270,15 @@ export default function Dashboard() {
         <div className="flex items-center gap-1">
           {[
             { to: '/', label: 'Landing Page' },
-            { to: '/simulations', label: 'Simulations' },
-            { to: '/analyzer', label: 'Analyzer' },
-            { to: '/compare', label: 'Compare' },
-            { to: '/report', label: 'Report' },
-          ].map(({ to, label }) => (
+            { to: '/simulations', label: 'Simulations', target: '_blank' },
+            { to: '/analyzer', label: 'Analyzer', target: '_blank' },
+            { to: '/report', label: 'Report', target: '_blank' },
+          ].map(({ to, label, target }) => (
             <Link
               key={to}
               to={to}
+              target={target}
+              rel={target === '_blank' ? 'noopener noreferrer' : undefined}
               className="text-[11px] text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-md hover:bg-white/[0.04] transition-colors font-medium"
             >
               {label}
@@ -273,14 +325,14 @@ export default function Dashboard() {
               <div className="flex items-center bg-[#0a0d14] rounded-lg p-0.5 gap-1 border border-white/[0.06]">
                 <span className="text-[9px] font-mono text-slate-600 px-2 font-bold uppercase tracking-wider flex items-center">
                   Active:
-                  <HelpPopover text="### RL Algorithm Presets\nSelect between deterministic baselines and diverse adaptive Reinforcement Learning agents:\n- **Baseline**: Static green splits cycles based on Webster rules.\n- **RL1 (PPO)**: On-policy gradient agent ($8-35s$ green splits).\n- **RL2 (DQN)**: Off-policy deep Q-network ($6-30s$ green splits).\n- **RL3 (SAC)**: Continuous entropy regularized actor-critic ($10-40s$ green splits).\n- **RL4 (A2C)**: Synchronous advantage micro-controller ($5-25s$ green splits).\n- **Custom Agent**: Fully customizable hyperparameters and reward weights." position="top" />
+                  <HelpPopover text="### RL Algorithm Presets\nSelect between deterministic baselines and diverse adaptive Reinforcement Learning agents:\n- **Baseline**: Static green splits cycles based on Webster rules.\n- **RL1 (PPO)**: On-policy gradient agent ($8-35s$ green splits).\n- **RL2 (DQN)**: Off-policy deep Q-network ($6-30s$ green splits).\n- **RL3 (SAC)**: Continuous entropy regularized actor-critic ($10-40s$ green splits).\n- **RL4 (A2C)**: Synchronous advantage micro-controller ($5-25s$ green splits)." position="top" />
                 </span>
-                {(['baseline', 'rl1', 'rl2', 'rl3', 'rl4', 'custom'] as const).map((m) => {
+                {(['baseline', 'rl1', 'rl2', 'rl3', 'rl4'] as const).map((m) => {
                   const isActive = selectedModelSingle === m
                   const isRl = m !== 'baseline'
                   const maxDur = Number(simConfig.simulation_duration_s ?? 1800)
                   const hasCompletedBaseline = isBaselineCompleted || (simTimeS >= maxDur && maxDur > 0)
-                  const isDisabled = (isRl && !hasCompletedBaseline) || m === 'custom'
+                  const isDisabled = isRl && !hasCompletedBaseline
 
                   const labelMap: Record<string, string> = {
                     baseline: 'Baseline',
@@ -288,7 +340,6 @@ export default function Dashboard() {
                     rl2: 'RL2 (DQN)',
                     rl3: 'RL3 (SAC)',
                     rl4: 'RL4 (A2C)',
-                    custom: 'Custom Agent',
                   }
                   return (
                     <button
@@ -300,7 +351,7 @@ export default function Dashboard() {
                           : 'border-transparent text-gray-500 hover:text-gray-300'
                         }`}
                       disabled={isDisabled}
-                      title={m === 'custom' ? 'Custom Agent is currently disabled.' : isDisabled ? 'Execute Baseline Simulation first to establish a reference and unlock RL agents.' : ''}
+                      title={isDisabled ? 'Execute Baseline Simulation first to establish a reference and unlock RL agents.' : ''}
                       onClick={() => {
                         if (isDisabled) return
                         // Don't stop training when switching tabs — allow background training
@@ -435,21 +486,7 @@ export default function Dashboard() {
               </button>
             )}
 
-            {/* Start Training button — shown when on an untrained RL model and not currently training */}
-            {viewMode === 'single' && selectedModelSingle !== 'baseline' && !trainedModels.includes(selectedModelSingle) && !isTraining && (
-              <button
-                className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide animate-fadeIn"
-                onClick={() => {
-                  setConfigModalMode('training')
-                  setConfigModalOpen(true)
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                Start Training
-              </button>
-            )}
+
 
             {/* Convergence badge removed from header — shown in NRAL panel only */}
 
@@ -902,4 +939,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

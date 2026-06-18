@@ -19,6 +19,7 @@ from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 
 from backend.config import SimulationConfig, AdverseConfig
 from backend.db.models import Base, TrainingSession, Episode, InsightCard
+from backend.rl.device import get_torch_device
 from backend.rl.traffic_env import make_env
 
 logger = logging.getLogger(__name__)
@@ -80,10 +81,14 @@ class EpisodeMetricsCallback(BaseCallback):
 
             mean_wait = float(info.get("mean_wait", 0.0))
             throughput = int(info.get("throughput", 0))
+            fuel_index = 0.7 * (mean_wait / 3.6)
+            carbon_index = fuel_index * 2.31
 
             metrics = {
                 "mean_wait": mean_wait,
                 "throughput": throughput,
+                "fuel_index_ml_veh": fuel_index,
+                "carbon_index_g_veh": carbon_index,
             }
 
             # Persist to DB
@@ -102,6 +107,8 @@ class EpisodeMetricsCallback(BaseCallback):
                             total_reward=self._episode_reward,
                             avg_wait_time_s=mean_wait,
                             throughput=throughput,
+                            fuel_index_ml_veh=fuel_index,
+                            carbon_index_g_veh=carbon_index,
                         )
                         db_session.add(episode_row)
                         db_session.commit()
@@ -393,7 +400,10 @@ class DecisionCaptureCallback(BaseCallback):
             importance = [0.0] * len(OBS_LABELS)
 
             try:
-                obs_t = torch.FloatTensor(obs_np[0:1])
+                device = getattr(self.model, "device", None)
+                if not isinstance(device, (str, torch.device)):
+                    device = None
+                obs_t = torch.as_tensor(obs_np[0:1], dtype=torch.float32, device=device)
 
                 with torch.no_grad():
                     dist = self.model.policy.get_distribution(obs_t)
@@ -401,7 +411,7 @@ class DecisionCaptureCallback(BaseCallback):
                     value = float(self.model.policy.predict_values(obs_t)[0, 0].item())
 
                 # Feature importance via Jacobian
-                obs_t_grad = torch.FloatTensor(obs_np[0:1]).requires_grad_(True)
+                obs_t_grad = torch.as_tensor(obs_np[0:1], dtype=torch.float32, device=device).requires_grad_(True)
                 features = self.model.policy.extract_features(obs_t_grad)
                 latent_pi, _ = self.model.policy.mlp_extractor(features)
                 action_logits = self.model.policy.action_net(latent_pi)
@@ -643,6 +653,7 @@ class PPOTrainer:
         gamma = getattr(self.sim_config, "discount_factor", 0.99)
         hidden = getattr(self.sim_config, "hidden_layer_size", 64)
         net_arch = [hidden, hidden]
+        device = get_torch_device()
 
         if alg == "A2C":
             from stable_baselines3 import A2C
@@ -654,6 +665,7 @@ class PPOTrainer:
                 policy_kwargs={"net_arch": net_arch},
                 verbose=0,
                 seed=42,
+                device=device,
             )
         elif alg == "DQN":
             from stable_baselines3 import DQN
@@ -665,6 +677,7 @@ class PPOTrainer:
                 policy_kwargs={"net_arch": net_arch},
                 verbose=0,
                 seed=42,
+                device=device,
             )
         else:
             # Check if environment is MockTrafficEnv to adjust hyperparameters dynamically
@@ -673,7 +686,7 @@ class PPOTrainer:
             batch_size = 64
             # SB3 PPO n_epochs is optimization epochs per update. 500 is extremely high
             # and leads to severe overfitting. We use 10 for MockTrafficEnv.
-            n_epochs = 10 if is_mock else getattr(self.sim_config, "ppo_epochs", 500)
+            n_epochs = 10 if is_mock else getattr(self.sim_config, "ppo_epochs", 250)
 
             return PPO(
                 policy="MlpPolicy",
@@ -691,6 +704,7 @@ class PPOTrainer:
                 policy_kwargs={"net_arch": net_arch},
                 verbose=0,
                 seed=42,
+                device=device,
             )
 
     def _behavioral_cloning_warmup(self, model, demonstrations: list, n_epochs: int = 10, batch_size: int = 32) -> None:
@@ -705,14 +719,15 @@ class PPOTrainer:
 
             obs_arr = np.array([d[0] for d in demonstrations], dtype=np.float32)
             act_arr = np.array([d[1] for d in demonstrations], dtype=np.int64)
-            obs_t = torch.FloatTensor(obs_arr)
-            act_t = torch.LongTensor(act_arr)
+            device = getattr(model, "device", "cpu")
+            obs_t = torch.as_tensor(obs_arr, dtype=torch.float32, device=device)
+            act_t = torch.as_tensor(act_arr, dtype=torch.long, device=device)
 
             bc_optimizer = torch.optim.Adam(model.policy.parameters(), lr=1e-3)
             n = len(demonstrations)
 
             for epoch in range(n_epochs):
-                idx = torch.randperm(n)
+                idx = torch.randperm(n, device=device)
                 total_loss = 0.0
                 for start in range(0, n, batch_size):
                     batch_idx = idx[start:start + batch_size]
@@ -849,9 +864,30 @@ class PPOTrainer:
         if self._model is None:
             raise RuntimeError("No model to save — call train() first")
 
-        os.makedirs(self.model_dir, exist_ok=True)
+        alg = getattr(self.sim_config, "rl_algorithm", getattr(self.sim_config, "algorithm", "PPO"))
+        alg = str(alg).strip().upper()
+        if not alg or alg == "NONE":
+            alg = "PPO"
+
+        algo_dir = os.path.join(self.model_dir, alg)
+        backup_dir = os.path.join(algo_dir, "backup")
+
+        os.makedirs(algo_dir, exist_ok=True)
+        os.makedirs(backup_dir, exist_ok=True)
+
         if path is None:
-            path = os.path.join(self.model_dir, f"{self.session_id}.zip")
+            path = os.path.join(algo_dir, "latest.zip")
+
+        if path == os.path.join(algo_dir, "latest.zip") and os.path.exists(path):
+            from datetime import datetime
+            import shutil
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = os.path.join(backup_dir, f"latest_{timestamp}.zip")
+            try:
+                shutil.move(path, backup_path)
+                logger.info("Moved old model to backup: %s", backup_path)
+            except Exception as e:
+                logger.warning("Failed to backup old model: %s", e)
 
         self._model.save(path)
         return path
@@ -860,7 +896,7 @@ class PPOTrainer:
         """Load a previously saved SB3 model from path."""
         if self._env is None:
             self._env = make_env(self.sim_config, self.adverse_config)
-        self._model = PPO.load(path, env=self._env)
+        self._model = PPO.load(path, env=self._env, device=get_torch_device())
 
     def predict(self, obs: np.ndarray) -> int:
         """

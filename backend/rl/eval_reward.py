@@ -29,12 +29,13 @@ import numpy as np
 from stable_baselines3 import PPO
 
 from backend.config import SimulationConfig, AdverseConfig
+from backend.rl.device import get_torch_device
 from backend.rl.mock_env import make_mock_env, run_fixed_time_baseline
 
 
 def _build_ppo(env, seed: int, sim_config: SimulationConfig | None = None) -> PPO:
     """Mirror the PPO hyperparameters used by PPOTrainer._build_model."""
-    ppo_epochs = getattr(sim_config, "ppo_epochs", 500) if sim_config is not None else 500
+    ppo_epochs = getattr(sim_config, "ppo_epochs", 250) if sim_config is not None else 250
     return PPO(
         policy="MlpPolicy",
         env=env,
@@ -48,9 +49,10 @@ def _build_ppo(env, seed: int, sim_config: SimulationConfig | None = None) -> PP
         ent_coef=0.01,
         vf_coef=0.5,
         max_grad_norm=0.5,
-        policy_kwargs={"net_arch": [64, 64]},
+        policy_kwargs={"net_arch": [128, 128]},
         verbose=0,
         seed=seed,
+        device=get_torch_device(),
     )
 
 

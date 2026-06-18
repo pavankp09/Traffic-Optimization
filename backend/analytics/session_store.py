@@ -71,6 +71,23 @@ class SessionStore:
             self._csv_path = csv_path
         os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
 
+    def _get_session_row(self, session: Session, session_id: str) -> Optional[TrainingSession]:
+        row = None
+        if "-" in session_id:
+            parts = session_id.split("-")
+            if parts[-1].isdigit():
+                db_id = int(parts[-1])
+                row = session.query(TrainingSession).filter(TrainingSession.id == db_id).first()
+        if row is None and session_id.isdigit():
+            row = session.query(TrainingSession).filter(TrainingSession.id == int(session_id)).first()
+        if row is None:
+            row = (
+                session.query(TrainingSession)
+                .filter(TrainingSession.notes == session_id)
+                .first()
+            )
+        return row
+
     # ------------------------------------------------------------------
     # Session management
     # ------------------------------------------------------------------
@@ -126,11 +143,7 @@ class SessionStore:
 
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     row = TrainingSession(
                         sim_config=json.loads(sim_json),
@@ -163,11 +176,7 @@ class SessionStore:
         """Updates TrainingSession status and optional aggregated fields."""
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     logger.warning(
                         "update_session_status: session %s not found", session_id
@@ -205,11 +214,7 @@ class SessionStore:
         try:
             with Session(self._engine) as session:
                 # Resolve integer FK
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     raise ValueError(
                         f"save_episode: TrainingSession not found for {session_id}"
@@ -227,6 +232,8 @@ class SessionStore:
                     collision_count=metrics.collision_count,
                     violation_count=metrics.violation_count,
                     convergence_pct=metrics.signal_efficiency * 100.0,
+                    fuel_index_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
                 )
                 session.add(episode_row)
                 session.flush()  # get episode_row.id before committing
@@ -246,6 +253,8 @@ class SessionStore:
                     fuel_cost_saved_inr=(eco.total_fuel_cost_saved_inr if eco else None),
                     time_value_saved_inr=(eco.total_time_value_saved_inr if eco else None),
                     total_economic_inr_per_hr=(eco.total_saving_inr if eco else None),
+                    fuel_index_rl_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_rl_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
                 )
                 session.add(metric_row)
                 session.commit()
@@ -270,11 +279,7 @@ class SessionStore:
         try:
             with Session(self._engine) as session:
                 # Resolve integer FK
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == insight["session_id"])
-                    .first()
-                )
+                ts_row = self._get_session_row(session, insight["session_id"])
                 if ts_row is None:
                     raise ValueError(
                         f"save_insight: TrainingSession not found for "
@@ -303,11 +308,7 @@ class SessionStore:
         """Returns TrainingSession as dict, or None if not found."""
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     return None
                 return _orm_to_dict(row)
@@ -319,11 +320,7 @@ class SessionStore:
         """Returns list of Episode dicts ordered by episode_number, limited."""
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     return []
                 rows = (
@@ -342,11 +339,7 @@ class SessionStore:
         """Returns all InsightCard dicts for session ordered by episode_number."""
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     return []
                 rows = (
@@ -382,11 +375,7 @@ class SessionStore:
         """
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     return False
                 session.delete(row)
@@ -408,11 +397,7 @@ class SessionStore:
         import dataclasses
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     logger.warning("create_simulation_run: TrainingSession not found for %s", session_id)
                     return
@@ -477,11 +462,7 @@ class SessionStore:
         # 2. Save to SQL database
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     logger.warning("save_vehicle_crossing: TrainingSession not found for %s", session_id)
                     return

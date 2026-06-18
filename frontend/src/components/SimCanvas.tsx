@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useCallback, useState } from 'react'
+import { useLayoutEffect, useEffect, useRef, useCallback, useState } from 'react'
 import { useSimulationStore } from '../store/simulationStore'
 import { useConfigStore } from '../store/configStore'
 import type { SimFrame, VehicleFrame } from '../types'
@@ -14,6 +14,127 @@ import {
   getDefaultRenderConfig,
   worldToCanvas,
 } from '../canvas/renderer'
+
+// ── Smooth interpolation helper ──────────────────────────────────────────────
+// Lerps an angle, handling the 2π wrap-around so e.g. 350°→10° goes clockwise.
+function lerpAngle(a: number, b: number, t: number): number {
+  let diff = b - a
+  while (diff > Math.PI) diff -= 2 * Math.PI
+  while (diff < -Math.PI) diff += 2 * Math.PI
+  return a + diff * t
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+// Client-side simulation frame interpolation
+function interpolateFrame(
+  history: { simTime: number; frame: SimFrame }[],
+  tRender: number
+): SimFrame | null {
+  if (history.length === 0) return null
+  if (history.length === 1) return history[0].frame
+
+  // Find the two frames frameA and frameB around tRender
+  let index = 0
+  for (let i = 0; i < history.length - 1; i++) {
+    if (history[i].simTime <= tRender && tRender <= history[i + 1].simTime) {
+      index = i
+      break
+    }
+  }
+
+  const frameA = history[index].frame
+  const frameB = history[index + 1].frame
+  const timeA = history[index].simTime
+  const timeB = history[index + 1].simTime
+
+  let lerpFactor = 0
+  if (timeB > timeA) {
+    lerpFactor = (tRender - timeA) / (timeB - timeA)
+  } else {
+    return frameB
+  }
+
+  // Interpolate vehicles
+  const interpolatedVehicles: VehicleFrame[] = []
+  const vehiclesBMap = new Map<string, VehicleFrame>(
+    frameB.vehicles.map((v) => [v.id, v])
+  )
+
+  for (const vA of frameA.vehicles) {
+    const vB = vehiclesBMap.get(vA.id)
+    if (vB) {
+      const x = lerp(vA.x, vB.x, lerpFactor)
+      const y = lerp(vA.y, vB.y, lerpFactor)
+      let angle = vA.angle
+      if (vA.angle !== undefined && vB.angle !== undefined) {
+        angle = lerpAngle(vA.angle, vB.angle, lerpFactor)
+      } else if (vB.angle !== undefined) {
+        angle = vB.angle
+      }
+
+      interpolatedVehicles.push({
+        ...vB,
+        x,
+        y,
+        angle,
+        speed: lerp(vA.speed, vB.speed, lerpFactor),
+        wait_time: lerp(vA.wait_time, vB.wait_time, lerpFactor),
+      })
+    } else {
+      // Vehicle exited in frameB: extrapolate to slide it off screen smoothly
+      const angle = vA.angle ?? 0
+      const dx = -Math.cos(angle)
+      const dy = -Math.sin(angle)
+      const dt = tRender - timeA
+      const x = vA.x + vA.speed * dt * dx
+      const y = vA.y + vA.speed * dt * dy
+      interpolatedVehicles.push({
+        ...vA,
+        x,
+        y,
+      })
+    }
+  }
+
+  // Include vehicles that spawned in frameB but are not in frameA
+  for (const vB of frameB.vehicles) {
+    if (!frameA.vehicles.some((v) => v.id === vB.id)) {
+      interpolatedVehicles.push(vB)
+    }
+  }
+
+  // Interpolate pedestrians
+  const interpolatedPedestrians: any[] = []
+  if (frameA.pedestrians && frameB.pedestrians) {
+    const pedsBMap = new Map<string, any>(
+      frameB.pedestrians.map((p) => [p.id, p])
+    )
+
+    for (const pA of frameA.pedestrians) {
+      const pB = pedsBMap.get(pA.id)
+      if (pB) {
+        const x = lerp(pA.x, pB.x, lerpFactor)
+        const y = lerp(pA.y, pB.y, lerpFactor)
+        interpolatedPedestrians.push({
+          ...pB,
+          x,
+          y,
+        })
+      }
+    }
+  }
+
+  return {
+    ...frameB,
+    sim_time_s: tRender,
+    vehicles: interpolatedVehicles,
+    pedestrians: frameB.pedestrians ? interpolatedPedestrians : undefined,
+  }
+}
+
 
 const humanReadableVehicleType = (typeId: string): string => {
   const mapping: Record<string, string> = {
@@ -65,6 +186,25 @@ export default function SimCanvas({
 }: SimCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // ── Smooth-animation refs (mutated without causing re-renders) ─────────────
+  const framesHistoryRef = useRef<{ simTime: number; frame: SimFrame }[]>([])
+  const simTimeGapRef    = useRef<number>(0.5)
+  const T_renderRef      = useRef<number | null>(null)
+  const lastRafTimeRef   = useRef<number>(0)
+  const renderRef        = useRef<((f?: SimFrame) => void) | null>(null)
+  const rafIdRef         = useRef<number>(0)
+
+  // Sync state parameters to refs to keep the RAF loop independent of render lifecycles
+  const isRunningRef = useRef(isRunning)
+  const isPausedRef = useRef(isPaused)
+  const speedValueRef = useRef(speedValue)
+
+  useEffect(() => {
+    isRunningRef.current = isRunning
+    isPausedRef.current = isPaused
+    speedValueRef.current = speedValue
+  }, [isRunning, isPaused, speedValue])
 
   // Keep track of dimensions when responsive
   const [responsiveSize, setResponsiveSize] = useState({ w: width, h: height })
@@ -137,6 +277,29 @@ export default function SimCanvas({
     }
   }, [isRunning])
 
+  // ── Sync incoming frame → history buffer ───────────────────────────────────
+  useEffect(() => {
+    if (frame === null) {
+      framesHistoryRef.current = []
+      T_renderRef.current = null
+      simTimeGapRef.current = 0.5
+      lastRafTimeRef.current = 0
+      return
+    }
+    const history = framesHistoryRef.current
+    const prevFrame = history[history.length - 1]
+    if (prevFrame) {
+      const gap = frame.sim_time_s - prevFrame.simTime
+      if (gap > 0) {
+        simTimeGapRef.current = 0.8 * simTimeGapRef.current + 0.2 * gap
+      }
+    }
+    history.push({ simTime: frame.sim_time_s, frame })
+    if (history.length > 25) {
+      history.shift()
+    }
+  }, [frame])
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -171,7 +334,7 @@ export default function SimCanvas({
     }
   }
 
-  const render = useCallback(() => {
+  const render = useCallback((displayFrame?: SimFrame) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -196,13 +359,16 @@ export default function SimCanvas({
     drawGrid(ctx, cfg)
     drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
 
-    if (frame) {
-      drawTrafficSignals(ctx, frame.signals, cfg, frame.vehicles, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
-      frame.vehicles.forEach((v) => drawVehicle(ctx, v, cfg))
+    const f = displayFrame ?? frame
+    if (f) {
+      const vehiclesToDraw = f.vehicles
 
-      // Highlight selected vehicle on canvas
+      drawTrafficSignals(ctx, f.signals, cfg, vehiclesToDraw, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
+      vehiclesToDraw.forEach((v) => drawVehicle(ctx, v, cfg))
+
+      // Highlight selected vehicle on canvas (at interpolated position)
       if (selectedVehicleId) {
-        const selectedVeh = frame.vehicles.find(v => v.id === selectedVehicleId)
+        const selectedVeh = vehiclesToDraw.find(v => v.id === selectedVehicleId)
         if (selectedVeh) {
           const [vx, vy] = worldToCanvas(selectedVeh.x, selectedVeh.y, cfg)
           ctx.save()
@@ -219,18 +385,18 @@ export default function SimCanvas({
       }
 
       // Draw pedestrian agents (Indian traffic)
-      if (frame.pedestrians) {
-        frame.pedestrians.forEach((p) => drawPedestrian(ctx, p, cfg))
+      if (f.pedestrians) {
+        f.pedestrians.forEach((p) => drawPedestrian(ctx, p, cfg))
       }
       // Phase HUD stays — it's compact and shows signal timing at a glance
-      frame.signals.forEach((s) => drawSignalIndicator(ctx, s, cfg, intersectionType))
+      f.signals.forEach((s) => drawSignalIndicator(ctx, s, cfg, intersectionType))
       drawAdverseOverlay(ctx, adverseEvents, cfg)
       // drawStats intentionally removed — t/moving/waiting shown in side panel
     }
 
     // ── Model label + policy mode badge ──────────────────────────────────────
     if (label) {
-      const policyMode = frame?.policy_mode ?? null
+      const policyMode = f?.policy_mode ?? null
       const isRL = label.includes('RL') || label.includes('PPO') || label.includes('DQN') ||
         label.includes('SAC') || label.includes('A2C') || label.includes('Custom')
 
@@ -259,7 +425,7 @@ export default function SimCanvas({
                 'rgba(143,184,206,0.28)'
 
       // Badge text: append the policy mode so it's unambiguous
-      const replayEp = (frame as any)?.replay_episode
+      const replayEp = (f as any)?.replay_episode
       const modeSuffix =
         policyMode === 'model' ? '  ·  ⚡ MODEL ACTIVE' :
           policyMode === 'replay' ? `  ·  🎬 REPLAY EP${replayEp ?? ''}` :
@@ -310,9 +476,84 @@ export default function SimCanvas({
     ctx.restore()  // pop the dpr scale
   }, [frame, adverseEvents, activeWidth, activeHeight, showTrails, label, trainedModels, intersectionType, nLanes, laneConfig, selectedVehicleId])
 
+  // ── Always keep renderRef pointing to the latest render function ──────────
+  renderRef.current = render
+
+  // ── 60 fps requestAnimationFrame loop with exponential smoothing ──────────
+  // Each vehicle's display position smoothly chases its data position every
+  // tick using framerate-independent exponential approach:  factor = 1 - e^(-k·dt).
+  // This eliminates the "freeze at target" problem of linear interpolation.
+  // ── 60 fps requestAnimationFrame loop with client-side history interpolation ──
   useLayoutEffect(() => {
-    render()
-  }, [render])
+    const loop = (time: number) => {
+      const dtReal = lastRafTimeRef.current > 0
+        ? Math.min((time - lastRafTimeRef.current) / 1000, 0.1)
+        : 0
+      lastRafTimeRef.current = time
+
+      const history = framesHistoryRef.current
+      if (history.length === 0) {
+        renderRef.current?.(undefined)
+        rafIdRef.current = requestAnimationFrame(loop)
+        return
+      }
+
+      if (history.length < 2) {
+        renderRef.current?.(history[0].frame)
+        rafIdRef.current = requestAnimationFrame(loop)
+        return
+      }
+
+      const latestFrame = history[history.length - 1].frame
+      const simTimeGap = simTimeGapRef.current
+
+      // Target delay of 1.5 frame intervals to guarantee we have frames to interpolate between
+      const delay = 1.5 * simTimeGap
+      const T_target = latestFrame.sim_time_s - delay
+
+      if (T_renderRef.current === null) {
+        T_renderRef.current = T_target
+      }
+
+      const isRunning = isRunningRef.current
+      const isPaused = isPausedRef.current
+      const speedValue = speedValueRef.current
+      const speedMult = (isRunning && !isPaused) ? (speedValue ?? 1) : 0
+
+      if (dtReal > 0 && speedMult > 0) {
+        const error = T_target - T_renderRef.current
+        // If error is too large (e.g. simulation reset or seek), snap directly to avoid lagging/rubber-banding
+        if (Math.abs(error) > 3 * simTimeGap) {
+          T_renderRef.current = T_target
+        } else {
+          // P-controller for smooth clock speed adjustment
+          const kp = 2.0 / Math.max(simTimeGap, 0.1)
+          const adjustment = 1.0 + kp * error
+          const clampedAdjustment = Math.max(0.1, Math.min(3.0, adjustment))
+          T_renderRef.current += dtReal * speedMult * clampedAdjustment
+        }
+      }
+
+      // Clamp render cursor strictly to bounds of history range
+      const tRender = Math.max(
+        history[0].simTime,
+        Math.min(latestFrame.sim_time_s, T_renderRef.current ?? T_target)
+      )
+      T_renderRef.current = tRender
+
+      const interpFrame = interpolateFrame(history, tRender)
+      if (interpFrame) {
+        renderRef.current?.(interpFrame)
+      } else {
+        renderRef.current?.(latestFrame)
+      }
+
+      rafIdRef.current = requestAnimationFrame(loop)
+    }
+
+    rafIdRef.current = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(rafIdRef.current)
+  }, []) // empty deps — loop runs for the component lifetime
 
   const canvas = (
     <canvas

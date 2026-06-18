@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   LineChart,
@@ -264,7 +264,6 @@ export default function Analyzer() {
     <div className="app-page">
       <div className="app-container space-y-4">
         <div className="flex items-center gap-4">
-          <Link to="/simulations" className="text-slate-400 hover:text-cyan-300 text-sm">Back to Simulations</Link>
           <h1 className="app-title">Analyzer</h1>
           <span className="text-xs text-slate-400">
             {status ? `${status.sim_status} | t=${Math.round(status.sim_time)}s` : 'idle'}

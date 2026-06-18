@@ -62,12 +62,12 @@ class SimulationConfig:
     algorithm: str = "PPO"                      # PPO|A2C|DQN|SAC_Discrete
     reward_function: str = "min_wait"           # min_wait|max_throughput|min_stops|min_queue|balanced|custom
     training_episodes: int = 500
-    ppo_epochs: int = 500
+    ppo_epochs: int = 250
     action_frequency_seconds: int = 5
     observation_window: int = 1
     normalise_observations: bool = True
     learning_rate: float = 3e-4
-    hidden_layer_size: int = 64                 # 32|64|128|256
+    hidden_layer_size: int = 128                # 32|64|128|256
     discount_factor: float = 0.99
     random_seed: int = 42
     use_transfer_learning: bool = False

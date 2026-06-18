@@ -13,7 +13,7 @@ function getSocket(): Socket {
   if (!_socket) {
     _socket = io({
       // connects to same origin (proxied by vite dev server → Flask backend)
-      transports: ['websocket', 'polling'],
+      transports: ['polling'],
       autoConnect: false,
       reconnectionDelay: 300,        // try reconnecting quickly on restore
       reconnectionDelayMax: 2000,    // cap at 2s so it never feels "stuck"
@@ -33,8 +33,26 @@ const _EMA_ALPHA = 0.2
 interface LiveTracker {
   prevIds: Set<string>
   prevWaitMap: Map<string, number>  // id → wait_time at previous frame
+  prevTypeMap: Map<string, string>  // id → type_id at previous frame
   exited: number
-  totalWait: number               // cumulative wait of all exited vehicles (sim-seconds)
+  totalWait: number                 // cumulative wait of all exited vehicles (sim-seconds)
+  totalFuelMl: number
+  totalCarbonG: number
+  sumGreenUtil?: number             // sum of green utilisation across frames
+  frameCount?: number               // count of frames processed
+}
+
+const VEHICLE_PROFILES: Record<string, { idleFuelLPerHr: number; co2FactorKgPerL: number }> = {
+  two_wheeler: { idleFuelLPerHr: 0.35, co2FactorKgPerL: 2.31 },
+  car: { idleFuelLPerHr: 0.80, co2FactorKgPerL: 2.31 },
+  ev_scooter: { idleFuelLPerHr: 0.0, co2FactorKgPerL: 0.0 },
+  auto_rickshaw: { idleFuelLPerHr: 0.55, co2FactorKgPerL: 1.89 },
+  e_rickshaw: { idleFuelLPerHr: 0.0, co2FactorKgPerL: 0.0 },
+  cab: { idleFuelLPerHr: 0.85, co2FactorKgPerL: 2.31 },
+  delivery_bike: { idleFuelLPerHr: 0.38, co2FactorKgPerL: 2.31 },
+  tsrtc_bus: { idleFuelLPerHr: 1.80, co2FactorKgPerL: 2.68 },
+  school_bus: { idleFuelLPerHr: 1.60, co2FactorKgPerL: 2.68 },
+  truck: { idleFuelLPerHr: 2.10, co2FactorKgPerL: 2.68 },
 }
 const _liveTrackers = new Map<string, LiveTracker>()
 
@@ -80,6 +98,14 @@ function _episodeToMetrics(ep: TrainingEpisodePayload): EpisodeMetrics {
   _tputEma = _tputEma === null ? rawTput : _EMA_ALPHA * rawTput + (1 - _EMA_ALPHA) * _tputEma
   const wait = _waitEma
   const tput = Math.round(_tputEma)
+
+  const fuelIndex = ep.metrics && 'fuel_index_ml_veh' in ep.metrics
+    ? (ep.metrics as any).fuel_index_ml_veh
+    : _ECON.idleFuelLPerHr * (wait / 3.6)
+  const carbonIndex = ep.metrics && 'carbon_index_g_veh' in ep.metrics
+    ? (ep.metrics as any).carbon_index_g_veh
+    : fuelIndex * _ECON.co2KgPerL
+
   return {
     episode_id: String(ep.episode),
     session_id: ep.session_id,
@@ -101,6 +127,8 @@ function _episodeToMetrics(ep: TrainingEpisodePayload): EpisodeMetrics {
     avg_phase_duration_s: 28,
     adverse_events_count: 0,
     total_delay_veh_hrs: (wait * tput) / 3600,
+    fuel_index_ml_veh: fuelIndex,
+    carbon_index_g_veh: carbonIndex,
   }
 }
 
@@ -201,6 +229,8 @@ function _baselineMetrics(sessionId: string, wait = 85, tput = 260): EpisodeMetr
     avg_phase_duration_s: 30,
     adverse_events_count: 0,
     total_delay_veh_hrs: (safeWait * safeTput) / 3600,
+    fuel_index_ml_veh: _ECON.idleFuelLPerHr * (safeWait / 3.6),
+    carbon_index_g_veh: _ECON.idleFuelLPerHr * (safeWait / 3.6) * _ECON.co2KgPerL,
   }
 }
 
@@ -213,34 +243,51 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
   const tracker: LiveTracker = _liveTrackers.get(trackerKey) ?? {
     prevIds: new Set<string>(),
     prevWaitMap: new Map<string, number>(),
+    prevTypeMap: new Map<string, string>(),
     exited: 0,
     totalWait: 0,
+    totalFuelMl: 0,
+    totalCarbonG: 0,
+    sumGreenUtil: 0,
+    frameCount: 0,
   }
 
   const currIds = new Set<string>(vehicles.map((v) => String(v.id)))
 
   // For each vehicle that was on-screen last frame but isn't now (i.e. exited),
   // capture its final accumulated wait_time from the previous frame snapshot.
-  // This is SPEED-INVARIANT: wait_time is in sim-seconds and doesn't depend on
-  // how many real-seconds passed — a vehicle waiting through a 28s red phase
-  // always exits with wait_time ≈ 28 whether the sim ran at 1× or 20×.
   tracker.prevIds.forEach((id) => {
     if (!currIds.has(id)) {
       tracker.exited += 1
-      tracker.totalWait += tracker.prevWaitMap.get(id) ?? 0
+      const wait = tracker.prevWaitMap.get(id) ?? 0
+      tracker.totalWait += wait
+
+      const typeId = tracker.prevTypeMap.get(id) ?? 'car'
+      const profile = VEHICLE_PROFILES[typeId] || VEHICLE_PROFILES.car
+      const fuelMl = profile.idleFuelLPerHr * (wait / 3.6)
+      const carbonG = fuelMl * profile.co2FactorKgPerL
+
+      tracker.totalFuelMl += fuelMl
+      tracker.totalCarbonG += carbonG
     }
   })
 
-  // Update the wait map for vehicles currently on screen
+  // Update the wait and type maps for vehicles currently on screen
   tracker.prevWaitMap = new Map(vehicles.map((v) => [String(v.id), v.wait_time ?? 0]))
+  tracker.prevTypeMap = new Map(vehicles.map((v) => [String(v.id), String(v.type_id)]))
   tracker.prevIds = currIds
+
+  const moving = vehicles.filter((v) => (v.speed ?? 0) >= 0.5).length
+  const util = total > 0 ? Math.min(1, Math.max(0, moving / total)) : 0
+  tracker.sumGreenUtil = (tracker.sumGreenUtil ?? 0) + util
+  tracker.frameCount = (tracker.frameCount ?? 0) + 1
+
   _liveTrackers.set(trackerKey, tracker)
 
   const simTime = Math.max(Number(frame.sim_time_s ?? 0), 0.001)
   const tput = Math.round((tracker.exited / simTime) * 3600)
 
   // Cumulative average — use backend's system-wide average wait if available
-  // to correctly include queue/backlog and canvas delay. Otherwise fallback.
   const avgWait = frame.stats !== undefined && frame.stats !== null
     ? frame.stats.avg_wait_s
     : (tracker.exited > 0 ? tracker.totalWait / tracker.exited : 0)
@@ -249,12 +296,12 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
     ? frame.stats.throughput_vph
     : tput
 
-  const moving = vehicles.filter((v) => (v.speed ?? 0) >= 0.5).length
-  const util = total > 0 ? Math.min(1, Math.max(0, moving / total)) : 0
+  const avgGreenUtil = tracker.frameCount && tracker.frameCount > 0
+    ? tracker.sumGreenUtil / tracker.frameCount
+    : util
 
   // Signal Coordination = share of vehicles that progressed through without a
-  // meaningful stop (wait_time < 2s). High when greens align with platoons;
-  // a fixed-time baseline scores lower because more vehicles hit a red.
+  // meaningful stop (wait_time < 2s).
   const freeFlowing = vehicles.filter((v) => (v.wait_time ?? 0) < 2.0).length
   const eff = total > 0 ? Math.min(1, Math.max(0, freeFlowing / total)) : 0
 
@@ -287,7 +334,7 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
     per_type: {},
     per_arm: perArm,
     throughput_vph: systemTput,
-    green_utilisation: util,
+    green_utilisation: avgGreenUtil,
     collision_count: Array.isArray((frame as unknown as { collision_ids?: unknown[] }).collision_ids)
       ? ((frame as unknown as { collision_ids: unknown[] }).collision_ids.length)
       : 0,
@@ -296,6 +343,8 @@ function _computeLiveSimulationMetrics(key: string, frame: SimFrame): EpisodeMet
     avg_phase_duration_s: Number(frame.signals?.[0]?.duration_s ?? 0),
     adverse_events_count: 0,
     total_delay_veh_hrs: (avgWait * systemTput) / 3600,
+    fuel_index_ml_veh: tracker.exited > 0 ? tracker.totalFuelMl / tracker.exited : _ECON.idleFuelLPerHr * (avgWait / 3.6),
+    carbon_index_g_veh: tracker.exited > 0 ? tracker.totalCarbonG / tracker.exited : (_ECON.idleFuelLPerHr * (avgWait / 3.6)) * _ECON.co2KgPerL,
   }
 }
 
@@ -306,8 +355,18 @@ function registerGlobalListeners(socket: Socket) {
   _listenersRegistered = true
 
   // Server → Client event handlers
-  socket.on('server:hello', (data: { version: string; status: string }) => {
+  socket.on('server:hello', (data: {
+    version: string
+    status: string
+    runtime?: {
+      device?: 'cpu' | 'cuda'
+      torch_version?: string | null
+      cuda_version?: string | null
+      device_name?: string | null
+    }
+  }) => {
     console.log('[Socket] Connected:', data)
+    useSimulationStore.getState().setRuntimeInfo(data.runtime ?? null)
   })
 
   socket.on('sim:frame:baseline', (frame: SimFrame) => {
@@ -679,12 +738,15 @@ function registerGlobalListeners(socket: Socket) {
     sessionStore.setConverged(false)
   })
 
-  socket.on('training:stopped', (data?: { session_id?: string }) => {
+  socket.on('training:stopped', (data?: { session_id?: string; done?: boolean }) => {
     const simStore = useSimulationStore.getState()
     const sessionStore = useSessionStore.getState()
     const activeSid = simStore.sessionId
     if (!activeSid || (data?.session_id && data.session_id !== activeSid)) return
     sessionStore.setTraining(false)
+    if (data?.done) {
+      sessionStore.setConverged(true)
+    }
 
     // Mark the model that was actually being trained — not whatever tab is now
     // viewed. trainingModelKey is the source of truth set when training began.

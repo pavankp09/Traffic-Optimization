@@ -1394,9 +1394,9 @@ function ScenarioStudioModal({
                           key={opt.id}
                           type="button"
                           onClick={() => setDurationChoice(opt.id as any)}
-                          className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                            ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                            : 'text-slate-500 hover:text-slate-300'
+                          className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all border ${isActive
+                            ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
+                            : 'border-transparent text-slate-500 hover:text-slate-300'
                             }`}
                         >
                           {opt.label}
@@ -1451,9 +1451,9 @@ function ScenarioStudioModal({
                           key={opt.id}
                           type="button"
                           onClick={() => setDrivingBehavior(opt.id as any)}
-                          className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                            ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                            : 'text-slate-500 hover:text-slate-300'
+                          className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all border ${isActive
+                            ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
+                            : 'border-transparent text-slate-500 hover:text-slate-300'
                             }`}
                         >
                           {opt.label}
@@ -1555,9 +1555,9 @@ function SectionL({
                 key={num}
                 type="button"
                 onClick={() => updateSimConfig({ n_lanes: num, lane_config: undefined })}
-                className={`flex-grow py-1.5 rounded-lg text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                    : 'text-slate-555 opacity-40 hover:text-slate-300'
+                className={`flex-grow py-1.5 rounded-lg text-center text-[10px] font-mono font-semibold transition-all border ${isActive
+                    ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
                   }`}
               >
                 {num}

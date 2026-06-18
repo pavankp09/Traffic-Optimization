@@ -827,9 +827,9 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   key={opt.id}
                   type="button"
                   onClick={() => setDurationChoice(opt.id as any)}
-                  className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                    : 'text-slate-500 hover:text-slate-300'
+                  className={`flex-1 py-2 rounded-lg text-center text-[10px] font-mono font-semibold transition-all border ${isActive
+                    ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
                     }`}
                 >
                   {opt.label}
@@ -884,9 +884,9 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
                   key={opt.id}
                   type="button"
                   onClick={() => setDrivingBehavior(opt.id as any)}
-                  className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all ${isActive
-                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
-                    : 'text-slate-500 hover:text-slate-300'
+                  className={`flex-1 py-2 text-center text-[10px] font-mono font-semibold transition-all border ${isActive
+                    ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
                     }`}
                 >
                   {opt.label}
@@ -978,11 +978,11 @@ function SectionL({ isBaseline }: { isBaseline: boolean }) {
                 type="button"
                 disabled={isSyncActive}
                 onClick={() => updateSimConfig({ n_lanes: num, lane_config: undefined })}
-                className={`flex-grow py-2 rounded-lg text-center text-[11px] font-mono font-semibold transition-all ${isActive
-                    ? 'bg-white/[0.06] border border-white/[0.08] text-slate-100 shadow'
+                className={`flex-grow py-2 rounded-lg text-center text-[11px] font-mono font-semibold transition-all border ${isActive
+                    ? 'bg-white/[0.06] border-white/[0.08] text-slate-100 shadow'
                     : isSyncActive
-                      ? 'text-slate-655 opacity-40 cursor-not-allowed'
-                      : 'text-slate-500 hover:text-slate-300'
+                      ? 'border-transparent text-slate-655 opacity-40 cursor-not-allowed'
+                      : 'border-transparent text-slate-500 hover:text-slate-300'
                   }`}
               >
                 {num} {num === 3 ? 'Lanes (Std)' : num === 1 ? 'Lane' : 'Lanes'}

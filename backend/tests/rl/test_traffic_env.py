@@ -221,9 +221,25 @@ def test_mock_env_reward_parts_in_info():
     _, _, _, _, info = env.step(0)
     assert "reward_parts" in info, "info must contain reward_parts"
     parts = info["reward_parts"]
-    for key in ["delta_queue", "flow_eff", "switch", "imbalance", "starvation", "baseline_gap", "all_red"]:
+    for key in ["delta_queue", "flow_eff", "switch", "imbalance", "wrong_axis", "starvation", "baseline_gap", "all_red"]:
         assert key in parts, f"reward_parts missing key: {key}"
         assert isinstance(parts[key], float), f"{key} must be float"
+
+
+def test_mock_env_penalizes_serving_empty_axis_while_cross_axis_is_queued():
+    from backend.rl.mock_env import make_mock_env
+    from backend.config import SimulationConfig
+
+    env = make_mock_env(SimulationConfig(), seed=0)
+    env.reset()
+    env._queue = {"N": 0.0, "S": 0.0, "E": 20.0, "W": 20.0}
+    env._prev_queue = dict(env._queue)
+    env._arrival_rate = {"N": 0.0, "S": 0.0, "E": 0.0, "W": 0.0}
+
+    _, _, _, _, info = env.step(0)  # phase 0 serves N+S
+
+    assert info["reward_parts"]["wrong_axis"] <= -1.9
+
 
 def test_obs_labels_length():
     from backend.rl.mock_env import OBS_LABELS

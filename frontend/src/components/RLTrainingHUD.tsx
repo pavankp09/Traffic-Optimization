@@ -18,37 +18,37 @@ const METADATA: Record<
 > = {
   rl1: {
     label: 'RL Agent 1 (PPO)',
-    color: '#22d3ee', // cyan
-    indicatorColor: 'bg-cyan-400',
-    shadow: 'shadow-cyan-500/20',
+    color: '#8fb8ce',
+    indicatorColor: 'bg-sky-400',
+    shadow: 'shadow-sky-500/20',
     description: 'On-policy proximal policy optimization agent calibrated for stable and robust splits.',
   },
   rl2: {
     label: 'RL Agent 2 (DQN)',
-    color: '#c084fc', // purple
-    indicatorColor: 'bg-purple-400',
-    shadow: 'shadow-purple-500/20',
+    color: '#9fa8c6',
+    indicatorColor: 'bg-indigo-300',
+    shadow: 'shadow-indigo-500/20',
     description: 'Off-policy value-based Q-network designed to optimize immediate queue clearances rapidly.',
   },
   rl3: {
     label: 'RL Agent 3 (SAC)',
-    color: '#34d399', // emerald
-    indicatorColor: 'bg-emerald-400',
+    color: '#97b9a7',
+    indicatorColor: 'bg-emerald-300',
     shadow: 'shadow-emerald-500/20',
     description: 'Continuous entropy-regularized actor-critic model ensuring conservative, highly stable green holds.',
   },
   rl4: {
     label: 'RL Agent 4 (A2C)',
-    color: '#f87171', // red
-    indicatorColor: 'bg-red-400',
-    shadow: 'shadow-red-500/20',
+    color: '#b8a2a2',
+    indicatorColor: 'bg-rose-300',
+    shadow: 'shadow-rose-500/20',
     description: 'Synchronous advantage actor-critic executing quick micro-corrections based on live queues.',
   },
   custom: {
     label: 'Custom RL Agent',
-    color: '#6366f1', // indigo
-    indicatorColor: 'bg-indigo-400',
-    shadow: 'shadow-indigo-500/20',
+    color: '#a6aec2',
+    indicatorColor: 'bg-slate-300',
+    shadow: 'shadow-slate-500/20',
     description: 'Fully customizable neural model driven by user-defined reward formulations and hyperparameters.',
   },
 }
@@ -90,6 +90,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
 
   const meta = METADATA[modelKey] ?? METADATA.rl1
   const [pulseSpeed, setPulseSpeed] = useState('3s')
+  const [isHovered, setIsHovered] = useState(false)
 
   useEffect(() => {
     if (isTraining) {
@@ -103,19 +104,22 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
   const latestEpisode = episodes.length > 0 ? episodes[episodes.length - 1] : null
   const currentEpNum = latestEpisode?.episode ?? 0
   const resolvedTrainingMode = simConfig.training_mode ?? trainingMode
-  
+
   const totalSteps = Number(simConfig.total_timesteps ?? 20000)
-  let totalEpisodes = 500
+  const explicitEpisodeCap = Number(simConfig.training_episodes ?? 0)
+  let totalEpisodes = explicitEpisodeCap > 0 ? explicitEpisodeCap : 500
   let stepsPerEpText = '40 steps/ep'
-  if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
-    totalEpisodes = Math.round(totalSteps / 40)
-    stepsPerEpText = '40 steps/ep'
-  } else if (resolvedTrainingMode === 'stage3') {
-    totalEpisodes = Math.round(totalSteps / 360)
-    stepsPerEpText = '360 steps/ep'
-  } else if (resolvedTrainingMode === 'stage4') {
-    totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360)
-    stepsPerEpText = 'mixed steps/ep'
+  if (explicitEpisodeCap <= 0) {
+    if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
+      totalEpisodes = Math.round(totalSteps / 40)
+      stepsPerEpText = '40 steps/ep'
+    } else if (resolvedTrainingMode === 'stage3') {
+      totalEpisodes = Math.round(totalSteps / 360)
+      stepsPerEpText = '360 steps/ep'
+    } else if (resolvedTrainingMode === 'stage4') {
+      totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360)
+      stepsPerEpText = 'mixed steps/ep'
+    }
   }
   const progressPct = Math.min(100, (currentEpNum / totalEpisodes) * 100)
 
@@ -157,7 +161,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
             }`}
           />
           <div>
-            <h3 className="text-sm font-black font-mono uppercase tracking-widest text-gray-200">
+            <h3 className="text-sm font-black font-mono uppercase tracking-widest" style={{ color: meta.color }}>
               {meta.label} Setup
             </h3>
             <p className="text-[10px] text-gray-500 font-mono">
@@ -183,7 +187,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
           </span>
         ) : (
           <span className="text-[10px] font-bold font-mono px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
-            Retraining Required
+            Training Required
           </span>
         )}
       </div>
@@ -199,7 +203,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                 Neural Weights Uninitialized
               </h4>
               <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                {meta.description} To initialize learning, configure Stage parameters in the <strong>Config</strong> panel, then click <strong>Start Training</strong> in the dashboard control bar.
+                {meta.description} To initialize learning, configure Stage parameters in the <strong>Config</strong> panel, then click <strong>Start New Training</strong> below.
               </p>
             </div>
 
@@ -219,7 +223,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-bold">Ready</span>
-                <span>MLP Nodes: {simConfig.hidden_layer_size ?? 64}x{simConfig.hidden_layer_size ?? 64}</span>
+                <span>MLP Nodes: {simConfig.hidden_layer_size ?? 128}x{simConfig.hidden_layer_size ?? 128}</span>
               </div>
             </div>
 
@@ -268,6 +272,35 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                 )}
               </div>
             </div>
+
+            {/* Start New Training button: premium compact centered outlined style matching resolvedBaseline box */}
+            <div className="w-full flex justify-center pt-2">
+              {(() => {
+                const boxThemeColor = resolvedBaseline ? '#34d399' : '#f59e0b'
+                return (
+                  <button
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border transition-all duration-300 font-mono font-bold text-[10px] tracking-[0.2em] uppercase animate-fadeIn group cursor-pointer"
+                    style={{
+                      borderColor: isHovered ? `${boxThemeColor}80` : `${boxThemeColor}30`,
+                      backgroundColor: isHovered ? `${boxThemeColor}2e` : `${boxThemeColor}0f`,
+                      color: isHovered ? '#ffffff' : boxThemeColor,
+                      boxShadow: isHovered ? `0 0 15px ${boxThemeColor}40` : 'none',
+                    }}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                    onClick={() => {
+                      useSimulationStore.getState().setConfigModalMode('training')
+                      useSimulationStore.getState().setConfigModalOpen(true)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 transition-transform duration-300 group-hover:scale-110 fill-current" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    Start New Training
+                  </button>
+                )
+              })()}
+            </div>
           </div>
         ) : (
           /* ACTIVE TRAINING PROGRESS PANEL WITH PULSING BRAIN */
@@ -305,7 +338,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                   y1="60"
                   x2="120"
                   y2="80"
-                  stroke="#c084fc"
+                  stroke="#9fa8c6"
                   strokeWidth="0.8"
                   strokeOpacity="0.4"
                   className="synapse-line"
@@ -315,7 +348,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                   y1="100"
                   x2="120"
                   y2="125"
-                  stroke="#34d399"
+                  stroke="#97b9a7"
                   strokeWidth="0.8"
                   strokeOpacity="0.4"
                   className="synapse-line"
@@ -325,7 +358,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                   y1="140"
                   x2="120"
                   y2="80"
-                  stroke="#f59e0b"
+                  stroke="#b8a2a2"
                   strokeWidth="0.8"
                   strokeOpacity="0.4"
                   className="synapse-line"
@@ -347,7 +380,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                   y1="80"
                   x2="220"
                   y2="80"
-                  stroke="#c084fc"
+                  stroke="#9fa8c6"
                   strokeWidth="0.8"
                   strokeOpacity="0.4"
                   className="synapse-line"
@@ -357,7 +390,7 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
                   y1="125"
                   x2="220"
                   y2="120"
-                  stroke="#34d399"
+                  stroke="#97b9a7"
                   strokeWidth="0.8"
                   strokeOpacity="0.4"
                   className="synapse-line"
@@ -365,9 +398,9 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
 
                 {/* Input Nodes (Physical groups) */}
                 <circle cx="20" cy="20" r="5" fill={meta.color} className="node-glow" />
-                <circle cx="20" cy="60" r="5" fill="#c084fc" className="node-glow" />
-                <circle cx="20" cy="100" r="5" fill="#34d399" className="node-glow" />
-                <circle cx="20" cy="140" r="5" fill="#f59e0b" className="node-glow" />
+                <circle cx="20" cy="60" r="5" fill="#9fa8c6" className="node-glow" />
+                <circle cx="20" cy="100" r="5" fill="#97b9a7" className="node-glow" />
+                <circle cx="20" cy="140" r="5" fill="#b8a2a2" className="node-glow" />
 
                 {/* Hidden Layer Nodes */}
                 <circle cx="120" cy="35" r="4.5" fill="#1f2937" stroke="#4b5563" strokeWidth="1.5" />
@@ -376,8 +409,8 @@ export default function RLTrainingHUD({ modelKey, trainingMode = 'stage1', onTra
 
                 {/* Output Decision Nodes */}
                 <circle cx="220" cy="40" r="5.5" fill={meta.color} className="node-glow" />
-                <circle cx="220" cy="80" r="5.5" fill="#c084fc" className="node-glow" />
-                <circle cx="220" cy="120" r="5.5" fill="#34d399" className="node-glow" />
+                <circle cx="220" cy="80" r="5.5" fill="#9fa8c6" className="node-glow" />
+                <circle cx="220" cy="120" r="5.5" fill="#97b9a7" className="node-glow" />
 
                 {/* Glowing Live Observation Text */}
                 <text x="30" y="23" fill="#e5e7eb" fontSize="7" fontWeight="bold" fontFamily="monospace">

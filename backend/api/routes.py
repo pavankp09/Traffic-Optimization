@@ -513,6 +513,8 @@ def _make_placeholder_episode_metrics(session_id: str, e: dict):
         avg_phase_duration_s=0.0,
         adverse_events_count=0,
         total_delay_veh_hrs=0.0,
+        fuel_index_ml_veh=float(e.get("fuel_index_ml_veh") or 0.0),
+        carbon_index_g_veh=float(e.get("carbon_index_g_veh") or 0.0),
     )
 
 
@@ -993,25 +995,25 @@ def list_simulations_addon():
     page = max(1, request.args.get("page", 1, type=int))
     per_page = request.args.get("per_page", 20, type=int)
     per_page = max(1, min(per_page, 100))
+    q = request.args.get("q", "").strip().lower()
 
     store = _get_store()
     sessions = store.list_sessions(limit=1000)
-    total = len(sessions)
-    total_pages = max(1, math.ceil(total / per_page))
-    start = (page - 1) * per_page
-    end = start + per_page
-    items = sessions[start:end]
 
     sims = []
-    for row in items:
-        session_id = str(row.get("notes") or row.get("id"))
-        runtime = _runtime_or_fallback(session_id, row)
+    for row in sessions:
+        notes = row.get("notes")
+        db_id = row.get("id")
+        orig_session_id = str(notes or db_id)
+        unique_session_id = f"{notes}-{db_id}" if notes else str(db_id)
+
+        runtime = _runtime_or_fallback(orig_session_id, row)
         created_at = row.get("created_at")
         created_str = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
         sim_cfg = row.get("sim_config") or {}
         sims.append(
             {
-                "id": session_id,
+                "id": unique_session_id,
                 "created_at": created_str,
                 "intersection": sim_cfg.get("intersection_type", "four_way"),
                 "total_vehicles": runtime.get("exited", 0),
@@ -1021,13 +1023,25 @@ def list_simulations_addon():
             }
         )
 
+    if q:
+        sims = [
+            s for s in sims
+            if q in s["id"].lower() or q in s["intersection"].lower() or q in s["status"].lower()
+        ]
+
+    total = len(sims)
+    total_pages = max(1, math.ceil(total / per_page))
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_sims = sims[start:end]
+
     return jsonify(
         {
             "page": page,
             "per_page": per_page,
             "total": total,
             "total_pages": total_pages,
-            "sims": sims,
+            "sims": paginated_sims,
         }
     )
 

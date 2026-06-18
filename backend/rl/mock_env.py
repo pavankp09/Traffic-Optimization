@@ -64,7 +64,7 @@ _RATE_NORM = 1.0             # normalisation cap for per-arm arrival rate (veh/s
 _EPISODE_DECISIONS = 40      # agent decisions per episode
 # Starvation is measured in *decisions* here (not 0.5 s sim-steps like the SUMO env),
 # so it uses a small episode-appropriate threshold rather than config.starvation_threshold_steps.
-_STARVATION_DECISIONS = 12   # an arm unserved for this many decisions is "starved"
+_STARVATION_DECISIONS = 6    # an arm unserved for this many decisions is "starved"
                              # must be > a full phase cycle (N+S then E+W = 2 decisions minimum)
 _ALL_RED_PHASE = 4           # phase index that serves no arm
 
@@ -264,6 +264,10 @@ class MockTrafficEnv(gym.Env):
         # All-red penalty: explicitly discourage parking on phase 4.
         all_red_penalty = 1.0 if phase == _ALL_RED_PHASE else 0.0
 
+        served_q_before = sum(self._prev_queue[a] for a in green)
+        red_q_before = sum(self._prev_queue[a] for a in ARMS if a not in green)
+        wrong_axis_penalty = max(0.0, red_q_before - served_q_before) / max(prev_total, 1.0)
+
         # Imbalance: fraction of total queue concentrated on one arm vs another.
         # Normalised by total_queue so it stays in [0,1] at any demand level.
         queues = list(self._queue.values())
@@ -295,6 +299,7 @@ class MockTrafficEnv(gym.Env):
             + self.sim_config.reward_wt_flow_efficiency * flow_efficiency  # efficient green use
             - self.sim_config.reward_wt_switch * lost_penalty         # penalise needless switching
             - self.sim_config.reward_wt_pressure * imbalance_penalty  # penalise arm starvation
+            - 2.0 * wrong_axis_penalty                                # penalise serving empty axes over queued ones
             - self.sim_config.reward_wt_starvation * starvation_penalty
             - 2.0 * all_red_penalty                                   # hard penalty for all-red
             - 0.8 * spillback_penalty
@@ -312,6 +317,7 @@ class MockTrafficEnv(gym.Env):
                 "flow_eff":     round(self.sim_config.reward_wt_flow_efficiency * flow_efficiency, 3),
                 "switch":       round(-self.sim_config.reward_wt_switch * lost_penalty, 3),
                 "imbalance":    round(-self.sim_config.reward_wt_pressure * imbalance_penalty, 3),
+                "wrong_axis":   round(-2.0 * wrong_axis_penalty, 3),
                 "starvation":   round(-self.sim_config.reward_wt_starvation * starvation_penalty, 3),
                 "baseline_gap": round(baseline_bonus, 3),
                 "all_red":      round(-2.0 * all_red_penalty, 3),

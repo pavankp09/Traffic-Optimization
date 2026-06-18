@@ -49,6 +49,8 @@ class Episode(Base):
     convergence_pct = Column(Float, default=0.0)
     phase_durations = Column(JSON, nullable=True)   # {phase_id: avg_duration_s}
     created_at = Column(DateTime, default=datetime.utcnow)
+    fuel_index_ml_veh = Column(Float, nullable=True)
+    carbon_index_g_veh = Column(Float, nullable=True)
 
     session = relationship("TrainingSession", back_populates="episodes")
 
@@ -73,6 +75,10 @@ class MetricRecord(Base):
     # Environmental
     fuel_saved_l = Column(Float, nullable=True)
     co2_avoided_kg = Column(Float, nullable=True)
+    fuel_index_rl_ml_veh = Column(Float, nullable=True)
+    fuel_index_baseline_ml_veh = Column(Float, nullable=True)
+    carbon_index_rl_g_veh = Column(Float, nullable=True)
+    carbon_index_baseline_g_veh = Column(Float, nullable=True)
 
     # Economic
     fuel_cost_saved_inr = Column(Float, nullable=True)
@@ -181,6 +187,26 @@ def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
                 conn.execute(text("ALTER TABLE vehicle_crossings ADD COLUMN algorithm VARCHAR(30)"))
             if "simulation_id" not in existing_cols:
                 conn.execute(text("ALTER TABLE vehicle_crossings ADD COLUMN simulation_id VARCHAR(50)"))
+
+            # Migration for episodes
+            columns_info_ep = conn.execute(text("PRAGMA table_info(episodes)")).fetchall()
+            existing_cols_ep = {col[1] for col in columns_info_ep}
+            if "fuel_index_ml_veh" not in existing_cols_ep:
+                conn.execute(text("ALTER TABLE episodes ADD COLUMN fuel_index_ml_veh FLOAT"))
+            if "carbon_index_g_veh" not in existing_cols_ep:
+                conn.execute(text("ALTER TABLE episodes ADD COLUMN carbon_index_g_veh FLOAT"))
+
+            # Migration for metric_records
+            columns_info_mr = conn.execute(text("PRAGMA table_info(metric_records)")).fetchall()
+            existing_cols_mr = {col[1] for col in columns_info_mr}
+            if "fuel_index_rl_ml_veh" not in existing_cols_mr:
+                conn.execute(text("ALTER TABLE metric_records ADD COLUMN fuel_index_rl_ml_veh FLOAT"))
+            if "fuel_index_baseline_ml_veh" not in existing_cols_mr:
+                conn.execute(text("ALTER TABLE metric_records ADD COLUMN fuel_index_baseline_ml_veh FLOAT"))
+            if "carbon_index_rl_g_veh" not in existing_cols_mr:
+                conn.execute(text("ALTER TABLE metric_records ADD COLUMN carbon_index_rl_g_veh FLOAT"))
+            if "carbon_index_baseline_g_veh" not in existing_cols_mr:
+                conn.execute(text("ALTER TABLE metric_records ADD COLUMN carbon_index_baseline_g_veh FLOAT"))
     except Exception:
         # Ignore errors if altering failed or db was in-memory/read-only
         pass

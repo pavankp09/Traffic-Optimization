@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 export default function PilotReport() {
@@ -39,8 +39,7 @@ export default function PilotReport() {
   return (
     <div className="app-page">
       <div className="app-container space-y-6">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="text-gray-400 hover:text-cyan-300 text-sm">Back to Home</Link>
+        <div className="flex items-center gap-3">
           <h1 className="app-title">Pilot Report</h1>
         </div>
 
