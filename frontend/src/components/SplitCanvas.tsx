@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSimulationStore } from '../store/simulationStore'
 import { useConfigStore } from '../store/configStore'
+import { useSimulation } from '../hooks/useSimulation'
 import SimCanvas from './SimCanvas'
 import SimLiveStatsPanel from './SimLiveStatsPanel'
 import { MODEL_METADATA } from '../utils/constants'
@@ -11,6 +12,11 @@ export default function SplitCanvas() {
   const selectedModels = useSimulationStore((s) => s.selectedModelsSplit)
   const simTimeS = useSimulationStore((s) => s.splitSimTimeS)
   const splitFrames = useSimulationStore((s) => s.splitFrames)
+  const splitIsRunning = useSimulationStore((s) => s.splitIsRunning)
+  const splitIsPaused = useSimulationStore((s) => s.splitIsPaused)
+  const splitSimSpeed = useSimulationStore((s) => s.splitSimSpeed)
+
+  const { setSpeed, resumeSimulation, pauseSimulation, stopSimulation } = useSimulation()
 
   const { simConfig } = useConfigStore()
   const maxDur = Number(simConfig.simulation_duration_s ?? 1800)
@@ -80,6 +86,9 @@ export default function SplitCanvas() {
                   height={size.h}
                   frameOverride={frame}
                   label={meta.label}
+                  isRunning={splitIsRunning}
+                  isPaused={splitIsPaused}
+                  speedValue={splitSimSpeed}
                 />
               </div>
             </div>
@@ -129,6 +138,12 @@ export default function SplitCanvas() {
                     label={meta.label}
                     responsive={true}
                     className="max-w-full"
+                    isRunning={splitIsRunning}
+                    isPaused={splitIsPaused}
+                    speedValue={splitSimSpeed}
+                    onSpeedChange={setSpeed}
+                    onPlayPause={splitIsPaused ? resumeSimulation : pauseSimulation}
+                    onStop={stopSimulation}
                   />
                 </div>
 

@@ -240,7 +240,7 @@ def shutil_which(command: str) -> str | None:
 
 def main() -> None:
     ensure_local_runtime()
-    print("[Traffic] Traffic Signal Optimizer starting...")
+    print("[Traffic] VeloCity starting...")
 
     fe_thread = threading.Thread(target=start_frontend, daemon=True)
     fe_thread.start()

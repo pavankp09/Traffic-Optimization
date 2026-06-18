@@ -912,7 +912,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
     }
   }, [emit, selectedEp, setPopupPaused])
 
-  const setPopupSimSpeed = useCallback((s: 1 | 5 | 10 | 20 | 50) => {
+  const setPopupSimSpeed = useCallback((s: 1 | 5 | 10 | 20) => {
     if (selectedEp === null) return
     setPopupSpeed(selectedEp, s)
     if (popupSidRef.current) {

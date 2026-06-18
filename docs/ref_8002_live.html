@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Low Traffic Analyzer</title>
+  <title>VeloCity Analyzer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -121,7 +121,7 @@
   <div class="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
     <a href="http://localhost:8001" target="_blank" class="flex items-center gap-3">
       <div class="w-2 h-2 rounded-full bg-white"></div>
-      <span class="font-semibold text-sm tracking-tight">Low Traffic Analyzer</span>
+      <span class="font-semibold text-sm tracking-tight">VeloCity Analyzer</span>
       <span class="text-muted text-xs hidden sm:block">· Phase 02: Analyse</span>
     </a>
     <div class="flex items-center gap-5 text-xs text-muted">
@@ -401,7 +401,7 @@
 </main>
 
 <footer class="border-t border-border py-4 px-6 flex justify-between items-center text-xs text-muted">
-  <span>Low Traffic Analyzer · Phase 02 of the Capture → Analyse → Calculate → Optimise pipeline · <span class="text-white font-semibold">v2</span></span>
+  <span>VeloCity Analyzer · Phase 02 of the Capture → Analyse → Calculate → Optimise pipeline · <span class="text-white font-semibold">v2</span></span>
   <span>DB-only · no simulator connection required</span>
 </footer>
 
@@ -626,7 +626,7 @@ async function runCalculate() {
       btn.textContent = 'Calculate Key Metrics';
     }
   } catch(e) {
-    alert('Could not reach LowTrafficCalculator at ' + CALC_URL + '\nMake sure it is running on port 5005.');
+    alert('Could not reach VeloCityCalculator at ' + CALC_URL + '\nMake sure it is running on port 5005.');
     btn.textContent = 'Calculate Key Metrics';
   }
   btn.disabled = false;
