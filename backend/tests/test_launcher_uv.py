@@ -44,9 +44,14 @@ def test_build_uv_install_commands_puts_torch_first():
     assert "--link-mode=copy" in cmds[0]
     assert "--index-url" in cmds[0]
     assert "https://download.pytorch.org/whl/cu128" in cmds[0]
-    assert cmds[0].index("torch") < cmds[0].index("flask==3.0.3")
-    assert cmds[0].index("torchvision") < cmds[0].index("flask==3.0.3")
-    assert cmds[0].index("torchaudio") < cmds[0].index("flask==3.0.3")
+    torch_idx = next(i for i, x in enumerate(cmds[0]) if x.startswith("torch=="))
+    torchvision_idx = next(i for i, x in enumerate(cmds[0]) if x.startswith("torchvision=="))
+    torchaudio_idx = next(i for i, x in enumerate(cmds[0]) if x.startswith("torchaudio=="))
+    flask_idx = cmds[0].index("flask==3.0.3")
+
+    assert torch_idx < flask_idx
+    assert torchvision_idx < flask_idx
+    assert torchaudio_idx < flask_idx
 
 
 def test_ensure_local_runtime_bootstraps_with_uv(monkeypatch, tmp_path):

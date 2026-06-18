@@ -31,3 +31,7 @@ models/A2C/backup
 
 # Virtual Environments
 .venv/
+
+# Temporary patch scripts
+patch_renderer.py
+

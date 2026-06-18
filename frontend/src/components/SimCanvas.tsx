@@ -578,7 +578,7 @@ export default function SimCanvas({
   )
 
   // If no speed controls requested and not responsive, render the bare canvas
-  if (!responsive && !onSpeedChange && !onPlayPause) return canvas
+  if (!responsive && !onSpeedChange && !onPlayPause && !(isRunning && !frame)) return canvas
 
   // isCompact: use cycling speed badge when canvas is too narrow for the full row
   // Below 680px, full bar (play+stop+5 speeds) would overlap the road arms
@@ -587,6 +587,35 @@ export default function SimCanvas({
   const mainContent = (
     <div style={{ position: 'relative', display: 'inline-block', width: activeWidth, height: activeHeight }}>
       {canvas}
+
+      {/* Starting/Loading Overlay */}
+      {isRunning && !frame && (
+        <div className="absolute inset-0 bg-[#07090d]/85 backdrop-blur-md flex flex-col items-center justify-center rounded-xl animate-fadeIn z-20">
+          <div className="flex flex-col items-center gap-4 text-center p-6 max-w-sm">
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              {/* Outer pulsing ring */}
+              <div className="absolute inset-0 rounded-full border-2 border-[#10b981]/15 animate-ping duration-1000" />
+              {/* Inner spinning ring */}
+              <div className="w-10 h-10 rounded-full border-2 border-slate-700/50 border-t-[#10b981] animate-spin" />
+              {/* Center static dot */}
+              <div className="absolute w-2 h-2 rounded-full bg-[#10b981]" />
+            </div>
+            
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-slate-100 tracking-wide uppercase font-mono">
+                Initializing Simulation
+              </h4>
+              <p className="text-xs text-slate-400 font-medium">
+                {label ? `Loading ${label}...` : 'Resolving runtime dependencies...'}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono italic animate-pulse">
+                Please wait (this may take a few seconds on first run)
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Speed + playback controller bar — rendered on top right of the canvas itself */}
       {isRunning && (onSpeedChange || onPlayPause) && (
