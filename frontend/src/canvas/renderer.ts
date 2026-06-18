@@ -642,28 +642,24 @@ export function drawIntersection(
     // N arm (southbound, heading = Math.PI = pointing south/down)
     const nArrowY = cy - STOP_PX - ARROW_OFFSET
     for (let idx = 0; idx < lanes.N; idx++) {
-      const type = idx === 0 ? 'straight_left' : idx === lanes.N - 1 ? 'straight_right' : 'straight'
-      drawTurnArrow(ctx, cx + laneCenterPx(idx), nArrowY, Math.PI, type)
+      drawTurnArrow(ctx, cx + laneCenterPx(idx), nArrowY, Math.PI, 'straight')
     }
     // S arm (northbound, heading = 0 = pointing north/up)
     if (!isTJunction) {
       const sArrowY = cy + STOP_PX + ARROW_OFFSET
       for (let idx = 0; idx < lanes.S; idx++) {
-        const type = idx === 0 ? 'straight_left' : idx === lanes.S - 1 ? 'straight_right' : 'straight'
-        drawTurnArrow(ctx, cx - laneCenterPx(idx), sArrowY, 0, type)
+        drawTurnArrow(ctx, cx - laneCenterPx(idx), sArrowY, 0, 'straight')
       }
     }
-    // E arm (westbound, heading = Math.PI/2 = pointing west/left)
+    // E arm (westbound, heading = -Math.PI/2 = pointing west/left)
     const eArrowX = cx + STOP_PX + ARROW_OFFSET
     for (let idx = 0; idx < lanes.E; idx++) {
-      const type = idx === 0 ? 'straight_left' : idx === lanes.E - 1 ? 'straight_right' : 'straight'
-      drawTurnArrow(ctx, eArrowX, cy + laneCenterPx(idx), Math.PI / 2, type)
+      drawTurnArrow(ctx, eArrowX, cy + laneCenterPx(idx), -Math.PI / 2, 'straight')
     }
-    // W arm (eastbound, heading = -Math.PI/2 = pointing east/right)
+    // W arm (eastbound, heading = Math.PI/2 = pointing east/right)
     const wArrowX = cx - STOP_PX - ARROW_OFFSET
     for (let idx = 0; idx < lanes.W; idx++) {
-      const type = idx === 0 ? 'straight_left' : idx === lanes.W - 1 ? 'straight_right' : 'straight'
-      drawTurnArrow(ctx, wArrowX, cy - laneCenterPx(idx), -Math.PI / 2, type)
+      drawTurnArrow(ctx, wArrowX, cy - laneCenterPx(idx), Math.PI / 2, 'straight')
     }
   }
 

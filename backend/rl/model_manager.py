@@ -102,6 +102,12 @@ class ModelManager:
 
         Raises FileNotFoundError if not found.
         """
+        new_path = os.path.join(self.model_dir, name, "latest.zip")
+        if os.path.isfile(new_path):
+            model = PPO.load(new_path, env=None)
+            logger.info("Model loaded from new layout: %s", new_path)
+            return model
+
         if version is None:
             version = self.get_latest_version(name)
             if version == 0:
@@ -130,27 +136,59 @@ class ModelManager:
         if not os.path.isdir(self.model_dir):
             return results
 
-        for filename in os.listdir(self.model_dir):
-            if not filename.endswith(".zip"):
-                continue
-            # Match pattern: {name}_v{version}.zip
-            match = re.match(r'^(.+)_v(\d+)\.zip$', filename)
-            if not match:
-                continue
+        for root, dirs, files in os.walk(self.model_dir):
+            for filename in files:
+                if not filename.endswith(".zip"):
+                    continue
 
-            name = match.group(1)
-            version = int(match.group(2))
-            path = os.path.join(self.model_dir, filename)
-            metadata = self._load_metadata(name, version)
-            saved_at = metadata.get("saved_at", "")
+                path = os.path.join(root, filename)
+                rel_path = os.path.relpath(path, self.model_dir)
+                parts = rel_path.split(os.sep)
 
-            results.append({
-                "name": name,
-                "version": version,
-                "path": path,
-                "metadata": metadata,
-                "saved_at": saved_at,
-            })
+                if len(parts) >= 2:
+                    algo_name = parts[0]
+                    if filename == "latest.zip":
+                        name = algo_name
+                        version = 999999
+                        saved_at = datetime.utcnow().isoformat()
+                        metadata = {}
+                    elif filename.startswith("latest_") and filename.endswith(".zip"):
+                        name = algo_name
+                        ts_str = filename[7:-4]
+                        try:
+                            version = int(ts_str.replace("_", ""))
+                        except ValueError:
+                            version = 1
+                        saved_at = datetime.utcnow().isoformat()
+                        metadata = {}
+                    else:
+                        match = re.match(r'^(.+)_v(\d+)\.zip$', filename)
+                        if match:
+                            name = match.group(1)
+                            version = int(match.group(2))
+                        else:
+                            name = filename[:-4]
+                            version = 1
+                        metadata = self._load_metadata(name, version)
+                        saved_at = metadata.get("saved_at", "")
+                else:
+                    match = re.match(r'^(.+)_v(\d+)\.zip$', filename)
+                    if match:
+                        name = match.group(1)
+                        version = int(match.group(2))
+                    else:
+                        name = filename[:-4]
+                        version = 1
+                    metadata = self._load_metadata(name, version)
+                    saved_at = metadata.get("saved_at", "")
+
+                results.append({
+                    "name": name,
+                    "version": version,
+                    "path": path,
+                    "metadata": metadata,
+                    "saved_at": saved_at,
+                })
 
         results.sort(key=lambda x: (x["name"], x["version"]))
         return results

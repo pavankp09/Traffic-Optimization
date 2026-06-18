@@ -9,10 +9,7 @@ import TrainingChart from './TrainingChart'
 import InsightCards from './InsightCards'
 import ConvergenceIndicator from './ConvergenceIndicator'
 import { TrainingIntelligenceModal } from './TrainingIntelligenceModal'
-
-const MODEL_COLORS: Record<string, string> = {
-  rl1: '#22d3ee', rl2: '#c084fc', rl3: '#34d399', rl4: '#f87171', custom: '#a78bfa',
-}
+import { MODEL_METADATA } from '../utils/constants'
 const MODEL_ALGO: Record<string, string> = {
   rl1: 'PPO', rl2: 'DQN', rl3: 'SAC', rl4: 'A2C', custom: 'Custom',
 }
@@ -53,7 +50,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
   const trainedModels  = useSimulationStore(s => s.trainedModels)
   const { liveEpisodeHistory } = useDecisionStore()
 
-  const color    = MODEL_COLORS[modelKey] ?? '#8fb8ce'
+  const color    = MODEL_METADATA[modelKey]?.color ?? '#8fb8ce'
   const algo     = MODEL_ALGO[modelKey]  ?? 'RL'
   const isTrained = trainedModels.includes(modelKey)
   // Training UI is scoped to the model actually being trained — other tabs stay
@@ -69,18 +66,21 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
   // Convergence progress (episodes toward total_timesteps equivalent)
   const totalSteps = Number(simConfig.total_timesteps ?? 20000)
   const resolvedTrainingMode = simConfig.training_mode ?? trainingMode
-  
-  let totalEpisodes = 500;
-  let stepsPerEpText = '40 steps/ep';
-  if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
-    totalEpisodes = Math.round(totalSteps / 40);
-    stepsPerEpText = '40 steps/ep';
-  } else if (resolvedTrainingMode === 'stage3') {
-    totalEpisodes = Math.round(totalSteps / 360);
-    stepsPerEpText = '360 steps/ep';
-  } else if (resolvedTrainingMode === 'stage4') {
-    totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360);
-    stepsPerEpText = 'mixed steps/ep';
+  const explicitEpisodeCap = Number(simConfig.training_episodes ?? 0)
+
+  let totalEpisodes = explicitEpisodeCap > 0 ? explicitEpisodeCap : 500
+  let stepsPerEpText = '40 steps/ep'
+  if (explicitEpisodeCap <= 0) {
+    if (resolvedTrainingMode === 'stage1' || resolvedTrainingMode === 'stage2') {
+      totalEpisodes = Math.round(totalSteps / 40)
+      stepsPerEpText = '40 steps/ep'
+    } else if (resolvedTrainingMode === 'stage3') {
+      totalEpisodes = Math.round(totalSteps / 360)
+      stepsPerEpText = '360 steps/ep'
+    } else if (resolvedTrainingMode === 'stage4') {
+      totalEpisodes = Math.round((totalSteps * 0.6) / 40 + (totalSteps * 0.4) / 360)
+      stepsPerEpText = 'mixed steps/ep'
+    }
   }
 
   const isFinished = isTrained && !isThisTraining;
@@ -136,7 +136,11 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
             <button
               onClick={() => {
                 useDecisionStore.getState().clearLive()
-                startTraining(simConfig.total_timesteps, simConfig.training_mode ?? 'stage1')
+                useSimulationStore.getState().resetModelTrainedState(modelKey)
+                useSessionStore.getState().resetTrainedModelDetails(modelKey)
+                useSessionStore.getState().loadModelDetails(modelKey)
+                useSimulationStore.getState().setConfigModalMode('training')
+                useSimulationStore.getState().setConfigModalOpen(true)
               }}
               className="flex items-center gap-1.5 text-[8px] font-mono uppercase tracking-widest px-2 py-1 rounded-md border border-orange-500/40 text-orange-400 bg-orange-500/[0.06] hover:bg-orange-500/20 transition-colors"
               title="Retrain from scratch"
@@ -224,7 +228,7 @@ export default function RLNeuralPanel({ modelKey }: { modelKey: string }) {
               { k: 'Algorithm',   v: algo },
               { k: 'LR',          v: simConfig.learning_rate?.toExponential(0) ?? '3e-4' },
               { k: 'Gamma',       v: (simConfig.discount_factor ?? 0.99).toString() },
-              { k: 'Hidden',      v: `${simConfig.hidden_layer_size ?? 64}` },
+              { k: 'Hidden',      v: `${simConfig.hidden_layer_size ?? 128}` },
               { k: 'Episodes',    v: totalEpisodes.toLocaleString() },
               { k: 'Optimizer',   v: modelKey === 'rl4' ? 'RMSProp' : 'Adam' },
             ].map(({ k, v }) => (

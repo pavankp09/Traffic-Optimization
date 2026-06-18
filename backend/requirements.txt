@@ -5,7 +5,7 @@ sqlalchemy==2.0.30
 alembic==1.13.1
 stable-baselines3==2.3.2
 gymnasium==0.29.1
-torch==2.3.0
+# PyTorch is installed automatically by run.py based on available hardware.
 numpy==1.26.4
 ultralytics==8.2.18
 supervision==0.21.0

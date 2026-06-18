@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 interface SimulationItem {
@@ -25,6 +25,7 @@ export default function SimulationManager() {
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
 
   const selectedIds = useMemo(
@@ -32,11 +33,11 @@ export default function SimulationManager() {
     [selected]
   )
 
-  const loadPage = async (nextPage: number) => {
+  const loadPage = async (nextPage: number, queryVal = searchQuery) => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/simulations?page=${nextPage}&per_page=20`)
+      const res = await fetch(`/api/simulations?page=${nextPage}&per_page=20&q=${encodeURIComponent(queryVal)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const payload = (await res.json()) as SimulationResponse
       setData(payload)
@@ -49,8 +50,12 @@ export default function SimulationManager() {
   }
 
   useEffect(() => {
-    loadPage(1)
-  }, [])
+    const delayDebounceFn = setTimeout(() => {
+      loadPage(1, searchQuery)
+    }, 300)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [searchQuery])
 
   const toggle = (id: string, checked: boolean) => {
     setSelected((prev) => ({ ...prev, [id]: checked }))
@@ -65,17 +70,53 @@ export default function SimulationManager() {
     <div className="app-page">
       <div className="app-container space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="text-gray-400 hover:text-cyan-300 text-sm">Back to Home</Link>
+          <div className="flex items-center gap-3">
             <h1 className="app-title">Simulations</h1>
           </div>
-          <button
-            onClick={openCompare}
-            disabled={selectedIds.length < 2}
-            className="app-btn-secondary text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Compare Selected
-          </button>
+          
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sessions..."
+                className="w-64 bg-[#090c14]/90 border border-slate-700/60 focus:border-cyan-500/60 rounded-[10px] text-[#e8eefc] placeholder-slate-500 pl-9 pr-8 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/30 transition-all"
+              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.603 10.603z"
+                />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={openCompare}
+              disabled={selectedIds.length < 2}
+              className="app-btn-secondary text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Compare Selected
+            </button>
+          </div>
         </div>
 
         <div className="app-panel overflow-hidden">

@@ -23,4 +23,11 @@ dist-ssr/
 Thumbs.db
 
 # Models
-models/
+models/backup
+models/PPO/backup
+models/DQN/backup
+models/SAC/backup
+models/A2C/backup
+
+# Virtual Environments
+.venv/

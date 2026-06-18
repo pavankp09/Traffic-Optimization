@@ -61,13 +61,13 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
       algo: 'PPO (Proximal Policy Optimization)',
       policyType: 'Actor-Critic MLP (On-Policy)',
       optimizer: 'Adam Optimizer',
-      epochs: 10,
+      epochs: 250,
       batchSize: 64,
       actuation: 'Min Green: 8s | Max Green: 35s',
       description: 'Clipping-based policy gradient optimizer. Highly stable policy updates designed to handle stochastic vehicle arrivals smoothly.',
       lrDefault: 0.0003,
       gammaDefault: 0.99,
-      layersDefault: '64x64 Nodes (Balanced)',
+      layersDefault: '128x128 Nodes (Balanced)',
     },
     rl2: {
       algo: 'DQN (Deep Q-Network)',
@@ -85,7 +85,7 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
       algo: 'SAC (Soft Actor-Critic)',
       policyType: 'Gaussian Policy Actor-Critic (Off-Policy)',
       optimizer: 'Adam Optimizer',
-      epochs: 8,
+      epochs: 250,
       batchSize: 128,
       actuation: 'Min Green: 10s | Max Green: 40s',
       description: 'Entropy-regularized continuous control. Holds green phases conservatively when high queue dispersion is detected to guarantee stability.',
@@ -179,7 +179,7 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
   const isSameAsBaseline = modelKey !== 'baseline' && modelKey === selectedModelSingle && simConfig.rl_algorithm === 'Same as Baseline'
   const activeLr = (modelKey === 'baseline' || isSameAsBaseline) ? 0 : modelKey === selectedModelSingle ? simConfig.learning_rate : config.lrDefault
   const activeGamma = (modelKey === 'baseline' || isSameAsBaseline) ? 0 : modelKey === selectedModelSingle ? (simConfig.discount_factor ?? 0.99) : config.gammaDefault
-  const activeLayers = (modelKey === 'baseline' || isSameAsBaseline) ? 'None' : modelKey === selectedModelSingle ? `${simConfig.hidden_layer_size ?? 64}x${simConfig.hidden_layer_size ?? 64} Nodes` : config.layersDefault
+  const activeLayers = (modelKey === 'baseline' || isSameAsBaseline) ? 'None' : modelKey === selectedModelSingle ? `${simConfig.hidden_layer_size ?? 128}x${simConfig.hidden_layer_size ?? 128} Nodes` : config.layersDefault
 
   return (
     <div className="w-[560px] flex-shrink-0 h-[560px] bg-gradient-to-b from-[#0e131c] to-[#0a0e15] backdrop-blur-md border border-white/[0.07] rounded-2xl p-5 flex flex-col justify-start gap-3.5 shadow-2xl select-none hover:border-white/[0.12] transition-all duration-300 overflow-y-auto custom-scrollbar">

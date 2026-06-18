@@ -82,7 +82,7 @@ export default function RLBrainVisualizer() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 font-mono text-[9px] px-2 py-0.5 rounded-full bg-cyan-950/30 text-cyan-400 border border-cyan-800/30">
-          <span>SIZE: {simConfig.hidden_layer_size ?? 64}x{simConfig.hidden_layer_size ?? 64} MLP</span>
+          <span>SIZE: {simConfig.hidden_layer_size ?? 128}x{simConfig.hidden_layer_size ?? 128} MLP</span>
         </div>
       </div>
  
@@ -107,21 +107,21 @@ export default function RLBrainVisualizer() {
             <line x1="20" y1="140" x2="120" y2="125" stroke="#111827" strokeWidth="1" />
 
             {/* Glowing Active Connections */}
-            <line x1="20" y1="20" x2="120" y2="35" stroke="#22d3ee" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
-            <line x1="20" y1="60" x2="120" y2="80" stroke="#c084fc" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
-            <line x1="20" y1="100" x2="120" y2="125" stroke="#34d399" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
-            <line x1="20" y1="140" x2="120" y2="80" stroke="#f59e0b" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="20" y1="20" x2="120" y2="35" stroke="#8fb8ce" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="20" y1="60" x2="120" y2="80" stroke="#9fa8c6" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="20" y1="100" x2="120" y2="125" stroke="#97b9a7" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="20" y1="140" x2="120" y2="80" stroke="#b8a2a2" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
 
             {/* Hidden Nodes to Output Nodes */}
-            <line x1="120" y1="35" x2="220" y2="40" stroke="#22d3ee" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
-            <line x1="120" y1="80" x2="220" y2="80" stroke="#c084fc" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
-            <line x1="120" y1="125" x2="220" y2="120" stroke="#34d399" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="120" y1="35" x2="220" y2="40" stroke="#8fb8ce" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="120" y1="80" x2="220" y2="80" stroke="#9fa8c6" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
+            <line x1="120" y1="125" x2="220" y2="120" stroke="#97b9a7" strokeWidth="0.8" strokeOpacity="0.4" className="synapse-line" />
 
             {/* Input Nodes (Physical groups) */}
-            <circle cx="20" cy="20" r="6" fill="#22d3ee" className="node-glow text-cyan-400" />
-            <circle cx="20" cy="60" r="6" fill="#c084fc" className="node-glow text-purple-400" />
-            <circle cx="20" cy="100" r="6" fill="#34d399" className="node-glow text-emerald-400" />
-            <circle cx="20" cy="140" r="6" fill="#f59e0b" className="node-glow text-amber-500" />
+            <circle cx="20" cy="20" r="6" fill="#8fb8ce" className="node-glow text-[#8fb8ce]" />
+            <circle cx="20" cy="60" r="6" fill="#9fa8c6" className="node-glow text-[#9fa8c6]" />
+            <circle cx="20" cy="100" r="6" fill="#97b9a7" className="node-glow text-[#97b9a7]" />
+            <circle cx="20" cy="140" r="6" fill="#b8a2a2" className="node-glow text-[#b8a2a2]" />
 
             {/* Hidden Layer Nodes */}
             <circle cx="120" cy="35" r="5" fill="#1f2937" stroke="#4b5563" strokeWidth="1.5" />
@@ -129,9 +129,9 @@ export default function RLBrainVisualizer() {
             <circle cx="120" cy="125" r="5" fill="#1f2937" stroke="#4b5563" strokeWidth="1.5" />
 
             {/* Output Decision Nodes */}
-            <circle cx="220" cy="40" r="7" fill="#22d3ee" className="node-glow text-cyan-400" />
-            <circle cx="220" cy="80" r="7" fill="#c084fc" className="node-glow text-purple-400" />
-            <circle cx="220" cy="120" r="7" fill="#34d399" className="node-glow text-emerald-400" />
+            <circle cx="220" cy="40" r="7" fill="#8fb8ce" className="node-glow text-[#8fb8ce]" />
+            <circle cx="220" cy="80" r="7" fill="#9fa8c6" className="node-glow text-[#9fa8c6]" />
+            <circle cx="220" cy="120" r="7" fill="#97b9a7" className="node-glow text-[#97b9a7]" />
 
             {/* Glowing Live Observation Text */}
             <text x="32" y="23" fill="#e5e7eb" fontSize="7.5" fontWeight="bold" fontFamily="monospace">OBS_QUEUES: {totalQueue} stopped</text>

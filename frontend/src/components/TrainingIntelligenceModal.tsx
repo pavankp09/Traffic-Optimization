@@ -1310,6 +1310,7 @@ export function TrainingIntelligenceModal({ onClose }: { onClose: () => void }) 
                                 ['Learning Rate', simConfig.learning_rate],
                                 ['Discount (γ)', simConfig.discount_factor],
                                 ['Hidden Layer', `${simConfig.hidden_layer_size} units`],
+                                ['Episode Cap', simConfig.training_episodes?.toLocaleString() ?? '—'],
                                 ['Total Timesteps', simConfig.total_timesteps?.toLocaleString() ?? '—'],
                                 ['Replay Speed', `${popupSpeed}× real-time`],
                                 ['Replay Duration', popupDuration < 60 ? `${popupDuration}s` : `${popupDuration / 60} min`],

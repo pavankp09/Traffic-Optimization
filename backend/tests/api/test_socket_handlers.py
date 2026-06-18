@@ -202,6 +202,111 @@ def test_spawn_spec_respects_per_arm_lane_override():
     assert sh._spawn_spec(2, arm="S", lane=2, intersection_type="four_way", lane_layout=layout)["lane"] == 0
 
 
+def test_four_way_turn_mapping_matches_driver_perspective():
+    """Left/right turns should be relative to the vehicle's inbound heading."""
+    from backend.api import socket_handlers as sh
+
+    assert sh.get_exit_arm("N", "left", "four_way") == "E"
+    assert sh.get_exit_arm("N", "right", "four_way") == "W"
+    assert sh.get_exit_arm("S", "left", "four_way") == "W"
+    assert sh.get_exit_arm("S", "right", "four_way") == "E"
+    assert sh.get_exit_arm("E", "left", "four_way") == "S"
+    assert sh.get_exit_arm("E", "right", "four_way") == "N"
+    assert sh.get_exit_arm("W", "left", "four_way") == "N"
+    assert sh.get_exit_arm("W", "right", "four_way") == "S"
+
+
+def test_t_junction_turn_mapping_uses_open_arms_only():
+    """T-junction turns should respect driver perspective and avoid closed south arm."""
+    from backend.api import socket_handlers as sh
+
+    assert sh.get_exit_arm("N", "left", "t_junction") == "E"
+    assert sh.get_exit_arm("N", "right", "t_junction") == "W"
+    assert sh.get_exit_arm("E", "straight", "t_junction") == "W"
+    assert sh.get_exit_arm("E", "right", "t_junction") == "N"
+    assert sh.get_exit_arm("W", "straight", "t_junction") == "E"
+    assert sh.get_exit_arm("W", "left", "t_junction") == "N"
+
+
+def test_turn_exits_land_on_outbound_side_of_destination_arm():
+    """Completed turn targets must use the outbound half, not oncoming lanes."""
+    import math
+    from backend.api import socket_handlers as sh
+
+    for arm in ("N", "S", "E", "W"):
+        for turn, expected_exit in (("left", sh.get_exit_arm(arm, "left", "four_way")), ("right", sh.get_exit_arm(arm, "right", "four_way"))):
+            vehicle = sh._MockVehicle(f"{arm}-{turn}", arm, lane=1, intersection_type="four_way")
+            vehicle.type_id = "car"
+            vehicle.turn_dir = turn
+            vehicle.lat_drift = 7.9
+            vehicle.x = vehicle.dx * (sh._STOP_DIST - 1.0)
+            vehicle.y = vehicle.dy * (sh._STOP_DIST - 1.0)
+
+            vehicle._setup_turn("four_way")
+            assert vehicle.exit_arm == expected_exit
+
+            theta = sh.get_arm_angle(expected_exit, "four_way")
+            target_x, target_y = vehicle.b_p2
+            exit_lateral = -target_x * math.sin(theta) + target_y * math.cos(theta)
+
+            assert exit_lateral < 0, f"{arm} {turn} to {expected_exit} entered the oncoming side"
+
+
+def test_sumo_fine_tuning_is_not_automatic_for_fast_training_modes():
+    """Fast mock modes must not silently enter SUMO/TraCI after PPO completes."""
+    from backend.api import socket_handlers as sh
+
+    assert sh._should_run_sumo_fine_tuning("stage1") is False
+    assert sh._should_run_sumo_fine_tuning("stage2") is False
+
+
+def test_sumo_fine_tuning_requires_explicit_sumo_training_mode():
+    """Only explicit SUMO training should use the SUMO fine-tuning path."""
+    from backend.api import socket_handlers as sh
+
+    assert sh._should_run_sumo_fine_tuning("stage3") is True
+    assert sh._should_run_sumo_fine_tuning("stage4") is False
+    assert sh._should_run_sumo_fine_tuning("") is False
+
+
+def test_live_rl_simulation_honors_policy_phase_without_override():
+    """Live simulation should reveal the policy decision, not correct it."""
+    from backend.api import socket_handlers as sh
+
+    world = sh._SimWorld(fixed_time=False, policy_fn=lambda _: (0, 30.0))
+    world.phase = 1  # transitioning out of N-S yellow; next decision is due
+
+    for idx, arm in enumerate(["E"] * 12 + ["W"] * 12):
+        vehicle = sh._MockVehicle(f"veh-{idx}", arm=arm, lane=0)
+        vehicle.x = 10.0
+        vehicle.y = 0.0
+        vehicle.through = False
+        world.add(vehicle)
+
+    world._decide_next()
+
+    assert world.phase == 0
+
+
+def test_live_rl_simulation_honors_all_red_policy_output():
+    """All-red output is a model decision and must not be corrected live."""
+    from backend.api import socket_handlers as sh
+
+    world = sh._SimWorld(fixed_time=False, policy_fn=lambda _: (4, 30.0))
+    world.phase = 1
+
+    for idx, arm in enumerate(["E"] * 5 + ["W"] * 5 + ["N"] * 2):
+        vehicle = sh._MockVehicle(f"veh-{idx}", arm=arm, lane=0)
+        vehicle.x = 10.0
+        vehicle.y = 0.0
+        vehicle.through = False
+        world.add(vehicle)
+
+    world._decide_next()
+
+    assert world.phase == 4
+
+
 def test_preset_count():
     """Sanity check: ALL_PRESETS contains at least 34 presets."""
     from backend.config_presets import ALL_PRESETS

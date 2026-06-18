@@ -5,6 +5,7 @@ All handlers are registered via init_socket_handlers(socketio, app).
 from __future__ import annotations
 
 import logging
+import os
 import math
 import random
 import threading
@@ -201,14 +202,14 @@ def get_exit_arm(spawn_arm: str, turn_dir: str, intersection_type: str) -> str:
             if spawn_arm == "E": return "S"
             if spawn_arm == "W": return "S"
     elif intersection_type in ("t_junction", "t_junction_free_left"):
-        if spawn_arm == "N": return "W" if turn_dir == "left" else "E"
-        if spawn_arm == "E": return "N" if turn_dir == "left" else "W"
-        if spawn_arm == "W": return "E" if turn_dir == "left" else "N"
+        if spawn_arm == "N": return "E" if turn_dir == "left" else "W"
+        if spawn_arm == "E": return "N" if turn_dir == "right" else "W"
+        if spawn_arm == "W": return "N" if turn_dir == "left" else "E"
     # 4-way default
-    if spawn_arm == "N": return "E" if turn_dir == "right" else ("W" if turn_dir == "left" else "S")
-    if spawn_arm == "S": return "W" if turn_dir == "right" else ("E" if turn_dir == "left" else "N")
-    if spawn_arm == "E": return "S" if turn_dir == "right" else ("N" if turn_dir == "left" else "W")
-    if spawn_arm == "W": return "N" if turn_dir == "right" else ("S" if turn_dir == "left" else "E")
+    if spawn_arm == "N": return "W" if turn_dir == "right" else ("E" if turn_dir == "left" else "S")
+    if spawn_arm == "S": return "E" if turn_dir == "right" else ("W" if turn_dir == "left" else "N")
+    if spawn_arm == "E": return "N" if turn_dir == "right" else ("S" if turn_dir == "left" else "W")
+    if spawn_arm == "W": return "S" if turn_dir == "right" else ("N" if turn_dir == "left" else "E")
     return "N"
 
 
@@ -455,11 +456,14 @@ class _MockVehicle:
         # Calculate deviation relative to starting lane center
         start_lane_center = offsets[self.lane % _N_LANES]
         deviation = self.lat_drift - start_lane_center
-        self.exit_lat_drift = exit_lane_center + deviation
+        exit_lat_mag = exit_lane_center + deviation
 
         ex_lo, ex_hi = 1.6, 13.8
         ex_hw = _VEH_WIDTH.get(self.type_id, 1.8) / 2.0
-        self.exit_lat_drift = max(ex_lo + ex_hw, min(ex_hi - ex_hw, self.exit_lat_drift))
+        exit_lat_mag = max(ex_lo + ex_hw, min(ex_hi - ex_hw, exit_lat_mag))
+        # Destination-arm local positive lateral is the inbound/oncoming half.
+        # Turn exits must use the outbound half, which is negative local lateral.
+        self.exit_lat_drift = -exit_lat_mag
 
         # 3. Setup control points based on starting and exit arms
         self.b_p0 = (self.x, self.y)
@@ -704,9 +708,9 @@ class _MockVehicle:
 
                 offsets = [3.7, 7.9, 12.1]
                 w = offsets[self.lane % _N_LANES]
-                self.lat_drift = w
-                self.x = R * math.cos(exit_theta) - w * math.sin(exit_theta)
-                self.y = R * math.sin(exit_theta) + w * math.cos(exit_theta)
+                self.lat_drift = -w
+                self.x = R * math.cos(exit_theta) - self.lat_drift * math.sin(exit_theta)
+                self.y = R * math.sin(exit_theta) + self.lat_drift * math.cos(exit_theta)
 
             return self._check_exit()
 
@@ -1734,8 +1738,12 @@ class _SimWorld:
                     cos_ex = math.cos(exit_theta)
                     sin_ex = math.sin(exit_theta)
                     v_lat_ex = -v.x * sin_ex + v.y * cos_ex
-                    lo_h, hi_h = 1.6, 13.8
-                    clamped_lat = max(lo_h + my_hw, min(hi_h - my_hw, v_lat_ex))
+                    if v.exit_arm is not None:
+                        lo_h, hi_h = -13.8, -1.6
+                        clamped_lat = max(lo_h + my_hw, min(hi_h - my_hw, v_lat_ex))
+                    else:
+                        lo_h, hi_h = 1.6, 13.8
+                        clamped_lat = max(lo_h + my_hw, min(hi_h - my_hw, v_lat_ex))
                     move = clamped_lat - v_lat_ex
                     if move != 0.0:
                         v.x += move * (-sin_ex)
@@ -1840,14 +1848,26 @@ class _SimWorld:
                 self.wait_history.append((self.sim_clock, v.wait_time))
                 if getattr(self, "session_store", None) and getattr(self, "session_id", None):
                     crossing_time = self.sim_clock - getattr(v, "spawn_time", 0.0)
+                    
+                    world_key = getattr(self, "world_key", "unknown")
+                    if world_key == "baseline":
+                        run_type = "baseline"
+                        algorithm = getattr(self, "baseline_controller", "fixed_time")
+                    else:
+                        run_type = "rl"
+                        algorithm = getattr(self, "algorithm", "RL")
+
                     self.session_store.save_vehicle_crossing(
                         session_id=self.session_id,
+                        simulation_id=getattr(self, "simulation_id", "unknown"),
                         vehicle_id=v.id,
                         vehicle_type=v.type_id,
                         number_plate=getattr(v, "number_plate", ""),
                         entry_time=getattr(v, "spawn_time", 0.0),
                         exit_time=self.sim_clock,
-                        crossing_duration=crossing_time
+                        crossing_duration=crossing_time,
+                        run_type=run_type,
+                        algorithm=algorithm
                     )
 
         # ── Pedestrian spawn ──────────────────────────────────────────────
@@ -2040,19 +2060,40 @@ def _load_rl_policy(model_key: str):
     """Load the trained SB3 model for the given model key (cached after first load).
     Keyed by model_key (e.g. 'rl1') NOT session_id, so the policy survives
     across the session_id change between training and simulation."""
+    if model_key == "baseline":
+        return None
+
     if model_key in _loaded_policies:
         return _loaded_policies[model_key]
 
     model_path = _trained_model_paths.get(model_key)
     if not model_path:
-        logger.debug("No trained model registered for %s — using heuristic", model_key)
-        return None
+        algo_map = {"rl1": "PPO", "rl2": "DQN", "rl3": "SAC", "rl4": "A2C", "custom": "Custom"}
+        algo_name = algo_map.get(model_key, "PPO")
+        disk_path = f"models/{algo_name}/latest.zip"
+        if os.path.exists(disk_path):
+            model_path = disk_path
+            _trained_model_paths[model_key] = disk_path
+        else:
+            logger.debug("No trained model registered for %s — using heuristic", model_key)
+            return None
+
+    # Resolve algorithm class loader (SAC falls back to DQN in trainer.py)
+    if model_key in ("rl2", "rl3"):
+        from stable_baselines3 import DQN
+        loader = DQN
+    elif model_key == "rl4":
+        from stable_baselines3 import A2C
+        loader = A2C
+    else:
+        from stable_baselines3 import PPO
+        loader = PPO
 
     try:
-        from stable_baselines3 import PPO
-        model = PPO.load(model_path)
+        from backend.rl.device import get_torch_device
+        model = loader.load(model_path, device=get_torch_device())
         _loaded_policies[model_key] = model
-        logger.info("Loaded trained RL policy for %s from %s", model_key, model_path)
+        logger.info("Loaded trained %s policy for %s from %s", loader.__name__, model_key, model_path)
         return model
     except Exception as exc:
         logger.warning("Could not load RL model for %s (%s) — using heuristic", model_key, exc)
@@ -2253,10 +2294,11 @@ def _run_mock_sim(sio, session_id: str) -> None:
         except Exception as e:
             logger.exception("Failed to load replay decisions")
 
-    # ── Load trained RL policy (keyed by model_key, not session_id) ─────────
+    # ── Load trained RL policies (keyed by model_key, not session_id) ─────────
     # Lookup uses model_key so the policy persists across the session_id change
     # between training and the subsequent simulation run.
-    _rl_model = _load_rl_policy(model_key)
+    _policy_fns = {}
+    keys_to_load = ["rl1", "rl2", "rl3", "rl4", "custom"] if model_key == "all" else [model_key]
 
     def _make_policy_fn(model):
         """Return a policy_fn(world) → (phase_idx, duration_s) closure."""
@@ -2292,12 +2334,15 @@ def _run_mock_sim(sio, session_id: str) -> None:
 
         return _policy_fn
 
-    _policy_fn = _make_policy_fn(_rl_model) if _rl_model is not None else None
+    for k in keys_to_load:
+        model = _load_rl_policy(k)
+        if model is not None:
+            _policy_fns[k] = _make_policy_fn(model)
 
-    if _rl_model is not None:
-        logger.info("[sim] Session %s: using trained RL policy for RL worlds", session_id)
+    if _policy_fns:
+        logger.info("[sim] Session %s: using trained RL policies for: %s", session_id, list(_policy_fns.keys()))
     else:
-        logger.info("[sim] Session %s: no trained model — using adaptive heuristic", session_id)
+        logger.info("[sim] Session %s: no trained models loaded — using adaptive heuristic", session_id)
 
     # Assign the policy to whichever RL world matches the active model_key.
     def _rl_world(mk, **kw):
@@ -2315,9 +2360,12 @@ def _run_mock_sim(sio, session_id: str) -> None:
                 **actual_kw,
             )
         else:
+            active_policy = None
+            if model_key == "all" or model_key == mk:
+                active_policy = _policy_fns.get(mk)
             return _SimWorld(
                 fixed_time=False,
-                policy_fn=_policy_fn if mk == model_key and _policy_fn else None,
+                policy_fn=active_policy,
                 intersection_type=intersection_type,
                 replay_decisions=replay_decisions if mk == model_key else None,
                 replay_episode_num=replay_episode if mk == model_key else None,
@@ -2358,10 +2406,18 @@ def _run_mock_sim(sio, session_id: str) -> None:
         # In split-view, attach the trained policy to the matching world.
         _WORLDS = _ALL_WORLDS_MAP
 
-    for w in _WORLDS.values():
+    simulation_id = get_session_state(session_id).get("simulation_id", "unknown")
+    for k, w in _WORLDS.items():
         w.max_sim_s = max_sim_s
         w.session_id = session_id
         w.session_store = store
+        w.world_key = k
+        w.simulation_id = simulation_id
+        if k == "baseline":
+            w.baseline_controller = _baseline_ctrl
+        else:
+            algo_map = {"rl1": "PPO", "rl2": "DQN", "rl3": "SAC", "rl4": "A2C", "custom": "Custom"}
+            w.algorithm = algo_map.get(k, "RL")
 
     step = 0
     vid_counter = 0
@@ -2795,6 +2851,13 @@ def _run_curriculum_training(
     emit_fn("training:stage_change", {
         "session_id": session_id, "from_stage": 3, "to_stage": 0, "done": True
     })
+    emit_fn("training:stopped", {"session_id": session_id, "done": True})
+    set_session_state(session_id, training=False)
+
+
+def _should_run_sumo_fine_tuning(training_mode: str) -> bool:
+    """Keep SUMO/TraCI work opt-in so fast modes cannot appear stuck."""
+    return training_mode == "stage3"
 
 
 def _run_real_training(sio, session_id: str) -> None:
@@ -2809,6 +2872,7 @@ def _run_real_training(sio, session_id: str) -> None:
         from backend.config import SimulationConfig, AdverseConfig
         from backend.rl.trainer import PPOTrainer
         from backend.rl.mock_env import make_mock_env, run_fixed_time_baseline
+        from backend.rl.device import get_torch_device
     except Exception as exc:  # SB3 / RL stack unavailable
         logger.warning("Real RL unavailable (%s) — falling back to mock training", exc)
         _run_mock_training(sio, session_id)
@@ -2827,6 +2891,31 @@ def _run_real_training(sio, session_id: str) -> None:
             if (dones[0] if hasattr(dones, "__len__") else dones):
                 time.sleep(0.12)
             return True
+
+    class _EpisodeCapCallback(BaseCallback):
+        def __init__(self, episode_cap: int):
+            super().__init__()
+            self.episode_cap = max(1, int(episode_cap))
+            self._completed_episodes = 0
+
+        def _on_step(self) -> bool:
+            dones = self.locals.get("dones", [False])
+            done = bool(dones[0] if hasattr(dones, "__len__") else dones)
+            if not done:
+                return True
+
+            self._completed_episodes += 1
+            if self._completed_episodes < self.episode_cap:
+                return True
+
+            sio.emit("training:converged", {"session_id": session_id, "episode": self._completed_episodes})
+            sio.emit("training:insight", {
+                "session_id": session_id,
+                "icon": "🏁",
+                "message": f"Reached configured episode cap of {self.episode_cap}.",
+                "episode": self._completed_episodes,
+            })
+            return False
 
     # Plateau-based convergence: the strict coefficient-of-variation test in
     # ConvergenceCallback is unreachable on a stochastic reward, so we instead
@@ -2900,6 +2989,9 @@ def _run_real_training(sio, session_id: str) -> None:
         else:
             sim_config = SimulationConfig()
             adverse_config = AdverseConfig()
+
+        episode_cap = int(getattr(sim_config, "training_episodes", 500) or 500)
+        logger.info("Training runtime device resolved to: %s", get_torch_device())
 
         if getattr(sim_config, "rl_algorithm", "PPO") == "Same as Baseline":
             logger.info("Training with 'Same as Baseline' is a no-op.")
@@ -3031,6 +3123,7 @@ def _run_real_training(sio, session_id: str) -> None:
             extra_callbacks=[
                 _StopCallback(),
                 _PaceCallback(),
+                _EpisodeCapCallback(episode_cap),
                 _PlateauCallback(sim_config),
                 DecisionCaptureCallback(session_id=session_id, emit_fn=sio.emit),
             ],
@@ -3041,14 +3134,16 @@ def _run_real_training(sio, session_id: str) -> None:
         model_path = result.get("model_path")
         logger.info("Real training finished: %s  model_path=%s", result, model_path)
 
-        if model_path:
-            # Stage 2: SUMO Fine-tuning (Hybrid Step)
+        if model_path and _should_run_sumo_fine_tuning(training_mode):
+            # Optional SUMO fine-tuning. This can block if SUMO/TraCI is not
+            # available, so only run it for explicit SUMO training mode.
+            sumo_env = None
             try:
-                logger.info("Starting Stage 2: SUMO Simulator Fine-tuning…")
+                logger.info("Starting SUMO Simulator fine-tuning...")
                 sio.emit("training:insight", {
                     "session_id": session_id,
                     "icon": "⚡",
-                    "message": "Starting Stage 2: Fine-tuning agent policy on SUMO physics environment...",
+                    "message": "Fine-tuning agent policy on SUMO physics environment...",
                     "episode": result.get("total_episodes", 50) + 1,
                 })
                 from backend.rl.transfer_learner import TransferLearner
@@ -3075,16 +3170,23 @@ def _run_real_training(sio, session_id: str) -> None:
                 
                 # 3. Save the final hybrid model
                 learner.save_fine_tuned(model_path)
-                sumo_env.close()
-                logger.info("Stage 2 SUMO Fine-tuning complete!")
+                logger.info("SUMO fine-tuning complete!")
                 sio.emit("training:insight", {
                     "session_id": session_id,
                     "icon": "✅",
-                    "message": "Stage 2 complete: Policy optimized for realistic SUMO physics.",
+                    "message": "Policy optimized for realistic SUMO physics.",
                     "episode": result.get("total_episodes", 50) + 2,
                 })
             except Exception as sumo_exc:
-                logger.warning("Stage 2 SUMO Fine-tuning failed (non-fatal, proceeding with pre-trained mock policy): %s", sumo_exc)
+                logger.warning("SUMO fine-tuning failed (non-fatal, proceeding with pre-trained policy): %s", sumo_exc)
+            finally:
+                if sumo_env is not None:
+                    try:
+                        sumo_env.close()
+                    except Exception:
+                        logger.debug("SUMO fine-tuning environment close failed", exc_info=True)
+        elif model_path:
+            logger.info("Skipping SUMO fine-tuning for training_mode=%s", training_mode)
 
         # Register the trained model under the model_key (e.g. 'rl1') so that
         # _load_rl_policy() can find it even when the next simulation run uses
@@ -3102,7 +3204,8 @@ def _run_real_training(sio, session_id: str) -> None:
             _run_mock_training(sio, session_id)
             return
 
-    sio.emit("training:stopped", {"session_id": session_id})
+    is_completed = _session_states.get(session_id, {}).get("training", False)
+    sio.emit("training:stopped", {"session_id": session_id, "done": is_completed})
     set_session_state(session_id, training=False)
     _training_greenlets.pop(session_id, None)
 
@@ -3122,7 +3225,12 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
 
     @socketio.on("connect")
     def handle_connect():
-        emit("server:hello", {"version": "1.0.0", "status": "ready"})
+        from backend.rl.device import get_torch_runtime_info
+        emit("server:hello", {
+            "version": "1.0.0",
+            "status": "ready",
+            "runtime": get_torch_runtime_info(),
+        })
 
     @socketio.on("disconnect")
     def handle_disconnect():
@@ -3170,10 +3278,20 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
             # 'baseline', 'rl1', 'rl2', 'rl3', 'rl4', 'custom', or 'all'
             model_key = data.get("model_key") or "all"
             replay_episode = data.get("replay_episode")
+            
+            import uuid
+            simulation_id = f"sim-{uuid.uuid4().hex[:12]}"
+            
+            try:
+                store.create_simulation_run(simulation_id, session_id, sim_cfg, adverse_cfg)
+            except Exception as run_db_err:
+                logger.warning("Simulation run database creation failed: %s", run_db_err)
+
             set_session_state(session_id, running=True, paused=False,
                               raw_sim_config=sim_dict, model_key=model_key,
-                              replay_episode=replay_episode)
-            emit("sim:started", {"session_id": session_id, "status": "running"})
+                              replay_episode=replay_episode,
+                              simulation_id=simulation_id)
+            emit("sim:started", {"session_id": session_id, "simulation_id": simulation_id, "status": "running"})
 
             # Launch background sim loop as a daemon thread
             t = threading.Thread(target=_run_mock_sim, args=(socketio, session_id), daemon=True)
@@ -3218,11 +3336,11 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
 
     @socketio.on("sim:speed")
     def handle_sim_speed(data):
-        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20"""
+        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20 | 50"""
         if not isinstance(data, dict):
             return
         session_id  = data.get("session_id", "")
-        multiplier  = max(1, min(20, int(data.get("multiplier", 1))))
+        multiplier  = max(1, min(50, int(data.get("multiplier", 1))))
         if not session_id:
             return
         set_session_state(session_id, sim_speed=multiplier)

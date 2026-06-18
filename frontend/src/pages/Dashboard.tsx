@@ -44,13 +44,12 @@ function PanelBtn({ active, label, onClick, disabled }: { active: boolean; label
     <button
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
-        disabled
+      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${disabled
           ? 'bg-transparent border-white/[0.04] text-slate-650 opacity-40 cursor-not-allowed'
           : active
             ? 'bg-[#8fb8ce]/[0.12] border-[#8fb8ce]/35 text-[#8fb8ce]'
             : 'bg-transparent border-white/[0.07] text-slate-500 hover:border-white/[0.14] hover:text-slate-300'
-      }`}
+        }`}
     >
       {path && (
         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 opacity-70" fill="currentColor">
@@ -72,8 +71,10 @@ export default function Dashboard() {
   const [baselineRightTab, setBaselineRightTab] = useState<'config' | 'stats'>('config')
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('stage1')
   const [activePanel, setActivePanel] = useState<Panel | null>(null)
-  const [configModalOpen, setConfigModalOpen] = useState(false)
-  const [configModalMode, setConfigModalMode] = useState<'simulation' | 'training'>('simulation')
+  const configModalOpen = useSimulationStore((s) => s.configModalOpen)
+  const setConfigModalOpen = useSimulationStore((s) => s.setConfigModalOpen)
+  const configModalMode = useSimulationStore((s) => s.configModalMode)
+  const setConfigModalMode = useSimulationStore((s) => s.setConfigModalMode)
   const [simDurationMin, setSimDurationMin] = useState<15 | 30 | 45 | 60>(60)
   const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(true)
   const [isLearningCollapsed, setIsLearningCollapsed] = useState(true)
@@ -137,6 +138,12 @@ export default function Dashboard() {
 
   const isRunning = useSimulationStore((s) => s.isRunning)
   const isPaused = useSimulationStore((s) => s.isPaused)
+  const runtimeDevice = useSimulationStore((s) => s.runtimeDevice)
+  const runtimeDeviceName = useSimulationStore((s) => s.runtimeDeviceName)
+  const runtimeTorchVersion = useSimulationStore((s) => s.runtimeTorchVersion)
+  const splitIsRunning = useSimulationStore((s) => s.splitIsRunning)
+  const splitIsPaused = useSimulationStore((s) => s.splitIsPaused)
+  const splitSimSpeed = useSimulationStore((s) => s.splitSimSpeed)
   const viewMode = useSimulationStore((s) => s.viewMode)
   const setViewMode = useSimulationStore((s) => s.setViewMode)
 
@@ -164,7 +171,22 @@ export default function Dashboard() {
   const baselineMetrics = useSessionStore((s) => s.baselineMetrics)
   const isBaselineCompleted = useSessionStore((s) => s.isBaselineCompleted)
   const simTimeS = useSimulationStore((s) => s.simTimeS)
+  const splitSimTimeS = useSimulationStore((s) => s.splitSimTimeS)
   const economic = useSessionStore((s) => s.economic)
+
+  const fmtClock = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+  const runtimeLabel = runtimeDevice === 'cuda'
+    ? `CUDA${runtimeDeviceName ? ` · ${runtimeDeviceName}` : ''}`
+    : runtimeDevice === 'cpu'
+      ? 'CPU'
+      : 'Runtime unknown'
+  const runtimeTone = runtimeDevice === 'cuda'
+    ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+    : runtimeDevice === 'cpu'
+      ? 'text-slate-300 border-slate-500/30 bg-slate-500/10'
+      : 'text-amber-300 border-amber-500/30 bg-amber-500/10'
 
   // Keep Neural Processing tab while training is active
   useEffect(() => {
@@ -172,6 +194,33 @@ export default function Dashboard() {
       setRightColumnTab('neural')
     }
   }, [isTraining])
+
+  // Fetch trained models on disk on mount
+  useEffect(() => {
+    const ALGO_TO_KEY: Record<string, string> = {
+      PPO: 'rl1',
+      DQN: 'rl2',
+      SAC: 'rl3',
+      A2C: 'rl4',
+      Custom: 'custom',
+    }
+    fetch('/api/models')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          const store = useSimulationStore.getState()
+          res.data.forEach((m: any) => {
+            if (m.name) {
+              const modelKey = ALGO_TO_KEY[m.name] || m.name
+              if (['rl1', 'rl2', 'rl3', 'rl4', 'custom'].includes(modelKey)) {
+                store.addTrainedModel(modelKey)
+              }
+            }
+          })
+        }
+      })
+      .catch((err) => console.error('Failed to load models list:', err))
+  }, [])
 
   // (XAI tab removed — Training Intelligence is now inside the NRAL panel)
 
@@ -200,10 +249,18 @@ export default function Dashboard() {
                 <span className="text-[10px] text-slate-500 hidden lg:block">Traffic Management Research Tool</span>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${(viewMode === 'split' ? splitIsRunning : isRunning) ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
                 <p className="text-[10px] text-slate-500 font-mono">
-                  {isRunning ? 'SIMULATION ACTIVE' : 'READY'}
+                  {(viewMode === 'split' ? splitIsRunning : isRunning) ? 'SIMULATION ACTIVE' : 'READY'}
                 </p>
+                {runtimeDevice && (
+                  <span
+                    className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest ${runtimeTone}`}
+                    title={runtimeTorchVersion ? `PyTorch ${runtimeTorchVersion}` : undefined}
+                  >
+                    {runtimeLabel}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -213,14 +270,15 @@ export default function Dashboard() {
         <div className="flex items-center gap-1">
           {[
             { to: '/', label: 'Landing Page' },
-            { to: '/simulations', label: 'Simulations' },
-            { to: '/analyzer', label: 'Analyzer' },
-            { to: '/compare', label: 'Compare' },
-            { to: '/report', label: 'Report' },
-          ].map(({ to, label }) => (
+            { to: '/simulations', label: 'Simulations', target: '_blank' },
+            { to: '/analyzer', label: 'Analyzer', target: '_blank' },
+            { to: '/report', label: 'Report', target: '_blank' },
+          ].map(({ to, label, target }) => (
             <Link
               key={to}
               to={to}
+              target={target}
+              rel={target === '_blank' ? 'noopener noreferrer' : undefined}
               className="text-[11px] text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-md hover:bg-white/[0.04] transition-colors font-medium"
             >
               {label}
@@ -267,14 +325,14 @@ export default function Dashboard() {
               <div className="flex items-center bg-[#0a0d14] rounded-lg p-0.5 gap-1 border border-white/[0.06]">
                 <span className="text-[9px] font-mono text-slate-600 px-2 font-bold uppercase tracking-wider flex items-center">
                   Active:
-                  <HelpPopover text="### RL Algorithm Presets\nSelect between deterministic baselines and diverse adaptive Reinforcement Learning agents:\n- **Baseline**: Static green splits cycles based on Webster rules.\n- **RL1 (PPO)**: On-policy gradient agent ($8-35s$ green splits).\n- **RL2 (DQN)**: Off-policy deep Q-network ($6-30s$ green splits).\n- **RL3 (SAC)**: Continuous entropy regularized actor-critic ($10-40s$ green splits).\n- **RL4 (A2C)**: Synchronous advantage micro-controller ($5-25s$ green splits).\n- **Custom Agent**: Fully customizable hyperparameters and reward weights." position="top" />
+                  <HelpPopover text="### RL Algorithm Presets\nSelect between deterministic baselines and diverse adaptive Reinforcement Learning agents:\n- **Baseline**: Static green splits cycles based on Webster rules.\n- **RL1 (PPO)**: On-policy gradient agent ($8-35s$ green splits).\n- **RL2 (DQN)**: Off-policy deep Q-network ($6-30s$ green splits).\n- **RL3 (SAC)**: Continuous entropy regularized actor-critic ($10-40s$ green splits).\n- **RL4 (A2C)**: Synchronous advantage micro-controller ($5-25s$ green splits)." position="top" />
                 </span>
-                {(['baseline', 'rl1', 'rl2', 'rl3', 'rl4', 'custom'] as const).map((m) => {
+                {(['baseline', 'rl1', 'rl2', 'rl3', 'rl4'] as const).map((m) => {
                   const isActive = selectedModelSingle === m
                   const isRl = m !== 'baseline'
                   const maxDur = Number(simConfig.simulation_duration_s ?? 1800)
                   const hasCompletedBaseline = isBaselineCompleted || (simTimeS >= maxDur && maxDur > 0)
-                  const isDisabled = (isRl && !hasCompletedBaseline) || m === 'custom'
+                  const isDisabled = isRl && !hasCompletedBaseline
 
                   const labelMap: Record<string, string> = {
                     baseline: 'Baseline',
@@ -282,7 +340,6 @@ export default function Dashboard() {
                     rl2: 'RL2 (DQN)',
                     rl3: 'RL3 (SAC)',
                     rl4: 'RL4 (A2C)',
-                    custom: 'Custom Agent',
                   }
                   return (
                     <button
@@ -294,7 +351,7 @@ export default function Dashboard() {
                           : 'border-transparent text-gray-500 hover:text-gray-300'
                         }`}
                       disabled={isDisabled}
-                      title={m === 'custom' ? 'Custom Agent is currently disabled.' : isDisabled ? 'Execute Baseline Simulation first to establish a reference and unlock RL agents.' : ''}
+                      title={isDisabled ? 'Execute Baseline Simulation first to establish a reference and unlock RL agents.' : ''}
                       onClick={() => {
                         if (isDisabled) return
                         // Don't stop training when switching tabs — allow background training
@@ -378,7 +435,7 @@ export default function Dashboard() {
 
             {/* Simulation controls — for RL models: only after training completes, never during training */}
             {(viewMode === 'split' || selectedModelSingle === 'baseline' || (trainedModels.includes(selectedModelSingle) && !isTraining)) && (
-              !isRunning ? (
+              !(viewMode === 'split' ? splitIsRunning : isRunning) ? (
                 <div className="flex items-center gap-2 animate-fadeIn">
                   <button
                     className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide"
@@ -399,9 +456,9 @@ export default function Dashboard() {
                   <div className="flex items-center gap-1.5 animate-fadeIn">
                     <button
                       className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.10] hover:border-white/[0.20] text-slate-300 hover:text-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      onClick={isPaused ? resumeSimulation : pauseSimulation}
+                      onClick={splitIsPaused ? resumeSimulation : pauseSimulation}
                     >
-                      {isPaused
+                      {splitIsPaused
                         ? <><svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg> Resume</>
                         : <><svg viewBox="0 0 10 10" className="w-2.5 h-2 fill-current" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="0" width="3" height="10" /><rect x="6" y="0" width="3" height="10" /></svg> Pause</>
                       }
@@ -429,34 +486,20 @@ export default function Dashboard() {
               </button>
             )}
 
-            {/* Start Training button — shown when on an untrained RL model and not currently training */}
-            {viewMode === 'single' && selectedModelSingle !== 'baseline' && !trainedModels.includes(selectedModelSingle) && !isTraining && (
-              <button
-                className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide animate-fadeIn"
-                onClick={() => {
-                  setConfigModalMode('training')
-                  setConfigModalOpen(true)
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                Start Training
-              </button>
-            )}
+
 
             {/* Convergence badge removed from header — shown in NRAL panel only */}
 
             {/* Speed controls for split grid — shared across all canvases */}
-            {viewMode === 'split' && isRunning && (
-              <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1">
+            {viewMode === 'split' && splitIsRunning && (
+              <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1 h-8">
                 <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Speed</span>
                 {([1, 5, 20, 50] as const).map((spd) => (
                   <button
                     key={spd}
                     type="button"
                     onClick={() => setSpeed(spd)}
-                    className={`w-7 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${simSpeed === spd
+                    className={`w-7 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${splitSimSpeed === spd
                       ? 'bg-white text-[#0a0d14] border-white'
                       : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/[0.15]'
                       }`}
@@ -464,6 +507,15 @@ export default function Dashboard() {
                     {spd}×
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Simulation timer for split grid */}
+            {viewMode === 'split' && splitIsRunning && (
+              <div className="flex items-center gap-1.5 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-2 py-1 h-8 animate-fadeIn">
+                <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Time</span>
+                <span className="text-[10px] font-bold font-mono text-[#7ec8e3] tabular-nums">{fmtClock(splitSimTimeS)}</span>
+                <span className="text-[9px] text-slate-600 font-mono ml-0.5">/ {fmtClock(Number(simConfig.simulation_duration_s ?? 1800))}</span>
               </div>
             )}
 
@@ -521,42 +573,42 @@ export default function Dashboard() {
                             />
                           </div>
 
-                           <div className="animate-fadeIn flex-shrink-0">
-                             {baselineRightTab === 'stats' ? (
-                               <SimLiveStatsPanel />
-                             ) : (
-                               <RLConfigDetailsPanel modelKey="baseline" />
-                             )}
-                           </div>
+                          <div className="animate-fadeIn flex-shrink-0">
+                            {baselineRightTab === 'stats' ? (
+                              <SimLiveStatsPanel />
+                            ) : (
+                              <RLConfigDetailsPanel modelKey="baseline" />
+                            )}
+                          </div>
 
-                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
-                               <button
-                                 type="button"
-                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
-                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                   }`}
-                                 onClick={() => setBaselineRightTab('config')}
-                                 title="Configuration Specs"
-                               >
-                                 <span className="text-[13px] leading-none font-bold">CFG</span>
-                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
-                               </button>
-                               <button
-                                 type="button"
-                                 className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
-                                   ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
-                                   : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
-                                   }`}
-                                 onClick={() => setBaselineRightTab('stats')}
-                                 title="Live Stats Panel"
-                               >
-                                 <span className="text-[13px] leading-none font-bold">SIM</span>
-                                 <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
-                               </button>
-                             </div>
-                           </div>
+                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-2 shadow-lg items-center justify-center animate-fadeIn">
+                              <button
+                                type="button"
+                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'config'
+                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                  }`}
+                                onClick={() => setBaselineRightTab('config')}
+                                title="Configuration Specs"
+                              >
+                                <span className="text-[13px] leading-none font-bold">CFG</span>
+                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">SPECS</span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`w-[40px] h-[46px] flex flex-col items-center justify-center rounded-lg transition-all duration-200 ${baselineRightTab === 'stats'
+                                  ? 'bg-slate-700/30 text-slate-100 border border-slate-500'
+                                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-gray-900/40'
+                                  }`}
+                                onClick={() => setBaselineRightTab('stats')}
+                                title="Live Stats Panel"
+                              >
+                                <span className="text-[13px] leading-none font-bold">SIM</span>
+                                <span className="text-[7px] font-mono font-extrabold uppercase tracking-wide mt-1.5 leading-none">LIVE</span>
+                              </button>
+                            </div>
+                          </div>
                         </>
                       )
                     }
@@ -620,21 +672,21 @@ export default function Dashboard() {
                             )}
                           </div>
 
-                           <div className="animate-fadeIn flex-shrink-0">
-                             {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
-                             {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
-                             {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
-                           </div>
+                          <div className="animate-fadeIn flex-shrink-0">
+                            {rightColumnTab === 'config' && <RLConfigDetailsPanel modelKey={selectedModelSingle} />}
+                            {rightColumnTab === 'neural' && <RLNeuralPanel modelKey={selectedModelSingle} />}
+                            {rightColumnTab === 'stats' && <SimLiveStatsPanel />}
+                          </div>
 
-                           <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
-                             <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
-                               {(
-                                 [
-                                   { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
-                                   { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
-                                   { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
-                                 ] as const
-                               ).map(({ key, label, sub, title }) => (
+                          <div className="w-[56px] flex-shrink-0 flex justify-center self-start">
+                            <div className="w-[48px] flex flex-col bg-[#080c12]/90 border border-white/[0.07] p-1 rounded-xl gap-1.5 shadow-lg animate-fadeIn items-center">
+                              {(
+                                [
+                                  { key: 'config', label: 'CFG', sub: 'SPECS', title: 'Hyperparameter Specs' },
+                                  { key: 'neural', label: 'NRAL', sub: 'PROC', title: 'Neural Processing' },
+                                  { key: 'stats', label: 'SIM', sub: 'DATA', title: 'Simulation Data' },
+                                ] as const
+                              ).map(({ key, label, sub, title }) => (
                                 <button
                                   key={key}
                                   type="button"
@@ -887,4 +939,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

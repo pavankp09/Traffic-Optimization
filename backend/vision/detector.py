@@ -1,6 +1,6 @@
 """
 YOLOv8 vehicle detector + ByteTrack tracker stub.
-Full implementation requires: pip install ultralytics supervision
+Full implementation requires: uv pip install ultralytics supervision
 Set enable_rtsp=True in SimulationConfig to activate live camera mode.
 """
 from __future__ import annotations
@@ -50,7 +50,7 @@ class VehicleDetector:
             from ultralytics import YOLO  # noqa: F401
         except ImportError:
             raise RuntimeError(
-                "ultralytics not installed. Run: pip install ultralytics supervision"
+                "ultralytics not installed. Run: uv pip install ultralytics supervision"
             )
         self._running = True
         import threading

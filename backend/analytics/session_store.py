@@ -24,6 +24,7 @@ from backend.db.models import (
     MetricRecord,
     InsightCard,
     VehicleCrossing,
+    SimulationRun,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,23 @@ class SessionStore:
         else:
             self._csv_path = csv_path
         os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
+
+    def _get_session_row(self, session: Session, session_id: str) -> Optional[TrainingSession]:
+        row = None
+        if "-" in session_id:
+            parts = session_id.split("-")
+            if parts[-1].isdigit():
+                db_id = int(parts[-1])
+                row = session.query(TrainingSession).filter(TrainingSession.id == db_id).first()
+        if row is None and session_id.isdigit():
+            row = session.query(TrainingSession).filter(TrainingSession.id == int(session_id)).first()
+        if row is None:
+            row = (
+                session.query(TrainingSession)
+                .filter(TrainingSession.notes == session_id)
+                .first()
+            )
+        return row
 
     # ------------------------------------------------------------------
     # Session management
@@ -125,11 +143,7 @@ class SessionStore:
 
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     row = TrainingSession(
                         sim_config=json.loads(sim_json),
@@ -162,11 +176,7 @@ class SessionStore:
         """Updates TrainingSession status and optional aggregated fields."""
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     logger.warning(
                         "update_session_status: session %s not found", session_id
@@ -204,11 +214,7 @@ class SessionStore:
         try:
             with Session(self._engine) as session:
                 # Resolve integer FK
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     raise ValueError(
                         f"save_episode: TrainingSession not found for {session_id}"
@@ -226,6 +232,8 @@ class SessionStore:
                     collision_count=metrics.collision_count,
                     violation_count=metrics.violation_count,
                     convergence_pct=metrics.signal_efficiency * 100.0,
+                    fuel_index_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
                 )
                 session.add(episode_row)
                 session.flush()  # get episode_row.id before committing
@@ -245,6 +253,8 @@ class SessionStore:
                     fuel_cost_saved_inr=(eco.total_fuel_cost_saved_inr if eco else None),
                     time_value_saved_inr=(eco.total_time_value_saved_inr if eco else None),
                     total_economic_inr_per_hr=(eco.total_saving_inr if eco else None),
+                    fuel_index_rl_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_rl_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
                 )
                 session.add(metric_row)
                 session.commit()
@@ -269,11 +279,7 @@ class SessionStore:
         try:
             with Session(self._engine) as session:
                 # Resolve integer FK
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == insight["session_id"])
-                    .first()
-                )
+                ts_row = self._get_session_row(session, insight["session_id"])
                 if ts_row is None:
                     raise ValueError(
                         f"save_insight: TrainingSession not found for "
@@ -302,11 +308,7 @@ class SessionStore:
         """Returns TrainingSession as dict, or None if not found."""
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     return None
                 return _orm_to_dict(row)
@@ -318,11 +320,7 @@ class SessionStore:
         """Returns list of Episode dicts ordered by episode_number, limited."""
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     return []
                 rows = (
@@ -341,11 +339,7 @@ class SessionStore:
         """Returns all InsightCard dicts for session ordered by episode_number."""
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     return []
                 rows = (
@@ -381,11 +375,7 @@ class SessionStore:
         """
         try:
             with Session(self._engine) as session:
-                row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                row = self._get_session_row(session, session_id)
                 if row is None:
                     return False
                 session.delete(row)
@@ -396,15 +386,52 @@ class SessionStore:
             logger.exception("Failed to delete session %s", session_id)
             raise
 
+    def create_simulation_run(
+        self,
+        simulation_id: str,
+        session_id: str,
+        sim_config: SimulationConfig,
+        adverse_config: AdverseConfig,
+    ) -> None:
+        """Creates a SimulationRun row in the DB snapshotting configurations."""
+        import dataclasses
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    logger.warning("create_simulation_run: TrainingSession not found for %s", session_id)
+                    return
+                
+                # Check if it already exists
+                existing = session.query(SimulationRun).filter(SimulationRun.simulation_id == simulation_id).first()
+                if existing:
+                    return
+
+                row = SimulationRun(
+                    simulation_id=simulation_id,
+                    session_id=ts_row.id,
+                    sim_config=dataclasses.asdict(sim_config),
+                    adverse_config=dataclasses.asdict(adverse_config),
+                )
+                session.add(row)
+                session.commit()
+                logger.info("Saved simulation run %s for session %s", simulation_id, session_id)
+        except Exception:
+            logger.exception("Failed to save simulation run to database")
+            raise
+
     def save_vehicle_crossing(
         self,
         session_id: str,
+        simulation_id: str,
         vehicle_id: str,
         vehicle_type: str,
         number_plate: str,
         entry_time: float,
         exit_time: float,
         crossing_duration: float,
+        run_type: str = "unknown",
+        algorithm: str = "unknown",
     ) -> None:
         """Saves a VehicleCrossing record to both a flat CSV file and the SQL database."""
         import csv
@@ -420,13 +447,13 @@ class SessionStore:
                     writer = csv.writer(f)
                     if not file_exists:
                         writer.writerow([
-                            "session_id", "vehicle_id", "vehicle_type", "number_plate",
-                            "entry_time", "exit_time", "crossing_duration", "created_at"
+                            "session_id", "simulation_id", "vehicle_id", "vehicle_type", "number_plate",
+                            "entry_time", "exit_time", "crossing_duration", "run_type", "algorithm", "created_at"
                         ])
                     writer.writerow([
-                        session_id, vehicle_id, vehicle_type, number_plate,
+                        session_id, simulation_id, vehicle_id, vehicle_type, number_plate,
                         round(entry_time, 2), round(exit_time, 2), round(crossing_duration, 2),
-                        datetime.utcnow().isoformat()
+                        run_type, algorithm, datetime.utcnow().isoformat()
                     ])
                 logger.debug("Logged vehicle crossing to flat CSV for %s", vehicle_id)
         except Exception:
@@ -435,23 +462,22 @@ class SessionStore:
         # 2. Save to SQL database
         try:
             with Session(self._engine) as session:
-                ts_row = (
-                    session.query(TrainingSession)
-                    .filter(TrainingSession.notes == session_id)
-                    .first()
-                )
+                ts_row = self._get_session_row(session, session_id)
                 if ts_row is None:
                     logger.warning("save_vehicle_crossing: TrainingSession not found for %s", session_id)
                     return
                 
                 row = VehicleCrossing(
                     session_id=ts_row.id,
+                    simulation_id=simulation_id,
                     vehicle_id=vehicle_id,
                     vehicle_type=vehicle_type,
                     number_plate=number_plate,
                     entry_time=entry_time,
                     exit_time=exit_time,
                     crossing_duration=crossing_duration,
+                    run_type=run_type,
+                    algorithm=algorithm,
                 )
                 session.add(row)
                 session.commit()

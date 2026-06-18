@@ -253,6 +253,33 @@ class TestPPOTrainer:
         assert isinstance(action, int), "predict() must return an int"
         assert 0 <= action <= 34, f"Action {action} out of range [0, 34]"
 
+    def test_build_model_passes_selected_device(
+        self,
+        sim_config,
+        adverse_config,
+        session_id,
+        db_url,
+        model_dir,
+        emit_fn,
+        monkeypatch,
+    ):
+        """SB3 model creation should receive the selected torch device."""
+        captured = {}
+
+        class FakePPO:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        monkeypatch.setattr("backend.rl.trainer.get_torch_device", lambda: "cuda")
+        monkeypatch.setattr("backend.rl.trainer.PPO", FakePPO)
+
+        trainer = make_trainer(
+            sim_config, adverse_config, session_id, db_url, model_dir, emit_fn,
+        )
+        trainer._build_model(MockTrafficEnv())
+
+        assert captured["device"] == "cuda"
+
 
 class TestEpisodeMetricsCallback:
     """Tests for EpisodeMetricsCallback."""

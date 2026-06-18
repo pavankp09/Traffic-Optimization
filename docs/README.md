@@ -37,7 +37,7 @@ AI-powered adaptive traffic signal control using Reinforcement Learning (PPO), S
 cd Project_T
 
 # Backend dependencies
-pip install -r backend/requirements.txt
+python run.py
 
 # Frontend dependencies
 cd frontend && npm install && cd ..

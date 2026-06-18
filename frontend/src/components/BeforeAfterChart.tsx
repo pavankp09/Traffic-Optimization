@@ -10,8 +10,8 @@ export default function BeforeAfterChart() {
   const viewMode = useSimulationStore((s) => s.viewMode)
   const selectedModelSingle = useSimulationStore((s) => s.selectedModelSingle)
   const selectedModelsSplit = useSimulationStore((s) => s.selectedModelsSplit)
-  const isRunning = useSimulationStore((s) => s.isRunning)
-  const simTimeS = useSimulationStore((s) => s.simTimeS)
+  const isRunning = useSimulationStore((s) => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
+  const simTimeS = useSimulationStore((s) => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
 
   // Simulation frame buffers
   const baselineFrame = useSimulationStore((s) => s.baselineFrame)
@@ -19,12 +19,16 @@ export default function BeforeAfterChart() {
   const rl2Frame      = useSimulationStore((s) => s.rl2Frame)
   const rl3Frame      = useSimulationStore((s) => s.rl3Frame)
   const rl4Frame      = useSimulationStore((s) => s.rl4Frame)
+  const splitFrames   = useSimulationStore((s) => s.splitFrames)
 
   // Session metrics
   const currentMetrics  = useSessionStore((s) => s.currentMetrics)
   const baselineMetrics = useSessionStore((s) => s.baselineMetrics)
 
   const getFrameForModel = (modelKey: string): SimFrame | null => {
+    if (viewMode === 'split') {
+      return splitFrames[modelKey] || null
+    }
     if (modelKey === 'baseline') return baselineFrame
     if (modelKey === 'rl1') return rl1Frame
     if (modelKey === 'rl2') return rl2Frame
@@ -40,6 +44,11 @@ export default function BeforeAfterChart() {
 
   // Resolve metrics for each active key
   const getMetricsForModel = (modelKey: string): EpisodeMetrics | null => {
+    if (viewMode === 'split') {
+      const splitLastSimulationMetrics = useSimulationStore.getState().splitLastSimulationMetrics
+      return splitLastSimulationMetrics[modelKey] || null
+    }
+
     // If not running and no metrics exist yet, show clean empty state
     if (!isRunning && simTimeS === 0 && !currentMetrics && !baselineMetrics) {
       return null
@@ -62,6 +71,9 @@ export default function BeforeAfterChart() {
       const util = Math.min(0.95, 0.60 + (modelKey === 'rl1' ? 0.22 : modelKey === 'rl2' ? 0.18 : modelKey === 'rl3' ? 0.15 : 0.25))
       const eff = Math.min(0.95, 0.55 + (modelKey === 'rl1' ? 0.26 : modelKey === 'rl2' ? 0.20 : modelKey === 'rl3' ? 0.18 : 0.28))
       
+      const fuelVal = 0.7 * (avgWait / 3.6)
+      const carbonVal = fuelVal * 2.31
+      
       return {
         episode_id: modelKey,
         session_id: 'live',
@@ -78,6 +90,8 @@ export default function BeforeAfterChart() {
         avg_phase_duration_s: 28,
         adverse_events_count: 0,
         total_delay_veh_hrs: (avgWait * tput) / 3600,
+        fuel_index_ml_veh: fuelVal,
+        carbon_index_g_veh: carbonVal,
       }
     }
 
@@ -121,18 +135,18 @@ export default function BeforeAfterChart() {
       }, {} as Record<string, number>),
     },
     {
-      metric: 'Efficiency %',
+      metric: 'Fuel /10',
       ...activeKeys.reduce((acc, key) => {
         const m = getMetricsForModel(key)
-        if (m) acc[key] = parseFloat((m.signal_efficiency * 100).toFixed(1))
+        if (m) acc[key] = parseFloat((m.fuel_index_ml_veh / 10).toFixed(1))
         return acc
       }, {} as Record<string, number>),
     },
     {
-      metric: 'Collisions ×5',
+      metric: 'Carbon /10',
       ...activeKeys.reduce((acc, key) => {
         const m = getMetricsForModel(key)
-        if (m) acc[key] = m.collision_count * 5
+        if (m) acc[key] = parseFloat((m.carbon_index_g_veh / 10).toFixed(1))
         return acc
       }, {} as Record<string, number>),
     },
@@ -142,7 +156,7 @@ export default function BeforeAfterChart() {
     <div className="space-y-2">
       <h3 className="text-xs text-gray-400 font-extrabold font-mono uppercase tracking-wider flex items-center gap-1">
         Comparative Performance Chart
-        <HelpPopover text="### Comparative Performance Chart\nStreams live telemetrical comparisons across models:\n- **Avg Wait (s)**: Average commuter delay.\n- **Throughput /100**: Scaled hourly vehicle clearance flow.\n- **Green Util %**: Ratio of active green timings.\n- **Efficiency %**: Synchronization quality.\n- **Collisions ×5**: Conflict count indicator." position="top" />
+        <HelpPopover text="### Comparative Performance Chart\nStreams live telemetrical comparisons across models:\n- **Avg Wait (s)**: Average commuter delay.\n- **Throughput /100**: Scaled hourly vehicle clearance flow.\n- **Green Util %**: Ratio of active green timings.\n- **Fuel /10**: Fuel Index (mL/veh) scaled down by 10.\n- **Carbon /10**: Carbon footprint (g CO₂/veh) scaled down by 10." position="top" />
       </h3>
       
       <ResponsiveContainer width="100%" height={210}>
@@ -162,7 +176,7 @@ export default function BeforeAfterChart() {
               <Bar
                 key={key}
                 dataKey={key}
-                name={meta.label.split(' ')[0] + ' ' + (meta.label.split(' ')[1] || '')}
+                name={meta.label.replace('Agent ', '').replace(' Agent', '')}
                 fill={meta.color}
                 radius={[2, 2, 0, 0]}
               />

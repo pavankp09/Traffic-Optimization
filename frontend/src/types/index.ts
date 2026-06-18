@@ -122,6 +122,8 @@ export interface EpisodeMetrics {
   avg_phase_duration_s: number
   adverse_events_count: number
   total_delay_veh_hrs: number
+  fuel_index_ml_veh: number
+  carbon_index_g_veh: number
 }
 
 export interface MetricsDelta {
@@ -188,6 +190,7 @@ export interface SimConfig {
   cycle_length_s: number
   rl_algorithm: string
   total_timesteps: number
+  training_episodes?: number
   learning_rate: number
   ppo_epochs?: number
   early_stopping?: boolean

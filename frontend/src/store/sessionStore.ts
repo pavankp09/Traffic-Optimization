@@ -68,6 +68,7 @@ interface SessionState {
   resetSession: () => void
   saveModelDetails: (modelKey: string) => void
   loadModelDetails: (modelKey: string) => void
+  resetTrainedModelDetails: (modelKey: string) => void
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -192,6 +193,14 @@ export const useSessionStore = create<SessionState>((set) => ({
           baselineMetrics: state.baselineMetrics,
           economic: null,
         }
+      }
+    }),
+  resetTrainedModelDetails: (modelKey) =>
+    set((state) => {
+      const updatedDetails = { ...state.trainedModelDetails }
+      delete updatedDetails[modelKey]
+      return {
+        trainedModelDetails: updatedDetails,
       }
     }),
 }))

@@ -96,7 +96,7 @@ export default function PhaseTimeline() {
                 style={{ color: isSelected ? meta.color : undefined }}
                 onClick={() => setInspectKey(key)}
               >
-                {meta.label.split(' ')[0]}
+                {meta.label.replace('Agent ', '').replace(' Agent', '')}
               </button>
             )
           })}

@@ -13,6 +13,8 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
+from backend.rl.device import get_torch_device
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,7 +113,7 @@ class TransferLearner:
             fine-tuning or inference.
         """
         logger.info("Loading base model from %s", self.base_model_path)
-        model = PPO.load(self.base_model_path)
+        model = PPO.load(self.base_model_path, device=get_torch_device())
 
         if self.new_env is not None:
             model.set_env(self.new_env)

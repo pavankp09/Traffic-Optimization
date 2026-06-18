@@ -69,7 +69,7 @@ class IntersectionBuilder:
         try:
             import osmnx as ox
         except ImportError:
-            raise ImportError("osmnx is required for OSM import: pip install osmnx")
+            raise ImportError("osmnx is required for OSM import: uv pip install osmnx")
 
         lat, lon = self.config.osm_lat, self.config.osm_lon
         radius = 200  # metres around the intersection

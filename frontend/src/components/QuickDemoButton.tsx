@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useQuickDemo } from '../hooks/useQuickDemo'
+import { isQuickDemoEnabled } from '../utils/quickDemoAvailability'
 
 export default function QuickDemoButton() {
   const [demoState, setDemoState] = useState({ isRunning: false, progress: 0, currentDescription: '' })
   const { startDemo, cancelDemo } = useQuickDemo()
 
   const handleStart = () => {
+    if (!isQuickDemoEnabled) return
     startDemo((state) => setDemoState({ ...state }))
   }
 
-  if (demoState.isRunning) {
+  if (isQuickDemoEnabled && demoState.isRunning) {
     return (
       <div className="flex items-center gap-2.5 bg-[#0a0d14] border border-white/[0.08] rounded-lg px-3 py-1.5 min-w-[200px]">
         {/* Animated progress ring */}
@@ -42,8 +44,15 @@ export default function QuickDemoButton() {
 
   return (
     <button
-      onClick={handleStart}
-      className="group flex items-center gap-2 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.09] hover:border-white/[0.16] text-slate-400 hover:text-slate-200 px-3.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 tracking-wide"
+      type="button"
+      disabled={!isQuickDemoEnabled}
+      onClick={isQuickDemoEnabled ? handleStart : undefined}
+      title={isQuickDemoEnabled ? 'Start Quick Demo' : 'Quick Demo disabled'}
+      className={`group flex items-center gap-2 bg-[#0a0d14] border border-white/[0.09] px-3.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 tracking-wide ${
+        isQuickDemoEnabled
+          ? 'hover:bg-[#0d1118] hover:border-white/[0.16] text-slate-400 hover:text-slate-200'
+          : 'text-slate-600 opacity-55 cursor-not-allowed'
+      }`}
     >
       {/* Minimal play icon */}
       <span className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">

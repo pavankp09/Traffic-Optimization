@@ -51,6 +51,8 @@ class EpisodeMetrics:
     avg_phase_duration_s: float
     adverse_events_count: int
     total_delay_veh_hrs: float      # sum(wait_s) / 3600
+    fuel_index_ml_veh: float = 0.0
+    carbon_index_g_veh: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +211,40 @@ class MetricsCalculator:
         else:
             avg_phase_duration_s = 30.0
 
+        # ---- fuel and carbon index metrics -----------------------------
+        veh_wait_times: dict[str, float] = {}
+        for v in all_obs:
+            vid = v.get("id", "")
+            if vid:
+                wait_val = v.get("wait_time", 0.0)
+                if vid not in veh_wait_times or wait_val > veh_wait_times[vid]:
+                    veh_wait_times[vid] = wait_val
+
+        total_fuel_ml = 0.0
+        total_carbon_g = 0.0
+        for vid, tid in unique_vehicles.items():
+            wait_time = veh_wait_times.get(vid, 0.0)
+            profile = self.vehicle_types.get(tid)
+            if profile:
+                idle_fuel = profile.idle_fuel_l_per_hr
+                co2_factor = profile.co2_factor_kg_per_l
+            else:
+                idle_fuel = 0.80
+                co2_factor = 2.31
+            
+            # fuel (mL) = idle_fuel (L/hr) * wait_time (s) / 3600 * 1000 = idle_fuel * wait_time / 3.6
+            fuel_ml = idle_fuel * (wait_time / 3.6)
+            carbon_g = fuel_ml * co2_factor
+            total_fuel_ml += fuel_ml
+            total_carbon_g += carbon_g
+
+        if n_vehicles > 0:
+            fuel_index_ml_veh = total_fuel_ml / n_vehicles
+            carbon_index_g_veh = total_carbon_g / n_vehicles
+        else:
+            fuel_index_ml_veh = 0.0
+            carbon_index_g_veh = 0.0
+
         return EpisodeMetrics(
             episode_id=episode_id,
             session_id=session_id,
@@ -225,6 +261,8 @@ class MetricsCalculator:
             avg_phase_duration_s=avg_phase_duration_s,
             adverse_events_count=adverse_events_count,
             total_delay_veh_hrs=total_delay_veh_hrs,
+            fuel_index_ml_veh=fuel_index_ml_veh,
+            carbon_index_g_veh=carbon_index_g_veh,
         )
 
     # ------------------------------------------------------------------

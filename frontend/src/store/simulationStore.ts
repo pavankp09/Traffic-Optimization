@@ -23,6 +23,10 @@ interface SimulationState {
   selectedModelsSplit: string[]
   trainedModels: string[]
 
+  // Config modal state
+  configModalOpen: boolean
+  configModalMode: 'simulation' | 'training'
+
   // View mode
   viewMode: 'single' | 'split'
 
@@ -39,6 +43,22 @@ interface SimulationState {
 
   // Last stored simulation metrics per model key
   lastSimulationMetrics: Record<string, EpisodeMetrics>
+
+  // Split-specific state
+  splitFrames: Record<string, SimFrame | null>
+  splitLastSimulationMetrics: Record<string, EpisodeMetrics>
+  splitAdverseEvents: AdverseEvent[]
+  splitSessionId: string | null
+  splitIsRunning: boolean
+  splitIsPaused: boolean
+  splitSimTimeS: number
+  splitSimSpeed: 1 | 5 | 10 | 20 | 50
+  splitThroughputCount: number
+
+  runtimeDevice: 'cpu' | 'cuda' | null
+  runtimeTorchVersion: string | null
+  runtimeCudaVersion: string | null
+  runtimeDeviceName: string | null
 
   // Popup simulation state per episode (isolated replay)
   popupFrames: Record<number, SimFrame | null>
@@ -69,6 +89,9 @@ interface SimulationState {
   setSelectedModelsSplit: (models: string[]) => void
   setViewMode: (mode: 'single' | 'split') => void
   addTrainedModel: (model: string) => void
+  setConfigModalOpen: (open: boolean) => void
+  setConfigModalMode: (mode: 'simulation' | 'training') => void
+  resetModelTrainedState: (model: string) => void
   addAdverseEvent: (event: AdverseEvent) => void
   clearAdverseEvents: () => void
   setRunning: (running: boolean) => void
@@ -80,6 +103,25 @@ interface SimulationState {
   clearRlFrames: () => void
   setLastSimulationMetrics: (model: string, metrics: EpisodeMetrics) => void
   resetLastSimulationMetrics: () => void
+
+  // Split-specific actions
+  setSplitFrame: (modelKey: string, frame: SimFrame | null) => void
+  setSplitLastSimulationMetrics: (modelKey: string, metrics: EpisodeMetrics) => void
+  addSplitAdverseEvent: (event: AdverseEvent) => void
+  clearSplitAdverseEvents: () => void
+  setSplitRunning: (running: boolean) => void
+  setSplitPaused: (paused: boolean) => void
+  setSplitSessionId: (id: string | null) => void
+  setSplitSimSpeed: (speed: 1 | 5 | 10 | 20 | 50) => void
+  setSplitSimTimeS: (time: number) => void
+  resetSplitSimulation: () => void
+  clearSplitFrames: () => void
+  setRuntimeInfo: (runtime: {
+    device?: 'cpu' | 'cuda'
+    torch_version?: string | null
+    cuda_version?: string | null
+    device_name?: string | null
+  } | null) => void
 
   // Actions for popup simulation
   setPopupFrame: (ep: number, frame: SimFrame | null) => void
@@ -118,6 +160,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   selectedModelSingle: 'baseline',
   selectedModelsSplit: ['baseline', 'rl1'],
   trainedModels: [],
+  configModalOpen: false,
+  configModalMode: 'simulation',
   viewMode: 'single',
 
   signalStates: {},
@@ -128,6 +172,21 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   throughputCount: 0,
   simSpeed: 1,
   lastSimulationMetrics: {},
+
+  splitFrames: {},
+  splitLastSimulationMetrics: {},
+  splitAdverseEvents: [],
+  splitSessionId: null,
+  splitIsRunning: false,
+  splitIsPaused: false,
+  splitSimTimeS: 0,
+  splitSimSpeed: 5,
+  splitThroughputCount: 0,
+
+  runtimeDevice: null,
+  runtimeTorchVersion: null,
+  runtimeCudaVersion: null,
+  runtimeDeviceName: null,
 
   popupFrames: {},
   popupRunning: {},
@@ -185,6 +244,27 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     set((state) => {
       if (state.trainedModels.includes(model)) return {}
       return { trainedModels: [...state.trainedModels, model] }
+    }),
+  setConfigModalOpen: (open) => set({ configModalOpen: open }),
+  setConfigModalMode: (mode) => set({ configModalMode: mode }),
+  resetModelTrainedState: (model) =>
+    set((state) => {
+      const updatedMetrics = { ...state.lastSimulationMetrics }
+      delete updatedMetrics[model]
+
+      const frameReset: Partial<SimulationState> = {}
+      if (model === 'rl1') frameReset.rl1Frame = null
+      else if (model === 'rl2') frameReset.rl2Frame = null
+      else if (model === 'rl3') frameReset.rl3Frame = null
+      else if (model === 'rl4') frameReset.rl4Frame = null
+      else if (model === 'custom') frameReset.customFrame = null
+
+      return {
+        trainedModels: state.trainedModels.filter((m) => m !== model),
+        lastSimulationMetrics: updatedMetrics,
+        ...frameReset,
+        currentFrame: state.selectedModelSingle === model ? null : state.currentFrame,
+      }
     }),
 
   addAdverseEvent: (event) =>
@@ -267,6 +347,58 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setPopupDuration: (ep, duration) => set((state) => ({ popupDurations: { ...state.popupDurations, [ep]: duration } })),
   setPopupSimTime: (ep, time) => set((state) => ({ popupSimTimes: { ...state.popupSimTimes, [ep]: time } })),
   setPopupSid: (ep, sid) => set((state) => ({ popupSids: { ...state.popupSids, [ep]: sid } })),
+
+  setSplitFrame: (modelKey, frame) => set((state) => {
+    const prevFrame = state.splitFrames[modelKey]
+    const prevIds = new Set(prevFrame?.vehicles.map((v) => v.id) ?? [])
+    const currIds = new Set(frame?.vehicles.map((v) => v.id) ?? [])
+    const exited = [...prevIds].filter((id) => !currIds.has(id)).length
+    return {
+      splitFrames: {
+        ...state.splitFrames,
+        [modelKey]: frame,
+      },
+      splitThroughputCount: state.splitThroughputCount + exited,
+    }
+  }),
+  setSplitLastSimulationMetrics: (model, metrics) =>
+    set((state) => ({
+      splitLastSimulationMetrics: {
+        ...state.splitLastSimulationMetrics,
+        [model]: metrics,
+      },
+    })),
+  addSplitAdverseEvent: (event) =>
+    set((state) => ({ splitAdverseEvents: [...state.splitAdverseEvents.slice(-19), event] })),
+  clearSplitAdverseEvents: () => set({ splitAdverseEvents: [] }),
+  setSplitRunning: (running) => set({ splitIsRunning: running }),
+  setSplitPaused: (paused) => set({ splitIsPaused: paused }),
+  setSplitSessionId: (id) => set({ splitSessionId: id }),
+  setSplitSimSpeed: (speed) => set({ splitSimSpeed: speed }),
+  setSplitSimTimeS: (time) => set({ splitSimTimeS: time }),
+  resetSplitSimulation: () => set({
+    splitFrames: {},
+    splitLastSimulationMetrics: {},
+    splitAdverseEvents: [],
+    splitIsRunning: false,
+    splitIsPaused: false,
+    splitSessionId: null,
+    splitSimTimeS: 0,
+    splitSimSpeed: 5,
+    splitThroughputCount: 0,
+  }),
+  clearSplitFrames: () => set({
+    splitFrames: {},
+    splitSimTimeS: 0,
+  }),
+
+  setRuntimeInfo: (runtime) =>
+    set({
+      runtimeDevice: runtime?.device ?? null,
+      runtimeTorchVersion: runtime?.torch_version ?? null,
+      runtimeCudaVersion: runtime?.cuda_version ?? null,
+      runtimeDeviceName: runtime?.device_name ?? null,
+    }),
 
   setIntelSelectedEp: (ep) => set({ intelSelectedEp: ep }),
   setIntelSortMode: (mode) => set({ intelSortMode: mode }),
