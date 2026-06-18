@@ -160,8 +160,8 @@ interface SimCanvasProps {
   className?: string
   frameOverride?: SimFrame | null
   // Optional speed/playback overlay rendered on the canvas
-  speedValue?: 1 | 5 | 10 | 20 | 50
-  onSpeedChange?: (s: 1 | 5 | 10 | 20 | 50) => void
+  speedValue?: 1 | 5 | 10 | 20
+  onSpeedChange?: (s: 1 | 5 | 10 | 20) => void
   onPlayPause?: () => void
   onStop?: () => void
   isPaused?: boolean
@@ -188,8 +188,9 @@ export default function SimCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // ── Smooth-animation refs (mutated without causing re-renders) ─────────────
-  const framesHistoryRef = useRef<{ simTime: number; frame: SimFrame }[]>([])
+  const framesHistoryRef = useRef<{ simTime: number; frame: SimFrame; wallTime: number }[]>([])
   const simTimeGapRef    = useRef<number>(0.5)
+  const wallTimeGapRef   = useRef<number>(0.033)   // EMA of real wall-clock gap between frame arrivals
   const T_renderRef      = useRef<number | null>(null)
   const lastRafTimeRef   = useRef<number>(0)
   const renderRef        = useRef<((f?: SimFrame) => void) | null>(null)
@@ -203,8 +204,7 @@ export default function SimCanvas({
   useEffect(() => {
     isRunningRef.current = isRunning
     isPausedRef.current = isPaused
-    speedValueRef.current = speedValue
-  }, [isRunning, isPaused, speedValue])
+  }, [isRunning, isPaused])
 
   // Keep track of dimensions when responsive
   const [responsiveSize, setResponsiveSize] = useState({ w: width, h: height })
@@ -283,19 +283,26 @@ export default function SimCanvas({
       framesHistoryRef.current = []
       T_renderRef.current = null
       simTimeGapRef.current = 0.5
+      wallTimeGapRef.current = 0.033
       lastRafTimeRef.current = 0
       return
     }
+    const now = performance.now() / 1000  // wall-clock seconds
     const history = framesHistoryRef.current
-    const prevFrame = history[history.length - 1]
-    if (prevFrame) {
-      const gap = frame.sim_time_s - prevFrame.simTime
-      if (gap > 0) {
-        simTimeGapRef.current = 0.8 * simTimeGapRef.current + 0.2 * gap
+    const prevEntry = history[history.length - 1]
+    if (prevEntry) {
+      const simGap = frame.sim_time_s - prevEntry.simTime
+      const wallGap = now - prevEntry.wallTime
+      if (simGap > 0) {
+        simTimeGapRef.current = 0.8 * simTimeGapRef.current + 0.2 * simGap
+      }
+      if (wallGap > 0.001) {
+        wallTimeGapRef.current = 0.8 * wallTimeGapRef.current + 0.2 * wallGap
       }
     }
-    history.push({ simTime: frame.sim_time_s, frame })
-    if (history.length > 25) {
+    history.push({ simTime: frame.sim_time_s, frame, wallTime: now })
+    // Keep 60 frames for smoother interpolation at high speeds
+    if (history.length > 60) {
       history.shift()
     }
   }, [frame])
@@ -409,68 +416,69 @@ export default function SimCanvas({
 
       const isTrainedRL = isRL && modelKey && trainedModels.includes(modelKey)
 
-      // Accent colour: green = neural model running, blue = trained/baseline, default = muted
-      const accentColor =
-        policyMode === 'model' ? 'rgba(74,222,128,0.95)' :   // bright green — real RL!
-          policyMode === 'replay' ? 'rgba(6,182,212,0.95)' :   // neon cyan — replay!
-            policyMode === 'heuristic' ? 'rgba(251,191,36,0.90)' :   // amber — trained but using heuristic
-              isTrainedRL ? 'rgba(151,185,167,0.90)' :   // sage — trained
-                'rgba(143,184,206,0.90)'     // blue — baseline/default
-
-      const borderColor =
-        policyMode === 'model' ? 'rgba(74,222,128,0.35)' :
-          policyMode === 'replay' ? 'rgba(6,182,212,0.35)' :
-            policyMode === 'heuristic' ? 'rgba(251,191,36,0.30)' :
-              isTrainedRL ? 'rgba(151,185,167,0.32)' :
-                'rgba(143,184,206,0.28)'
-
-      // Badge text: append the policy mode so it's unambiguous
+      // Badge text: extract only the policy status to keep it clean since the model label is shown in the card header
       const replayEp = (f as any)?.replay_episode
-      const modeSuffix =
-        policyMode === 'model' ? '  ·  ⚡ MODEL ACTIVE' :
-          policyMode === 'replay' ? `  ·  🎬 REPLAY EP${replayEp ?? ''}` :
-            policyMode === 'heuristic' ? '  ·  ~ HEURISTIC' :
-              isTrainedRL ? '  ·  TRAINED' : ''
-      const badgeText = `${label.toUpperCase()}${modeSuffix}`
+      const statusText =
+        policyMode === 'model' ? '⚡ MODEL ACTIVE' :
+          policyMode === 'replay' ? `🎬 REPLAY EP${replayEp ?? ''}` :
+            policyMode === 'heuristic' ? '~ HEURISTIC' :
+              isTrainedRL ? 'TRAINED' : ''
 
-      ctx.save()
-      ctx.font = 'bold 9px "SF Mono", "Fira Code", monospace'
-      const textW = ctx.measureText(badgeText).width
-      const badgeW = textW + 30
-      const badgeH = 22
-      const bx = 10
-      const by = 10
+      if (statusText) {
+        // Accent colour: green = neural model running, blue = trained/baseline, default = muted
+        const accentColor =
+          policyMode === 'model' ? 'rgba(74,222,128,0.95)' :   // bright green — real RL!
+            policyMode === 'replay' ? 'rgba(6,182,212,0.95)' :   // neon cyan — replay!
+              policyMode === 'heuristic' ? 'rgba(251,191,36,0.90)' :   // amber — trained but using heuristic
+                isTrainedRL ? 'rgba(151,185,167,0.90)' :   // sage — trained
+                  'rgba(143,184,206,0.90)'     // blue — baseline/default
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.beginPath()
-      if (ctx.roundRect) { ctx.roundRect(bx + 1, by + 1.5, badgeW, badgeH, 5) }
-      else { ctx.rect(bx + 1, by + 1.5, badgeW, badgeH) }
-      ctx.fill()
+        const borderColor =
+          policyMode === 'model' ? 'rgba(74,222,128,0.35)' :
+            policyMode === 'replay' ? 'rgba(6,182,212,0.35)' :
+              policyMode === 'heuristic' ? 'rgba(251,191,36,0.30)' :
+                isTrainedRL ? 'rgba(151,185,167,0.32)' :
+                  'rgba(143,184,206,0.28)'
 
-      // Background — slightly tinted green when model is active
-      ctx.fillStyle = policyMode === 'model' ? 'rgba(10,30,16,0.96)' : 'rgba(6,9,14,0.95)'
-      ctx.beginPath()
-      if (ctx.roundRect) { ctx.roundRect(bx, by, badgeW, badgeH, 5) }
-      else { ctx.rect(bx, by, badgeW, badgeH) }
-      ctx.fill()
+        ctx.save()
+        ctx.font = 'bold 9px "SF Mono", "Fira Code", monospace'
+        const textW = ctx.measureText(statusText).width
+        const badgeW = textW + 22
+        const badgeH = 18
+        const bx = 10
+        const by = 10
 
-      ctx.strokeStyle = borderColor
-      ctx.lineWidth = 1
-      ctx.stroke()
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.beginPath()
+        if (ctx.roundRect) { ctx.roundRect(bx + 1, by + 1.5, badgeW, badgeH, 4) }
+        else { ctx.rect(bx + 1, by + 1.5, badgeW, badgeH) }
+        ctx.fill()
 
-      // Status dot
-      ctx.fillStyle = accentColor
-      ctx.beginPath()
-      ctx.arc(bx + 11, by + badgeH / 2, 3, 0, Math.PI * 2)
-      ctx.fill()
+        // Background — slightly tinted green when model is active
+        ctx.fillStyle = policyMode === 'model' ? 'rgba(10,30,16,0.96)' : 'rgba(6,9,14,0.95)'
+        ctx.beginPath()
+        if (ctx.roundRect) { ctx.roundRect(bx, by, badgeW, badgeH, 4) }
+        else { ctx.rect(bx, by, badgeW, badgeH) }
+        ctx.fill()
 
-      ctx.fillStyle = accentColor
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(badgeText, bx + 20, by + badgeH / 2)
+        ctx.strokeStyle = borderColor
+        ctx.lineWidth = 1
+        ctx.stroke()
 
-      ctx.restore()
+        // Status dot
+        ctx.fillStyle = accentColor
+        ctx.beginPath()
+        ctx.arc(bx + 9, by + badgeH / 2, 2.5, 0, Math.PI * 2)
+        ctx.fill()
+
+        ctx.fillStyle = accentColor
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(statusText, bx + 16, by + badgeH / 2)
+
+        ctx.restore()
+      }
     }
 
     ctx.restore()  // pop the dpr scale
@@ -479,11 +487,10 @@ export default function SimCanvas({
   // ── Always keep renderRef pointing to the latest render function ──────────
   renderRef.current = render
 
-  // ── 60 fps requestAnimationFrame loop with exponential smoothing ──────────
-  // Each vehicle's display position smoothly chases its data position every
-  // tick using framerate-independent exponential approach:  factor = 1 - e^(-k·dt).
-  // This eliminates the "freeze at target" problem of linear interpolation.
-  // ── 60 fps requestAnimationFrame loop with client-side history interpolation ──
+  // ── 60 fps requestAnimationFrame loop with data-driven interpolation ──────
+  // The render cursor derives its speed from the ratio of sim-time gap to
+  // wall-clock gap between frame arrivals.  This is always in sync with
+  // actual data regardless of React state staleness.
   useLayoutEffect(() => {
     const loop = (time: number) => {
       const dtReal = lastRafTimeRef.current > 0
@@ -504,40 +511,46 @@ export default function SimCanvas({
         return
       }
 
-      const latestFrame = history[history.length - 1].frame
+      const latestEntry = history[history.length - 1]
       const simTimeGap = simTimeGapRef.current
+      const wallTimeGap = wallTimeGapRef.current
 
-      // Target delay of 1.5 frame intervals to guarantee we have frames to interpolate between
+      // Derive effective speed from actual frame data:
+      // effectiveSpeed = simTimeGap / wallTimeGap
+      // e.g. at 20x: simTimeGap ≈ 0.25s, wallTimeGap ≈ 0.0125s → ratio ≈ 20
+      const effectiveSpeed = wallTimeGap > 0.001
+        ? simTimeGap / wallTimeGap
+        : 1.0
+
+      // Target delay of 1.5 frame intervals behind latest
       const delay = 1.5 * simTimeGap
-      const T_target = latestFrame.sim_time_s - delay
+      const T_target = latestEntry.simTime - delay
 
       if (T_renderRef.current === null) {
         T_renderRef.current = T_target
       }
 
-      const isRunning = isRunningRef.current
-      const isPaused = isPausedRef.current
-      const speedValue = speedValueRef.current
-      const speedMult = (isRunning && !isPaused) ? (speedValue ?? 1) : 0
+      const running = isRunningRef.current
+      const paused = isPausedRef.current
 
-      if (dtReal > 0 && speedMult > 0) {
-        const error = T_target - T_renderRef.current
-        // If error is too large (e.g. simulation reset or seek), snap directly to avoid lagging/rubber-banding
+      if (dtReal > 0 && running && !paused) {
+        const error = T_target - T_renderRef.current!
+        // If error is too large (e.g. simulation reset or seek), snap
         if (Math.abs(error) > 3 * simTimeGap) {
           T_renderRef.current = T_target
         } else {
-          // P-controller for smooth clock speed adjustment
-          const kp = 2.0 / Math.max(simTimeGap, 0.1)
+          // P-controller: advance at effective speed with smooth correction
+          const kp = 2.0 / Math.max(simTimeGap, 0.01)
           const adjustment = 1.0 + kp * error
-          const clampedAdjustment = Math.max(0.1, Math.min(3.0, adjustment))
-          T_renderRef.current += dtReal * speedMult * clampedAdjustment
+          const clamped = Math.max(0.5, Math.min(3.0, adjustment))
+          T_renderRef.current! += dtReal * effectiveSpeed * clamped
         }
       }
 
       // Clamp render cursor strictly to bounds of history range
       const tRender = Math.max(
         history[0].simTime,
-        Math.min(latestFrame.sim_time_s, T_renderRef.current ?? T_target)
+        Math.min(latestEntry.simTime, T_renderRef.current ?? T_target)
       )
       T_renderRef.current = tRender
 
@@ -545,7 +558,7 @@ export default function SimCanvas({
       if (interpFrame) {
         renderRef.current?.(interpFrame)
       } else {
-        renderRef.current?.(latestFrame)
+        renderRef.current?.(latestEntry.frame)
       }
 
       rafIdRef.current = requestAnimationFrame(loop)
@@ -620,7 +633,7 @@ export default function SimCanvas({
               /* Compact: single cycling badge */
               <button
                 onClick={() => {
-                  const speeds: (1 | 5 | 20 | 50)[] = [1, 5, 20, 50];
+                  const speeds: (1 | 5 | 10 | 20)[] = [1, 5, 10, 20];
                   const idx = speeds.indexOf((speedValue as any) ?? 5);
                   onSpeedChange(speeds[(idx + 1) % speeds.length]);
                 }}
@@ -633,7 +646,7 @@ export default function SimCanvas({
             ) : (
               /* Full: individual speed badges */
               <div className="flex items-center gap-0.5">
-                {([1, 5, 20, 50] as const).map(s => {
+                {([1, 5, 10, 20] as const).map(s => {
                   const isActive = speedValue === s;
                   return (
                     <button

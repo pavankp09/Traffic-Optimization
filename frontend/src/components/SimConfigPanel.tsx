@@ -1277,11 +1277,11 @@ function ScenarioStudioModal({
                     </div>
                     <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.03]">
                       <div className="absolute inset-y-0 left-0 bg-[#8fb8ce] rounded-full"
-                        style={{ width: `${((trafficVolume - 50) / 4950) * 100}%` }} />
+                        style={{ width: `${((trafficVolume - 50) / 34950) * 100}%` }} />
                       <input
                         type="range"
                         min={50}
-                        max={5000}
+                        max={35000}
                         step={50}
                         value={trafficVolume}
                         onChange={(e) => setTrafficVolume(Number(e.target.value))}
@@ -1433,12 +1433,12 @@ function ScenarioStudioModal({
                 </div>
 
                 {/* Driving Behavior */}
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+                <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm opacity-40 select-none">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Driving Behavior</h4>
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Driving Behavior <span className="text-[9px] text-slate-500 font-normal lowercase">(disabled)</span></h4>
                   </div>
-                  <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5">
+                  <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5 pointer-events-none">
                     {[
                       { id: 'safe', label: 'Safe' },
                       { id: 'medium', label: 'Medium' },

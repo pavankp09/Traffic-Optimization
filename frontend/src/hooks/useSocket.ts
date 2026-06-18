@@ -609,12 +609,12 @@ function registerGlobalListeners(socket: Socket) {
       const ep = Number(parts[1])
       if (!isNaN(ep)) {
         const m = data?.multiplier
-        if (m === 1 || m === 5 || m === 10 || m === 20 || m === 50) store.setPopupSpeed(ep, m)
+        if (m === 1 || m === 5 || m === 10 || m === 20) store.setPopupSpeed(ep, m)
         return
       }
     }
     const m = data?.multiplier
-    if (m === 1 || m === 5 || m === 10 || m === 20 || m === 50) {
+    if (m === 1 || m === 5 || m === 10 || m === 20) {
       if (session_id === activeSid && activeSid) {
         store.setSimSpeed(m)
       } else if (session_id === splitSid && splitSid) {

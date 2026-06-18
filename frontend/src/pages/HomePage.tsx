@@ -30,7 +30,11 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#07090d] text-gray-100">
       <nav className="sticky top-0 z-40 border-b border-white/10 bg-[#07090d]/90 backdrop-blur">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <a href="/" className="font-semibold tracking-tight text-white">Low Traffic<span className="text-cyan-400">.ai</span></a>
+          <a href="/" className="tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <span className="font-semibold text-white/90">Velo</span>
+            <span className="font-extrabold text-[#10b981]/85">City</span>
+            <span className="text-cyan-400/80 font-semibold">.ai</span>
+          </a>
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-300">
             {navLinks.map((item) => (
               <a key={item.id} href={`#${item.id}`} className="hover:text-white transition-colors">{item.label}</a>
@@ -44,7 +48,7 @@ export default function HomePage() {
       </nav>
 
       <section id="hero" className="max-w-7xl mx-auto px-6 pt-20 pb-16">
-        <p className="text-xs uppercase tracking-[0.22em] text-cyan-400/80">lowtraffic.ai · Hyderabad</p>
+        <p className="text-xs uppercase tracking-[0.22em] text-cyan-400/80">velocity.ai · Hyderabad</p>
         <h1 className="mt-4 text-5xl md:text-7xl font-semibold leading-[0.95] text-white">
           AI That Makes
           <br />
@@ -138,15 +142,15 @@ export default function HomePage() {
           <h2 className="mt-3 text-4xl font-semibold">Ready to Pilot in Hyderabad</h2>
           <p className="mt-3 text-gray-700">30-day pilot, zero upfront cost, measurable outcomes.</p>
           <div className="mt-6 flex justify-center gap-3 flex-wrap">
-            <a href="mailto:pilot@lowtraffic.ai" className="px-5 py-2.5 rounded-lg bg-black text-white">Request Your Pilot</a>
-            <a href="mailto:pilot@lowtraffic.ai" className="px-5 py-2.5 rounded-lg border border-gray-300">pilot@lowtraffic.ai</a>
+            <a href="mailto:pilot@velocity.ai" className="px-5 py-2.5 rounded-lg bg-black text-white">Request Your Pilot</a>
+            <a href="mailto:pilot@velocity.ai" className="px-5 py-2.5 rounded-lg border border-gray-300">pilot@velocity.ai</a>
           </div>
         </div>
       </section>
 
       <footer className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-6 text-xs text-gray-500 flex justify-between flex-wrap gap-2">
-          <span>© 2026 Low Traffic · lowtraffic.ai</span>
+          <span>© 2026 VeloCity · velocity.ai</span>
           <span>AI Traffic Management · Hyderabad, India</span>
         </div>
       </footer>

@@ -232,30 +232,33 @@ export default function Dashboard() {
         <div className="flex items-center gap-4 py-3">
           {/* Brand mark */}
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#8fb8ce]/80 to-[#6e8fa8]/60 flex items-center justify-center shadow-inner">
+            <div className="w-7 h-7 rounded-full border border-white/10 bg-white/[0.02] flex items-center justify-center">
               <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5">
-                <circle cx="8" cy="8" r="7" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" />
-                <circle cx="8" cy="4" r="1.5" fill="#4ade80" />
-                <circle cx="8" cy="8.5" r="1.5" fill="#facc15" />
-                <circle cx="8" cy="13" r="1.5" fill="#f87171" />
+                <circle cx="8" cy="8" r="7" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                <circle cx="8" cy="4.5" r="1.2" fill="#f87171" />
+                <circle cx="8" cy="8.0" r="1.2" fill="#fbbf24" />
+                <circle cx="8" cy="11.5" r="1.2" fill="#34d399" />
               </svg>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-semibold tracking-tight text-slate-100 leading-none">
-                  Low Traffic Simulation
-                </h1>
-                <span className="text-[10px] text-slate-500 font-mono hidden lg:block">·</span>
-                <span className="text-[10px] text-slate-500 hidden lg:block">Traffic Management Research Tool</span>
+                <div className="flex items-center" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  <span className="text-[13.5px] font-semibold text-white/90 tracking-tight">Velo</span>
+                  <span className="text-[13.5px] font-extrabold text-[#10b981]/85 tracking-tight">City</span>
+                </div>
+                <span className="text-[9px] text-[#f59e0b]/60 hidden lg:block font-mono select-none">·</span>
+                <span className="text-[9.5px] text-slate-400/80 hidden lg:block font-medium tracking-wider" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Traffic Management Tool</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${(viewMode === 'split' ? splitIsRunning : isRunning) ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
-                <p className="text-[10px] text-slate-500 font-mono">
-                  {(viewMode === 'split' ? splitIsRunning : isRunning) ? 'SIMULATION ACTIVE' : 'READY'}
-                </p>
+              <div className="flex items-center gap-2 mt-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${(viewMode === 'split' ? splitIsRunning : isRunning) ? 'bg-emerald-400 animate-pulse-dot' : 'bg-slate-600'}`} />
+                  <p className="text-[9px] text-slate-500 font-bold tracking-wider uppercase">
+                    {(viewMode === 'split' ? splitIsRunning : isRunning) ? 'SIMULATION ACTIVE' : 'READY'}
+                  </p>
+                </div>
                 {runtimeDevice && (
                   <span
-                    className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest ${runtimeTone}`}
+                    className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider ${runtimeTone}`}
                     title={runtimeTorchVersion ? `PyTorch ${runtimeTorchVersion}` : undefined}
                   >
                     {runtimeLabel}
@@ -435,7 +438,7 @@ export default function Dashboard() {
 
             {/* Simulation controls — for RL models: only after training completes, never during training */}
             {(viewMode === 'split' || selectedModelSingle === 'baseline' || (trainedModels.includes(selectedModelSingle) && !isTraining)) && (
-              !(viewMode === 'split' ? splitIsRunning : isRunning) ? (
+              !(viewMode === 'split' ? splitIsRunning : isRunning) && (
                 <div className="flex items-center gap-2 animate-fadeIn">
                   <button
                     className="flex items-center gap-1.5 bg-[#0f2a1c] hover:bg-[#142e20] border border-[#4ade80]/20 hover:border-[#4ade80]/35 text-[#4ade80]/85 hover:text-[#4ade80] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all tracking-wide"
@@ -451,71 +454,85 @@ export default function Dashboard() {
                     New Simulation
                   </button>
                 </div>
-              ) : (
-                viewMode === 'split' && (
-                  <div className="flex items-center gap-1.5 animate-fadeIn">
-                    <button
-                      className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#0d1118] border border-white/[0.10] hover:border-white/[0.20] text-slate-300 hover:text-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      onClick={splitIsPaused ? resumeSimulation : pauseSimulation}
-                    >
-                      {splitIsPaused
-                        ? <><svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><polygon points="1,0.5 9,5 1,9.5" /></svg> Resume</>
-                        : <><svg viewBox="0 0 10 10" className="w-2.5 h-2 fill-current" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="0" width="3" height="10" /><rect x="6" y="0" width="3" height="10" /></svg> Pause</>
-                      }
-                    </button>
-                    <button
-                      className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#160b0b] border border-[#ef4444]/18 hover:border-[#ef4444]/35 text-[#ef4444]/70 hover:text-[#ef4444] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      onClick={stopSimulation}
-                    >
-                      <svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><rect x="0.5" y="0.5" width="9" height="9" rx="1" /></svg>
-                      Stop
-                    </button>
-                  </div>
-                )
               )
             )}
 
             {/* Training controls — only on the tab whose model is actually training */}
             {viewMode === 'single' && selectedModelSingle !== 'baseline' && isActiveModelTraining && (
               <button
-                className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#160b0b] border border-[#ef4444]/18 hover:border-[#ef4444]/35 text-[#ef4444]/70 hover:text-[#ef4444] px-4 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                className="flex items-center gap-1.5 bg-[#0b0f17]/85 backdrop-blur-md hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/35 text-red-400/90 hover:text-red-400 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus:outline-none shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
                 onClick={stopTraining}
               >
-                <svg viewBox="0 0 10 10" className="w-2 h-2" fill="currentColor"><rect x="0.5" y="0.5" width="9" height="9" rx="1" /></svg>
+                <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current">
+                  <rect x="5" y="5" width="14" height="14" rx="1.5" />
+                </svg>
                 Stop Training
               </button>
             )}
 
-
-
-            {/* Convergence badge removed from header — shown in NRAL panel only */}
-
-            {/* Speed controls for split grid — shared across all canvases */}
+            {/* Consolidated split grid playback bar */}
             {viewMode === 'split' && splitIsRunning && (
-              <div className="flex items-center gap-1 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-1.5 py-1 h-8">
-                <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Speed</span>
-                {([1, 5, 20, 50] as const).map((spd) => (
-                  <button
-                    key={spd}
-                    type="button"
-                    onClick={() => setSpeed(spd)}
-                    className={`w-7 h-6 text-[10px] font-bold font-mono rounded border transition-all duration-150 ${splitSimSpeed === spd
-                      ? 'bg-white text-[#0a0d14] border-white'
-                      : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/[0.15]'
-                      }`}
-                  >
-                    {spd}×
-                  </button>
-                ))}
-              </div>
-            )}
+              <div className="flex items-center gap-2.5 bg-[#0b0f17]/85 backdrop-blur-md border border-white/[0.08] rounded-full px-2.5 py-1 h-9 shadow-[0_2px_12px_rgba(0,0,0,0.4)] animate-fadeIn select-none">
+                {/* Play/Pause Button */}
+                <button
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/[0.06] text-slate-350 hover:text-white transition-all focus:outline-none"
+                  onClick={splitIsPaused ? resumeSimulation : pauseSimulation}
+                  title={splitIsPaused ? 'Resume Simulation' : 'Pause Simulation'}
+                >
+                  {splitIsPaused ? (
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                  )}
+                </button>
 
-            {/* Simulation timer for split grid */}
-            {viewMode === 'split' && splitIsRunning && (
-              <div className="flex items-center gap-1.5 bg-[#0a0d14] rounded-lg border border-white/[0.06] px-2 py-1 h-8 animate-fadeIn">
-                <span className="text-[8px] font-mono text-slate-600 uppercase tracking-widest pr-1">Time</span>
-                <span className="text-[10px] font-bold font-mono text-[#7ec8e3] tabular-nums">{fmtClock(splitSimTimeS)}</span>
-                <span className="text-[9px] text-slate-600 font-mono ml-0.5">/ {fmtClock(Number(simConfig.simulation_duration_s ?? 1800))}</span>
+                {/* Stop Button */}
+                <button
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/10 text-red-400/90 hover:text-red-400 transition-all focus:outline-none"
+                  onClick={stopSimulation}
+                  title="Stop Simulation"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                    <rect x="5" y="5" width="14" height="14" rx="1.5" />
+                  </svg>
+                </button>
+
+                {/* Separator 1 */}
+                <div className="w-[1px] h-4 bg-white/[0.12]" />
+
+                {/* Speed Controls */}
+                <div className="flex items-center gap-0.5">
+                  {([1, 5, 10, 20] as const).map((spd) => {
+                    const isActive = splitSimSpeed === spd;
+                    return (
+                      <button
+                        key={spd}
+                        type="button"
+                        onClick={() => setSpeed(spd)}
+                        className={`px-2 py-0.5 text-[10px] font-bold font-mono rounded-full transition-all duration-150 focus:outline-none ${
+                          isActive
+                            ? 'bg-[#0e2a35] text-cyan-400 border border-cyan-400/40 shadow-[0_0_8px_rgba(34,211,238,0.22)]'
+                            : 'border border-transparent text-slate-500 hover:text-slate-350 hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        {spd}x
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Separator 2 */}
+                <div className="w-[1px] h-4 bg-white/[0.12]" />
+
+                {/* Simulation timer */}
+                <div className="flex items-center pr-1.5 text-[10px] font-mono text-cyan-400 tabular-nums">
+                  <span>{fmtClock(splitSimTimeS)}</span>
+                  <span className="text-slate-500 ml-1">/ {fmtClock(Number(simConfig.simulation_duration_s ?? 1800))}</span>
+                </div>
               </div>
             )}
 

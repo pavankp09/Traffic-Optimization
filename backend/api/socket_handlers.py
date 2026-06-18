@@ -2260,11 +2260,15 @@ def _run_mock_sim(sio, session_id: str) -> None:
         )
 
     # Initial speed — may be overridden mid-run via sim:speed socket events
-    _initial_speed = max(1, _safe_int(state_cfg.get("sim_speed_multiplier") or 1, 1))
+    _initial_speed = max(1, min(20, _safe_int(state_cfg.get("sim_speed_multiplier") or 1, 1)))
     set_session_state(session_id, sim_speed=_initial_speed)
     raw_duration = state_cfg.get("simulation_duration_s")
     max_sim_s = _safe_float(raw_duration, 1800.0) if raw_duration is not None else 1800.0
-    render_sleep_s = 0.05
+    # Dynamic frame rate — emit more frequently at higher speeds to keep the
+    # sim-time gap between frames ≤ MAX_SIM_GAP.  This is the key to smooth
+    # animation: vehicles never jump more than ~0.25 sim-seconds per frame.
+    _MAX_SIM_GAP = 0.25   # seconds of sim-time between emitted frames
+    _BASE_SLEEP = 0.033   # ~30 FPS at 1× speed
 
     # ── Which model to simulate ──────────────────────────────────────────────
     model_key = (_session_states.get(session_id, {}) or {}).get("model_key", "all")
@@ -2483,7 +2487,9 @@ def _run_mock_sim(sio, session_id: str) -> None:
             _tick_start = time.time()  # real wall-clock for Tick/FPS measurement
 
             # Re-read speed each tick so sim:speed events take effect immediately
-            sim_speed = max(1, int(_session_states.get(session_id, {}).get("sim_speed", _initial_speed)))
+            sim_speed = max(1, min(20, int(_session_states.get(session_id, {}).get("sim_speed", _initial_speed))))
+            # Dynamic sleep: keep sim-time gap between emitted frames ≤ _MAX_SIM_GAP
+            render_sleep_s = min(_BASE_SLEEP, _MAX_SIM_GAP / max(sim_speed, 1))
             dt = render_sleep_s * sim_speed
             step += 1
             sim_clock += dt  # continuous wall-clock of simulated time
@@ -3336,11 +3342,11 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
 
     @socketio.on("sim:speed")
     def handle_sim_speed(data):
-        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20 | 50"""
+        """Change simulation speed mid-run. multiplier: 1 | 5 | 10 | 20"""
         if not isinstance(data, dict):
             return
         session_id  = data.get("session_id", "")
-        multiplier  = max(1, min(50, int(data.get("multiplier", 1))))
+        multiplier  = max(1, min(20, int(data.get("multiplier", 1))))
         if not session_id:
             return
         set_session_state(session_id, sim_speed=multiplier)

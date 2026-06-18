@@ -284,7 +284,7 @@ export function useSimulation() {
     emit('training:resume', { session_id: sessionId })
   }, [emit, sessionId, setTrainingPaused])
 
-  const setSpeed = useCallback((multiplier: 1 | 5 | 10 | 20 | 50) => {
+  const setSpeed = useCallback((multiplier: 1 | 5 | 10 | 20) => {
     const viewMode = useSimulationStore.getState().viewMode
     if (viewMode === 'split') {
       const splitSid = useSimulationStore.getState().splitSessionId
