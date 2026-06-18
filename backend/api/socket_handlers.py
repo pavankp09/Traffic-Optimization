@@ -485,7 +485,7 @@ class _MockVehicle:
         self.turning = True
         self.turn_t  = 0.0
 
-    def _find_best_lane(self, world_vehicles: list) -> float | None:
+    def _find_best_lane(self, active_arm_vehicles: list) -> float | None:
         """
         Scan the 3 actual lanes on the current arm, measure the clearance
         ahead in each lane, and return the center of the lane with the most space.
@@ -513,8 +513,8 @@ class _MockVehicle:
             # If checking a different lane, make sure it is safe to enter (no vehicle beside or immediately behind/ahead)
             if lane_idx != self.lane % _N_LANES:
                 is_lane_safe = True
-                for v in world_vehicles:
-                    if v is self or v.arm != self.arm or v.through or v.turning:
+                for v in active_arm_vehicles:
+                    if v is self:
                         continue
                     v_long = v.x * cos_t + v.y * sin_t
                     v_lat  = -v.x * sin_t + v.y * cos_t
@@ -538,8 +538,8 @@ class _MockVehicle:
                     lane_clearance[lane_idx] = -1.0
             else:
                 # Own lane: only scan for blockers ahead
-                for v in world_vehicles:
-                    if v is self or v.arm != self.arm or v.through or v.turning:
+                for v in active_arm_vehicles:
+                    if v is self:
                         continue
                     v_long = v.x * cos_t + v.y * sin_t
                     v_lat  = -v.x * sin_t + v.y * cos_t
@@ -570,7 +570,7 @@ class _MockVehicle:
             
         return offsets[best_lane_idx]
 
-    def _find_lateral_gap(self, world_vehicles: list) -> float | None:
+    def _find_lateral_gap(self, active_arm_vehicles: list) -> float | None:
         """
         Find a lateral offset on the current arm that has sufficient gap to any blocker.
         """
@@ -592,13 +592,12 @@ class _MockVehicle:
             
             # Check clearance at this candidate lateral position
             clearance = 35.0
-            for v in world_vehicles:
-                if v is self or v.arm != self.arm or v.through or v.turning:
+            for v in active_arm_vehicles:
+                if v is self:
                     continue
                 v_long = v.x * cos_t + v.y * sin_t
                 v_lat  = -v.x * sin_t + v.y * cos_t
                 v_hl   = _VEH_LEN.get(v.type_id, 4.0) / 2.0
-                v_hw   = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                 
                 # Check vehicles that are ahead of us
                 if v_long >= my_long:
@@ -608,6 +607,7 @@ class _MockVehicle:
                     continue
                 
                 # Lateral overlap check
+                v_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                 my_hw = _VEH_WIDTH.get(self.type_id, 1.8) / 2.0
                 if abs(v_lat - cand) < (v_hw + my_hw + 0.3):
                     clearance = min(clearance, long_dist - v_hl)
@@ -1483,6 +1483,10 @@ class _SimWorld:
             v for v in self.vehicles
             if v.through and abs(v.x) < 14.4 and abs(v.y) < 14.4
         ]
+        arm_active_veh: dict[str, list] = {}
+        for v in self.vehicles:
+            if not v.through and not v.turning:
+                arm_active_veh.setdefault(v.arm, []).append(v)
         _GHOST_SPEED = _MOVE_SPEED * 0.25  # creep speed (used by Tier 1 & Tier 2)
 
         # ── Pre-compute pedestrian hard-stop zones ─────────────────────────────
@@ -1547,7 +1551,7 @@ class _SimWorld:
 
                 if closest_ahead < min_gap:
                     # Too close to vehicle ahead → steer to a lateral gap instead of stopping
-                    escape = v._find_lateral_gap(self.vehicles)
+                    escape = v._find_lateral_gap(arm_active_veh.get(v.arm, []))
                     if escape is not None:
                         my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                         escape = max(lo + my_hw + 0.1, min(hi - my_hw - 0.1, escape))
@@ -1593,7 +1597,7 @@ class _SimWorld:
                     target = v_lat
                     steer_rate = 0.0
                 else:
-                    lane_target = v._find_best_lane(self.vehicles)
+                    lane_target = v._find_best_lane(arm_active_veh.get(v.arm, []))
 
                     if lane_target is not None:
                         # Guard: in free-left layouts, lane 2 is dedicated to left-turners.
@@ -1697,7 +1701,7 @@ class _SimWorld:
             if v.speed == 0.0 and not v.turning and not v.through:
                 # Green signal but stuck > 3s → try hard lateral escape
                 if v.arm in green and v.stuck_s > 3.0:
-                    escape = v._find_lateral_gap(self.vehicles)
+                    escape = v._find_lateral_gap(arm_active_veh.get(v.arm, []))
                     if escape is not None:
                         my_hw = _VEH_WIDTH.get(v.type_id, 1.8) / 2.0
                         escape = max(lo + my_hw + 0.1, min(hi - my_hw - 0.1, escape))
@@ -2047,6 +2051,39 @@ _trained_model_paths: dict[str, str] = {}
 _loaded_policies: dict[str, object] = {}
 
 
+def _warmup_imports_and_models():
+    try:
+        logger.info("[Bootstrap] Pre-warming PyTorch and Stable-Baselines3 in background...")
+        import torch
+        from stable_baselines3 import PPO, DQN, A2C
+        from backend.rl.device import get_torch_device
+        device = get_torch_device()
+        
+        # Warm up existing model weights if present on disk
+        algo_map = {
+            "rl1": ("PPO", PPO),
+            "rl2": ("DQN", DQN),
+            "rl3": ("SAC", DQN),  # SAC uses DQN loader in trainer.py
+            "rl4": ("A2C", A2C),
+        }
+        for key, (algo_name, loader) in algo_map.items():
+            disk_path = f"models/{algo_name}/latest.zip"
+            if os.path.exists(disk_path):
+                try:
+                    model = loader.load(disk_path, device=device)
+                    _loaded_policies[key] = model
+                    _trained_model_paths[key] = disk_path
+                    logger.info("[Bootstrap] Pre-loaded model weights for %s from %s", key, disk_path)
+                except Exception as e:
+                    logger.warning("Failed to pre-load model weights for %s: %s", key, e)
+        logger.info("[Bootstrap] PyTorch/SB3 background pre-warming complete.")
+    except Exception as e:
+        logger.warning("Background pre-warming failed: %s", e)
+
+
+threading.Thread(target=_warmup_imports_and_models, daemon=True).start()
+
+
 def register_trained_model(model_key: str, model_path: str) -> None:
     """Record a freshly trained model path for the given RL model key.
     Called by the training thread after trainer.train() completes.
@@ -2272,6 +2309,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
 
     # ── Which model to simulate ──────────────────────────────────────────────
     model_key = (_session_states.get(session_id, {}) or {}).get("model_key", "all")
+    model_keys = [k.strip() for k in model_key.split(",")] if isinstance(model_key, str) and "," in model_key else [model_key]
     replay_episode = (_session_states.get(session_id, {}) or {}).get("replay_episode")
 
     # ── Demand & capacity settings ──────────────────────────────────────────
@@ -2302,7 +2340,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
     # Lookup uses model_key so the policy persists across the session_id change
     # between training and the subsequent simulation run.
     _policy_fns = {}
-    keys_to_load = ["rl1", "rl2", "rl3", "rl4", "custom"] if model_key == "all" else [model_key]
+    keys_to_load = ["rl1", "rl2", "rl3", "rl4", "custom"] if "all" in model_keys else [k for k in model_keys if k != "baseline"]
 
     def _make_policy_fn(model):
         """Return a policy_fn(world) → (phase_idx, duration_s) closure."""
@@ -2365,7 +2403,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
             )
         else:
             active_policy = None
-            if model_key == "all" or model_key == mk:
+            if "all" in model_keys or mk in model_keys:
                 active_policy = _policy_fns.get(mk)
             return _SimWorld(
                 fixed_time=False,
@@ -2402,9 +2440,12 @@ def _run_mock_sim(sio, session_id: str) -> None:
         "rl4": rl4_world,
         "custom": custom_world,
     }
-    if model_key in _ALL_WORLDS_MAP:
+    if len(model_keys) == 1 and model_keys[0] in _ALL_WORLDS_MAP:
         # Single-model mode — only run the requested world
-        _WORLDS = {model_key: _ALL_WORLDS_MAP[model_key]}
+        _WORLDS = {model_keys[0]: _ALL_WORLDS_MAP[model_keys[0]]}
+    elif len(model_keys) > 1 or (len(model_keys) == 1 and model_keys[0] != "all"):
+        # Specific subset of models
+        _WORLDS = {k: _ALL_WORLDS_MAP[k] for k in model_keys if k in _ALL_WORLDS_MAP}
     else:
         # 'all' or unset → run all worlds (split-view / legacy)
         # In split-view, attach the trained policy to the matching world.
@@ -2476,12 +2517,14 @@ def _run_mock_sim(sio, session_id: str) -> None:
                     world.add(v)
 
     try:
+        last_iteration_start = time.time()
         while True:
             state = _session_states.get(session_id, {})
             if not state.get("running"):
                 break
             if state.get("paused"):
                 time.sleep(render_sleep_s)
+                last_iteration_start = time.time()  # Reset start time to avoid a time jump on resume
                 continue
 
             _tick_start = time.time()  # real wall-clock for Tick/FPS measurement
@@ -2490,7 +2533,19 @@ def _run_mock_sim(sio, session_id: str) -> None:
             sim_speed = max(1, min(20, int(_session_states.get(session_id, {}).get("sim_speed", _initial_speed))))
             # Dynamic sleep: keep sim-time gap between emitted frames ≤ _MAX_SIM_GAP
             render_sleep_s = min(_BASE_SLEEP, _MAX_SIM_GAP / max(sim_speed, 1))
-            dt = render_sleep_s * sim_speed
+            
+            # Calculate actual elapsed wall-clock time since the last iteration
+            current_time = time.time()
+            elapsed = current_time - last_iteration_start
+            last_iteration_start = current_time
+            
+            if step == 0:
+                elapsed = render_sleep_s
+            else:
+                # Clamp elapsed to prevent massive timing jumps if the OS throttles or pauses the process
+                elapsed = min(0.08, max(0.002, elapsed))
+                
+            dt = elapsed * sim_speed
             step += 1
             sim_clock += dt  # continuous wall-clock of simulated time
 

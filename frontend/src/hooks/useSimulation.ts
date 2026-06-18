@@ -65,9 +65,10 @@ export function useSimulation() {
           sim_speed_multiplier: START_SPEED,
         }
 
+        const selectedSplit = useSimulationStore.getState().selectedModelsSplit
         emit('sim:start', {
           session_id: sid,
-          model_key: 'all',
+          model_key: selectedSplit && selectedSplit.length > 0 ? selectedSplit.join(',') : 'all',
           sim_config: runtimeSimConfig,
           adverse_config: currentAdverseConfig,
         })
