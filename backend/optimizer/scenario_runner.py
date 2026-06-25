@@ -344,8 +344,12 @@ def run_scenario_stream(
     # Detect convergence episode (stochastic plateau)
     convergence_ep = int(n_episodes * 0.72)
 
+    avg_wait = _mean(wait_times)
+    fuel_val = round(0.65 * (avg_wait / 3.6), 2)
+    co2_val = round(fuel_val * 2.31, 2)
+
     kpi = KpiResult(
-        avg_wait_s=_mean(wait_times),
+        avg_wait_s=avg_wait,
         avg_queue_len=0.0,
         throughput_vph=_mean(throughputs),
         flow_efficiency=round(min(_mean(throughputs) / max(profile.traffic_volume_vph, 1), 1.0), 3),
@@ -353,6 +357,8 @@ def run_scenario_stream(
         episodes_trained=n_episodes,
         convergence_episode=convergence_ep,
         training_curve=training_curve,
+        fuel_index_ml_veh=fuel_val,
+        carbon_index_g_veh=co2_val,
     )
 
     result = ScenarioResult(
@@ -395,6 +401,8 @@ def _result_to_dict(r: ScenarioResult) -> dict:
             "episodes_trained": kpi.episodes_trained,
             "convergence_episode": kpi.convergence_episode,
             "training_curve": kpi.training_curve,
+            "fuel_index_ml_veh": kpi.fuel_index_ml_veh,
+            "carbon_index_g_veh": kpi.carbon_index_g_veh,
         } if kpi else None,
         "sim_config_summary": r.sim_config_summary,
     }

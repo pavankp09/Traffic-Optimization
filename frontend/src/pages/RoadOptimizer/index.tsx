@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import './optimizer.css'
-import type { Scenario, IntersectionConfig } from './types'
+import type { Scenario, IntersectionConfig, LLMRecommendation } from './types'
 import ScenarioBoard from './ScenarioBoard'
 import ResultsPanel from './ResultsPanel'
 import LLMReportPanel from './LLMReportPanel'
@@ -322,6 +322,9 @@ export default function RoadOptimizerPage() {
   const [activeSimConfig, setActiveSimConfig] = useState<Record<string, any> | null>(null)
   const [availableModelKeys, setAvailableModelKeys] = useState<string[]>(['baseline', 'baseline_fixed'])
   const [rawModelsList, setRawModelsList] = useState<any[]>([])
+  // Persist AI recommendation report across tab switches and track completion
+  const [aiReport, setAiReport] = useState<LLMRecommendation | null>(null)
+  const [aiRecommendationDone, setAiRecommendationDone] = useState(false)
 
   useEffect(() => {
     fetch('/api/models')
@@ -394,6 +397,22 @@ export default function RoadOptimizerPage() {
   const isBulkRunning = runQueue.length > 0 || runningCount > 0
   // True when any visual sim overlay is actively running (not just the SSE evaluations)
   const isAnyVisualSimRunning = (isRunning || isPaused) && !!useSimulationStore.getState().sessionId?.startsWith('road_opt_visual_')
+
+  // Display-adjusted counts for the sidebar and scenario header chip.
+  // A scenario that has SSE status='done' but whose visual canvas simulation is
+  // still playing should appear as Running=1, Completed-1.
+  // Derive the running scenario_id from the store sessionId (always 'road_opt_visual_<id>')
+  // instead of activeSimScenario — activeSimScenario is nulled when the overlay closes
+  // but the socket session keeps running.
+  const _storeSessionId = useSimulationStore.getState().sessionId
+  const visuallyRunningScenarioId = isAnyVisualSimRunning && _storeSessionId?.startsWith('road_opt_visual_')
+    ? _storeSessionId.replace('road_opt_visual_', '')
+    : null
+  const visuallyRunningIsDone = visuallyRunningScenarioId
+    ? (scenarios.find(s => s.scenario_id === visuallyRunningScenarioId)?.status === 'done')
+    : false
+  const displayDoneCount = visuallyRunningIsDone ? Math.max(0, doneCount - 1) : doneCount
+  const displayRunningCount = runningCount + (isAnyVisualSimRunning ? 1 : 0)
 
   // ── Run scenario via SSE ──
   const handleRun = useCallback((scenarioId: string) => {
@@ -505,13 +524,6 @@ export default function RoadOptimizerPage() {
     const store = useSimulationStore.getState()
     const visualSessionId = `road_opt_visual_${scenario.scenario_id}`
 
-    // If this exact session is already running, just reopen the visual overlay.
-    if (store.sessionId === visualSessionId && (store.isRunning || store.isPaused)) {
-      setActiveSimScenario(scenario)
-      setActiveSimConfig(getScenarioSimConfig(scenario, simConfig, intersection))
-      return
-    }
-
     // If we just want to view a completed run, do not restart it on the backend.
     if (!forceStartRun && scenario.status === 'done') {
       setSessionId(visualSessionId)
@@ -534,11 +546,14 @@ export default function RoadOptimizerPage() {
       return
     }
 
-    // Stop the previous session so the backend kills its thread cleanly.
+    // Stop any previous session so the backend kills its thread cleanly.
     const prevSid = store.sessionId
     if (prevSid) {
       emit('sim:stop', { session_id: prevSid })
     }
+
+    // Reset all simulation state so the canvas starts completely empty.
+    store.resetSimulation()
     clearFrames()
 
     setSessionId(visualSessionId)
@@ -560,10 +575,9 @@ export default function RoadOptimizerPage() {
     // Store the mutated config so SimCanvas renders correct geometry for this scenario
     setActiveSimConfig(mutatedSimConfig)
 
-    // Wait 200ms after stopping before starting the new session so the backend
-    // thread has time to exit cleanly. This prevents leftover vehicles from the
-    // previous session appearing on the fresh canvas.
-    const startDelay = prevSid ? 200 : 0
+    // Wait for the old backend thread to wind down before starting the new session.
+    // 250ms is enough for the thread to see running=False on its next tick (max ~40ms sleep).
+    const startDelay = prevSid ? 250 : 0
     setTimeout(() => {
       emit('sim:start', {
         session_id: visualSessionId,
@@ -935,7 +949,9 @@ export default function RoadOptimizerPage() {
             const isActive = activeStep === s.step
             const isCompleted = s.step < maxUnlockedStep
             const isClickable = s.step <= maxUnlockedStep
-            const cardClass = `ro-guide-step-card ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`
+            // Step 5 gets a special tick when the AI report has been fetched
+            const isAiDone = s.step === 5 && aiRecommendationDone
+            const cardClass = `ro-guide-step-card ${isActive ? 'active' : ''} ${isCompleted || isAiDone ? 'completed' : ''}`
             return (
               <button
                 key={s.step}
@@ -944,7 +960,7 @@ export default function RoadOptimizerPage() {
                 onClick={() => handleStepClick(s.step)}
                 disabled={!isClickable}
               >
-                <div className="ro-guide-step-num">STEP 0{s.step} {isCompleted ? '✓' : ''}</div>
+                <div className="ro-guide-step-num">STEP 0{s.step} {(isCompleted || isAiDone) ? '✓' : ''}</div>
                 <div className="ro-guide-step-title">{s.title}</div>
                 <div className="ro-guide-step-desc">{s.desc}</div>
               </button>
@@ -968,7 +984,7 @@ export default function RoadOptimizerPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Completed</span>
-                  <span style={{ color: '#34d399', fontWeight: 600 }}>{doneCount}</span>
+                  <span style={{ color: '#34d399', fontWeight: 600 }}>{displayDoneCount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Queue Remaining</span>
@@ -977,7 +993,13 @@ export default function RoadOptimizerPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Running</span>
                   <span style={{ color: '#10b981', fontWeight: 600 }}>
-                    {runningCount}
+                    {displayRunningCount}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8, marginTop: 4 }}>
+                  <span>AI Recommendation</span>
+                  <span style={{ fontWeight: 700, color: aiRecommendationDone ? '#34d399' : '#475569' }}>
+                    {aiRecommendationDone ? '✓ Done' : '—'}
                   </span>
                 </div>
               </div>
@@ -999,11 +1021,11 @@ export default function RoadOptimizerPage() {
                       </span>
                     )}
                   </div>
-                  <p className="ro-config-header-desc">
+                  <p className="ro-config-header-desc" style={{ maxWidth: 'none' }}>
                     Calibrate intersection geometries, traffic demand patterns, vehicle mix, signal schedules, and environmental risk models.
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 
                   <button
                     className="ro-btn ro-btn-primary"
@@ -1205,6 +1227,7 @@ export default function RoadOptimizerPage() {
               onInjectDemo={handleInjectDemo}
               onShowSim={handleShowSim}
               isAnyVisualSimRunning={isAnyVisualSimRunning}
+              visuallyRunningScenarioId={visuallyRunningScenarioId}
               availableModelKeys={availableModelKeys}
               onModelChange={handleModelChange}
             />
@@ -1219,6 +1242,11 @@ export default function RoadOptimizerPage() {
             <LLMReportPanel
               scenarios={scenarios}
               intersectionName={intersection.name}
+              persistedReport={aiReport}
+              onReportFetched={(r) => {
+                setAiReport(r)
+                setAiRecommendationDone(true)
+              }}
             />
           )}
         </div>

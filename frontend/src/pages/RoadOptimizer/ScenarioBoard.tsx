@@ -18,6 +18,8 @@ interface Props {
   onInjectDemo: () => void
   onShowSim?: (s: Scenario) => void
   isAnyVisualSimRunning?: boolean
+  // The scenario_id currently being visually simulated (may have SSE status='done')
+  visuallyRunningScenarioId?: string | null
   availableModelKeys: string[]
   onModelChange: (scenarioId: string, model: string) => void
 }
@@ -37,6 +39,7 @@ export default function ScenarioBoard({
   onInjectDemo,
   onShowSim,
   isAnyVisualSimRunning = false,
+  visuallyRunningScenarioId = null,
   availableModelKeys,
   onModelChange,
 }: Props) {
@@ -44,6 +47,14 @@ export default function ScenarioBoard({
 
   const doneCount = scenarios.filter(s => s.status === 'done').length
   const runningCount = scenarios.filter(s => s.status === 'running').length
+
+  // Adjust chip counts: if the visual sim is playing for a 'done' scenario,
+  // show it as running (not completed) in the header chips.
+  const visuallyRunningIsDone = visuallyRunningScenarioId
+    ? (scenarios.find(s => s.scenario_id === visuallyRunningScenarioId)?.status === 'done')
+    : false
+  const displayDoneCount = visuallyRunningIsDone ? Math.max(0, doneCount - 1) : doneCount
+  const displayRunningCount = runningCount + (isAnyVisualSimRunning ? 1 : 0)
 
   // Scenarios other than baseline
   const hasModifications = scenarios.some(s => s.scenario_type !== 'baseline')
@@ -56,9 +67,9 @@ export default function ScenarioBoard({
       <div className="ro-scenarios-header">
         <div className="ro-section-header">
           Scenarios
-          {doneCount > 0 && <span className="ro-section-chip">{doneCount} complete</span>}
-          {runningCount > 0 && <span className="ro-section-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
-            <span className="ro-pulse">● </span>{runningCount} running
+          {displayDoneCount > 0 && <span className="ro-section-chip">{displayDoneCount} complete</span>}
+          {displayRunningCount > 0 && <span className="ro-section-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+            <span className="ro-pulse">● </span>{displayRunningCount} running
           </span>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -82,13 +93,31 @@ export default function ScenarioBoard({
                 id="ro-done-sims-trigger"
                 className="ro-btn ro-btn-primary"
                 onClick={onDoneSimulations}
-                disabled={doneCount === 0 || isBulkRunning}
+                disabled={doneCount === 0 || isBulkRunning || runningCount > 0 || isAnyVisualSimRunning}
+                title={
+                  doneCount === 0
+                    ? 'Run at least one simulation to continue'
+                    : (runningCount > 0 || isBulkRunning || isAnyVisualSimRunning)
+                    ? 'Wait for the running simulation to finish'
+                    : undefined
+                }
                 style={{
                   fontSize: 12,
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  borderColor: 'rgba(16, 185, 129, 0.35)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                  ...(doneCount > 0 && !isBulkRunning && runningCount === 0 && !isAnyVisualSimRunning
+                    ? {
+                        background: 'rgba(16, 185, 129, 0.1)',
+                        borderColor: 'rgba(16, 185, 129, 0.35)',
+                        color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        cursor: 'pointer',
+                      }
+                    : {
+                        background: 'rgba(16, 185, 129, 0.04)',
+                        borderColor: 'rgba(16, 185, 129, 0.12)',
+                        color: 'rgba(52, 211, 153, 0.35)',
+                        border: '1px solid rgba(16, 185, 129, 0.1)',
+                        cursor: 'not-allowed',
+                      }),
                 }}
               >
                 Done
@@ -117,12 +146,15 @@ export default function ScenarioBoard({
                 id="ro-done-adding-trigger"
                 className="ro-btn ro-btn-primary"
                 onClick={onDone}
+                disabled={!hasModifications}
+                title={!hasModifications ? 'Add at least one scenario to continue' : undefined}
                 style={{
                   fontSize: 12,
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  borderColor: 'rgba(16, 185, 129, 0.35)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                  background: hasModifications ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.04)',
+                  borderColor: hasModifications ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.12)',
+                  color: hasModifications ? '#34d399' : 'rgba(52, 211, 153, 0.35)',
+                  border: `1px solid ${hasModifications ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.1)'}`,
+                  cursor: hasModifications ? 'pointer' : 'not-allowed',
                 }}
               >
                 Done
