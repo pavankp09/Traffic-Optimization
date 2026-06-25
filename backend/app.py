@@ -48,7 +48,9 @@ def create_app(config=None) -> Flask:
     import logging
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-    app = Flask(__name__)
+    # Locate the frontend dist directory relative to the backend app directory
+    dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+    app = Flask(__name__, static_folder=dist_dir, static_url_path="")
     app.config["SECRET_KEY"] = APP_CONFIG.secret_key
 
     # Support passing a plain dict for testing
@@ -96,5 +98,16 @@ def create_app(config=None) -> Flask:
     )
     from backend.api.socket_handlers import init_socket_handlers
     init_socket_handlers(socketio, app)
+
+    # Serves the index.html at root, and falls back to it for SPA routing
+    from flask import jsonify
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve(path):
+        if path.startswith('api/'):
+            return jsonify({"success": False, "error": "Not Found"}), 404
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return app.send_static_file(path)
+        return app.send_static_file('index.html')
 
     return app
