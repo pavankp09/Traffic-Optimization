@@ -505,13 +505,6 @@ export default function RoadOptimizerPage() {
     const store = useSimulationStore.getState()
     const visualSessionId = `road_opt_visual_${scenario.scenario_id}`
 
-    // If this exact session is already running, just reopen the visual overlay.
-    if (store.sessionId === visualSessionId && (store.isRunning || store.isPaused)) {
-      setActiveSimScenario(scenario)
-      setActiveSimConfig(getScenarioSimConfig(scenario, simConfig, intersection))
-      return
-    }
-
     // If we just want to view a completed run, do not restart it on the backend.
     if (!forceStartRun && scenario.status === 'done') {
       setSessionId(visualSessionId)
@@ -534,11 +527,14 @@ export default function RoadOptimizerPage() {
       return
     }
 
-    // Stop the previous session so the backend kills its thread cleanly.
+    // Stop any previous session so the backend kills its thread cleanly.
     const prevSid = store.sessionId
     if (prevSid) {
       emit('sim:stop', { session_id: prevSid })
     }
+
+    // Reset all simulation state so the canvas starts completely empty.
+    store.resetSimulation()
     clearFrames()
 
     setSessionId(visualSessionId)
@@ -560,10 +556,9 @@ export default function RoadOptimizerPage() {
     // Store the mutated config so SimCanvas renders correct geometry for this scenario
     setActiveSimConfig(mutatedSimConfig)
 
-    // Wait 200ms after stopping before starting the new session so the backend
-    // thread has time to exit cleanly. This prevents leftover vehicles from the
-    // previous session appearing on the fresh canvas.
-    const startDelay = prevSid ? 200 : 0
+    // Wait for the old backend thread to wind down before starting the new session.
+    // 250ms is enough for the thread to see running=False on its next tick (max ~40ms sleep).
+    const startDelay = prevSid ? 250 : 0
     setTimeout(() => {
       emit('sim:start', {
         session_id: visualSessionId,

@@ -3490,6 +3490,15 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
     @socketio.on("connect")
     def handle_connect():
         from backend.rl.device import get_torch_runtime_info
+        # Reset all running/paused simulations on new connection (e.g. page reload)
+        for sid in list(_session_states.keys()):
+            logger.info("Cleaning up active simulation session %s on connect", sid)
+            set_session_state(sid, running=False, paused=False)
+            _sim_greenlets.pop(sid, None)
+            snap = _runtime_snapshots.get(sid)
+            if snap is not None:
+                snap["sim_status"] = "done"
+
         emit("server:hello", {
             "version": "1.0.0",
             "status": "ready",
@@ -3500,7 +3509,14 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
     def handle_disconnect():
         from flask import session as socket_session
         session_id = socket_session.get("session_id")
-        logger.info("Websocket client disconnected. session_id: %s. Simulation/training threads will continue in the background.", session_id)
+        logger.info("Websocket client disconnected. session_id: %s. Cleaning up simulation threads.", session_id)
+        # Clear all active simulation states on disconnect to ensure they stop running
+        for sid in list(_session_states.keys()):
+            set_session_state(sid, running=False, paused=False)
+            _sim_greenlets.pop(sid, None)
+            snap = _runtime_snapshots.get(sid)
+            if snap is not None:
+                snap["sim_status"] = "done"
 
     # ------------------------------------------------------------------
     # Simulation control
@@ -3517,12 +3533,18 @@ def init_socket_handlers(socketio, app) -> None:  # noqa: C901
             from flask import session as socket_session
             socket_session["session_id"] = session_id
 
-            # If a simulation is already running for this session, do not restart it
-            state = get_session_state(session_id)
-            if state.get("running"):
-                logger.info("Simulation for session %s is already running. Continuing and re-associating client.", session_id)
-                emit("sim:started", {"session_id": session_id, "simulation_id": state.get("simulation_id"), "status": "running"})
-                return
+            # Always stop any previous simulation for this session so that a fresh
+            # sim:start (e.g. after a page reload) always produces a clean slate.
+            # The running flag being False will cause the background thread to exit
+            # on its next iteration before the new thread starts.
+            existing_state = get_session_state(session_id)
+            if existing_state.get("running"):
+                logger.info("Stopping previous simulation for session %s before starting fresh.", session_id)
+                set_session_state(session_id, running=False, paused=False)
+                _sim_greenlets.pop(session_id, None)
+                snap = _runtime_snapshots.get(session_id)
+                if snap is not None:
+                    snap["sim_status"] = "done"
 
             # Save or update the session configurations in the DB, clearing previous run
             from backend.analytics.session_store import SessionStore
