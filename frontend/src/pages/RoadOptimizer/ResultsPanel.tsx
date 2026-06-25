@@ -165,24 +165,22 @@ export default function ResultsPanel({ scenarios, onDone }: Props) {
             <tr>
               <th>Scenario</th>
               <th>Type</th>
-              <th>Avg Wait (s)</th>
-              <th>Δ Wait</th>
-              <th>Throughput (vph)</th>
-              <th>Δ Throughput</th>
-              <th>Flow Eff.</th>
-              <th>Ep. Reward</th>
+              <th>Delay (s)</th>
+              <th>Tput (vph)</th>
+              <th>Fuel (mL/veh)</th>
+              <th>CO2 (g/veh)</th>
               <th>Depth</th>
             </tr>
           </thead>
           <tbody>
             {done.map((s, idx) => {
               const isBaseline = s.scenario_type === 'baseline'
-              const waitDelta = isBaseline ? null : pct(s.kpi!.avg_wait_s, baseWait)
-              const tputDelta = isBaseline ? null : pct(s.kpi!.throughput_vph, baseTput)
-
               const isBestWait = bestWaitScenario && s.scenario_id === bestWaitScenario.scenario_id
               const isBestTput = bestTputScenario && s.scenario_id === bestTputScenario.scenario_id
               const rowClass = isBestWait ? 'ro-row-best-wait' : isBestTput ? 'ro-row-best-tput' : ''
+
+              const fuelVal = s.kpi!.fuel_index_ml_veh ?? (0.65 * s.kpi!.avg_wait_s / 3.6)
+              const co2Val = s.kpi!.carbon_index_g_veh ?? (2.31 * fuelVal)
 
               return (
                 <tr key={s.scenario_id} className={rowClass}>
@@ -192,28 +190,10 @@ export default function ResultsPanel({ scenarios, onDone }: Props) {
                     {isBestTput && <span className="ro-perf-badge ro-perf-badge-tput">Best Flow</span>}
                   </td>
                   <td style={{ color: '#64748b' }}>{s.scenario_type.replace(/_/g, ' ')}</td>
-                  <td>{s.kpi!.avg_wait_s}s</td>
-                  <td>
-                    {waitDelta === null ? (
-                      <span className="ro-delta-neutral">baseline</span>
-                    ) : (
-                      <span className={waitDelta < 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
-                        {waitDelta > 0 ? '+' : ''}{waitDelta.toFixed(1)}%
-                      </span>
-                    )}
-                  </td>
-                  <td>{s.kpi!.throughput_vph}</td>
-                  <td>
-                    {tputDelta === null ? (
-                      <span className="ro-delta-neutral">baseline</span>
-                    ) : (
-                      <span className={tputDelta > 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
-                        {tputDelta > 0 ? '+' : ''}{tputDelta.toFixed(1)}%
-                      </span>
-                    )}
-                  </td>
-                  <td>{(s.kpi!.flow_efficiency * 100).toFixed(0)}%</td>
-                  <td>{s.kpi!.episode_reward.toFixed(2)}</td>
+                  <td>{s.kpi!.avg_wait_s.toFixed(1)}s</td>
+                  <td>{s.kpi!.throughput_vph.toFixed(0)}</td>
+                  <td>{fuelVal.toFixed(1)} mL</td>
+                  <td>{co2Val.toFixed(1)} g</td>
                   <td style={{ color: '#64748b' }}>
                     {s.training_depth}
                   </td>

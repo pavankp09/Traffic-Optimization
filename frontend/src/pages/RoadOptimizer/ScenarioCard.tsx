@@ -60,6 +60,36 @@ export default function ScenarioCard({
   // A different scenario's visual sim is running — disable our run button
   const isOtherSimRunning = isAnyVisualSimRunning && !isThisSimRunning
 
+  const selectStyle: React.CSSProperties = {
+    background: '#090a0f',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '8px',
+    color: '#e2e8f0',
+    fontSize: '12px',
+    fontWeight: 600,
+    height: '34px',
+    boxSizing: 'border-box',
+    padding: '0 24px 0 10px',
+    cursor: (scenario.status === 'running' || isThisSimRunning) ? 'not-allowed' : 'pointer',
+    outline: 'none',
+    width: '100%',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none'
+  }
+
+  const btnStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+    height: '34px',
+    boxSizing: 'border-box',
+    fontSize: '12px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 12px',
+    whiteSpace: 'nowrap',
+    ...extra
+  })
+
   const cardClass = [
     'ro-scenario-card',
     (scenario.status === 'running' || isThisSimRunning) ? 'is-running' : '',
@@ -127,10 +157,11 @@ export default function ScenarioCard({
 
       {/* KPI chips (when done) */}
       {scenario.status === 'done' && !isThisSimRunning && scenario.kpi && (
-        <div className="ro-kpi-chips">
-          <KpiChip label="Wait" value={`${scenario.kpi.avg_wait_s}s`} />
-          <KpiChip label="Throughput" value={`${scenario.kpi.throughput_vph} vph`} />
-          <KpiChip label="Flow Eff." value={`${(scenario.kpi.flow_efficiency * 100).toFixed(0)}%`} />
+        <div className="ro-kpi-chips" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+          <KpiChip label="Delay" value={`${scenario.kpi.avg_wait_s}s`} />
+          <KpiChip label="Tput" value={`${scenario.kpi.throughput_vph} vph`} />
+          <KpiChip label="Fuel" value={`${(scenario.kpi.fuel_index_ml_veh ?? (0.65 * scenario.kpi.avg_wait_s / 3.6)).toFixed(1)} mL`} />
+          <KpiChip label="CO2" value={`${(scenario.kpi.carbon_index_g_veh ?? (2.31 * (0.65 * scenario.kpi.avg_wait_s / 3.6))).toFixed(1)} g`} />
         </div>
       )}
 
@@ -143,21 +174,7 @@ export default function ScenarioCard({
           <div style={{ position: 'relative', width: '100%' }}>
             <select
               className="ro-select"
-              style={{
-                background: '#090a0f',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '8px',
-                color: '#e2e8f0',
-                fontSize: '11px',
-                fontWeight: 600,
-                padding: '6px 24px 6px 10px',
-                cursor: (scenario.status === 'running' || isThisSimRunning) ? 'not-allowed' : 'pointer',
-                outline: 'none',
-                width: '100%',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none'
-              }}
+              style={selectStyle}
               value={scenario.evaluation_model || (isBaseline ? 'baseline_fixed' : 'rl1')}
               disabled={scenario.status === 'running' || isThisSimRunning}
               onChange={(e) => onModelChange(scenario.scenario_id, e.target.value)}
@@ -196,21 +213,7 @@ export default function ScenarioCard({
           <div style={{ flex: 1.2, position: 'relative' }}>
             <select
               className="ro-select"
-              style={{
-                background: '#090a0f',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '8px',
-                color: '#e2e8f0',
-                fontSize: '11px',
-                fontWeight: 600,
-                padding: '6px 24px 6px 10px',
-                cursor: (scenario.status === 'running' || isThisSimRunning) ? 'not-allowed' : 'pointer',
-                outline: 'none',
-                width: '100%',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none'
-              }}
+              style={selectStyle}
               value={scenario.evaluation_model || (isBaseline ? 'baseline_fixed' : 'rl1')}
               disabled={scenario.status === 'running' || isThisSimRunning}
               onChange={(e) => onModelChange(scenario.scenario_id, e.target.value)}
@@ -245,28 +248,26 @@ export default function ScenarioCard({
           {(scenario.status === 'running' || isThisSimRunning) ? (
             <button
               className="ro-btn ro-btn-secondary"
-              style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' }}
+              style={btnStyle({ flex: 1 })}
               onClick={() => onShowSim?.(scenario)}
             >
-              <span>📺</span>
               View Sim
             </button>
           ) : scenario.status === 'done' ? (
             <React.Fragment>
               <button
                 className="ro-btn ro-btn-secondary"
-                style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px', whiteSpace: 'nowrap' }}
+                style={btnStyle({ flex: 1, padding: '0 4px' })}
                 onClick={() => onShowSim?.(scenario)}
                 title={isOtherSimRunning ? 'Close the current simulation first' : 'Watch visual simulation playback'}
                 disabled={isOtherSimRunning}
               >
-                <span>📺</span>
                 View
               </button>
               <button
                 id={`ro-run-${scenario.scenario_id}`}
                 className="ro-btn ro-btn-primary"
-                style={{ flex: 0.8, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer', padding: '8px 4px', whiteSpace: 'nowrap' }}
+                style={btnStyle({ flex: 0.8, padding: '0 4px', opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer' })}
                 onClick={() => onRun(scenario.scenario_id)}
                 disabled={isOtherSimRunning}
                 title={isOtherSimRunning ? 'Stop the running simulation first' : 'Re-run training/evaluation'}
@@ -278,7 +279,7 @@ export default function ScenarioCard({
             <button
               id={`ro-run-${scenario.scenario_id}`}
               className="ro-btn ro-btn-primary"
-              style={{ flex: 1, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+              style={btnStyle({ flex: 1, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer' })}
               onClick={() => {
                 onRun(scenario.scenario_id)
               }}

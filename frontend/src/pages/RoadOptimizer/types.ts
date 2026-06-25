@@ -43,6 +43,8 @@ export interface ScenarioKpi {
   episodes_trained: number
   convergence_episode: number | null
   training_curve: Array<{ episode: number; reward: number }>
+  fuel_index_ml_veh?: number
+  carbon_index_g_veh?: number
 }
 
 export interface Scenario {

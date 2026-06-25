@@ -223,6 +223,8 @@ class KpiResult:
     episodes_trained: int = 0
     convergence_episode: Optional[int] = None
     training_curve: list = field(default_factory=list)   # list of (episode, reward)
+    fuel_index_ml_veh: float = 0.0
+    carbon_index_g_veh: float = 0.0
 
 
 @dataclass
