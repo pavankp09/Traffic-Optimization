@@ -999,11 +999,11 @@ export default function RoadOptimizerPage() {
                       </span>
                     )}
                   </div>
-                  <p className="ro-config-header-desc">
+                  <p className="ro-config-header-desc" style={{ maxWidth: 'none' }}>
                     Calibrate intersection geometries, traffic demand patterns, vehicle mix, signal schedules, and environmental risk models.
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 
                   <button
                     className="ro-btn ro-btn-primary"
