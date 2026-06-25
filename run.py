@@ -1,5 +1,22 @@
 from __future__ import annotations
 
+# Early eventlet monkey patch (only when running inside the virtual environment)
+import sys
+from pathlib import Path
+_PROJECT_ROOT = Path(__file__).resolve().parent
+_VENV_DIR = _PROJECT_ROOT / ".venv"
+try:
+    _in_venv = str(Path(sys.prefix).resolve()).lower() == str(_VENV_DIR.resolve()).lower()
+except Exception:
+    _in_venv = False
+
+if _in_venv:
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except ImportError:
+        pass
+
 try:
     import torch
 except ImportError:
