@@ -1,7 +1,9 @@
 """Flask application factory for Traffic Signal Optimizer."""
 try:
+    import os
+    os.environ["EVENTLET_NO_GREENDNS"] = "yes"
     import eventlet
-    eventlet.monkey_patch(dns=False)
+    eventlet.monkey_patch()
     _has_eventlet = True
 except ImportError:
     _has_eventlet = False
