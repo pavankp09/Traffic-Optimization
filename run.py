@@ -201,6 +201,7 @@ core = [
     "gymnasium",
     "stable_baselines3",
     "numpy",
+    "boto3",
 ]
 for module_name in core:
     importlib.import_module(module_name)
