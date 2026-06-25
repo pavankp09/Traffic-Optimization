@@ -1,6 +1,10 @@
 """Flask application factory for Traffic Signal Optimizer."""
-import eventlet
-eventlet.monkey_patch()
+try:
+    import eventlet
+    eventlet.monkey_patch()
+    _has_eventlet = True
+except ImportError:
+    _has_eventlet = False
 
 try:
     import torch
@@ -92,10 +96,11 @@ def create_app(config=None) -> Flask:
     cors_allowed = cors_origins
     if "*" in cors_origins:
         cors_allowed = "*"
+    async_mode = "eventlet" if _has_eventlet else "threading"
     socketio.init_app(
         app,
         cors_allowed_origins=cors_allowed,
-        async_mode="eventlet",   # Use eventlet since we added monkey_patch() at the top
+        async_mode=async_mode,
         allow_upgrades=True,
         logger=False,
         engineio_logger=False,
