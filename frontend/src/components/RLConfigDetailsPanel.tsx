@@ -324,19 +324,20 @@ export default function RLConfigDetailsPanel({ modelKey }: RLConfigDetailsPanelP
 
       {/* 🧠 REWARD SHAPING "PERSONALITY" FORMULATION */}
       <div className="border-t border-gray-800/60 pt-2.5 space-y-2">
-        <button
-          type="button"
-          className="w-full flex justify-between items-center focus:outline-none group select-none"
+        <div
+          className="w-full flex justify-between items-center group select-none cursor-pointer"
           onClick={() => setIsWeightsOpen(!isWeightsOpen)}
         >
           <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest font-mono group-hover:text-gray-200 transition-colors flex items-center gap-1">
             Optimisation Weights Split
-            <HelpPopover text="### Optimisation Weights Split\nDefines the reward formulation weights guiding the learning agent:\n- **Reward Formula**:\n$$R_t = - ( w_q Q_t + w_w W_t + w_c C_t + w_s S_t ) + w_t T_t$$\nWhere weights $w$ balance queue penalties $Q$, delays $W$, collisions $C$, phase switches $S$, and throughput gains $T$." position="top" />
+            <span onClick={(e) => e.stopPropagation()}>
+              <HelpPopover text="### Optimisation Weights Split\nDefines the reward formulation weights guiding the learning agent:\n- **Reward Formula**:\n$$R_t = - ( w_q Q_t + w_w W_t + w_c C_t + w_s S_t ) + w_t T_t$$\nWhere weights $w$ balance queue penalties $Q$, delays $W$, collisions $C$, phase switches $S$, and throughput gains $T$." position="top" />
+            </span>
           </h4>
           <span className="text-[9px] font-mono text-cyan-400 font-bold bg-cyan-950/30 border border-cyan-800/30 px-2.5 py-0.5 rounded-lg group-hover:bg-cyan-900/40 transition-all shadow-sm">
             {(modelKey === 'baseline' || isSameAsBaseline) ? 'None (Static)' : isWeightsOpen ? 'Hide Weights' : 'View Weights'}
           </span>
-        </button>
+        </div>
 
         {isWeightsOpen && (
           (modelKey === 'baseline' || isSameAsBaseline) ? (

@@ -52,7 +52,7 @@ function ComparativeKpiCard({
       }
     }
     const meta = MODEL_METADATA[key] ?? { label: key, color: '#fff' }
-    const color = MODEL_METADATA.baseline?.color ?? '#b6a27d'
+    const color = meta.color
     return { key, val, label: meta.label, color }
   })
 

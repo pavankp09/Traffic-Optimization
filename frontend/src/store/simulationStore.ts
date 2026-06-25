@@ -170,7 +170,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   sessionId: null,
   simTimeS: 0,
   throughputCount: 0,
-  simSpeed: 1,
+  simSpeed: 5,
   lastSimulationMetrics: {},
 
   splitFrames: {},
@@ -227,7 +227,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setSelectedModelSingle: (model) =>
     set((state) => {
       let frame = state.rl1Frame
-      if (model === 'baseline') frame = state.baselineFrame
+      if (model === 'baseline' || model === 'baseline_fixed' || model === 'baseline_webster') frame = state.baselineFrame
       else if (model === 'rl1') frame = state.rl1Frame
       else if (model === 'rl2') frame = state.rl2Frame
       else if (model === 'rl3') frame = state.rl3Frame
@@ -291,7 +291,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
       isPaused: false,
       sessionId: null,
       simTimeS: 0,
-      simSpeed: 1,
+      simSpeed: 5,
       throughputCount: 0,
     })
   },
@@ -300,12 +300,16 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     set({
       currentFrame: null,
       frameHistory: [],
+      baselineFrame: null,
       rl1Frame: null,
       rl2Frame: null,
       rl3Frame: null,
       rl4Frame: null,
       customFrame: null,
       simTimeS: 0,  // reset the clock only when a fresh simulation begins
+      adverseEvents: [],
+      signalStates: {},
+      throughputCount: 0,
     }),
 
   // Clear only RL frames — preserves baselineFrame and baseline metrics so
@@ -422,7 +426,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
       isPaused: false,
       sessionId: null,
       simTimeS: 0,
-      simSpeed: 1,
+      simSpeed: 5,
       throughputCount: 0,
       lastSimulationMetrics: {
         ...(state.lastSimulationMetrics['baseline']

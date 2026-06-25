@@ -340,6 +340,8 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
                   <StatCell label="Queue" sub="total" value={inQueue.toLocaleString()} bordered />
                   <StatCell label="Inst Wait" sub="5m window" value={fmtWait(instantWait)} color={waitCol(instantWait)} bordered />
                   <StatCell label="Inst Tput" sub="5m window" value={Math.round(instantTput).toLocaleString()} color="#facc15" bordered />
+                  <StatCell label="Avg Wait (Cumul)" sub="total simulation" value={fmtWait(avgWait)} color={waitCol(avgWait)} bordered />
+                  <StatCell label="Avg Throughput" sub="hourly rate" value={`${Math.round(tput).toLocaleString()} vph`} color="#38bdf8" bordered />
                   <StatCell label="Exited" sub="passed" value={exited.toLocaleString()} color="#97b9a7" bordered />
                   <StatCell label="LOS Grade" sub={los.desc} value={`Grade ${los.grade}`} color={los.color} bordered />
                   <StatCell label="Fuel Wasted" sub="idle est" value={`${fuelLiters.toFixed(1)} L`} color="#f87171" bordered />

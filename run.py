@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+try:
+    import torch
+except ImportError:
+    pass
+
 import os
 import platform
 import subprocess
@@ -8,6 +13,18 @@ import threading
 import time
 from pathlib import Path
 from typing import Iterable
+
+# Dynamic alias for numpy._core to core for SB3/Pickle compatibility
+# between environments running different NumPy versions (1.x vs 2.x).
+try:
+    import numpy as np
+    if not hasattr(np, "_core"):
+        import numpy.core as core
+        sys.modules['numpy._core'] = core
+        import numpy.core.numeric as numeric
+        sys.modules['numpy._core.numeric'] = numeric
+except ImportError:
+    pass
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 VENV_DIR = PROJECT_ROOT / ".venv"
@@ -89,7 +106,7 @@ def write_backend_marker(backend: str) -> None:
 
 def in_project_venv() -> bool:
     try:
-        return Path(sys.prefix).resolve() == VENV_DIR.resolve()
+        return str(Path(sys.prefix).resolve()).lower() == str(VENV_DIR.resolve()).lower()
     except Exception:
         return False
 
@@ -220,17 +237,25 @@ def ensure_local_runtime() -> None:
 
 
 def start_frontend() -> None:
-    frontend_dir = PROJECT_ROOT / "frontend"
-    npm = "npm.cmd" if sys.platform == "win32" else "npm"
-    node_modules = frontend_dir / "node_modules"
+    try:
+        frontend_dir = PROJECT_ROOT / "frontend"
+        npm = "npm.cmd" if sys.platform == "win32" else "npm"
+        node_modules = frontend_dir / "node_modules"
 
-    if not node_modules.exists():
-        subprocess.run([npm, "install", "--silent"], cwd=frontend_dir, check=True)
+        if not node_modules.exists():
+            subprocess.run([npm, "install", "--silent"], cwd=frontend_dir, check=True)
 
-    subprocess.run([npm, "run", "dev"], cwd=frontend_dir, check=True)
+        subprocess.run([npm, "run", "dev"], cwd=frontend_dir, check=True)
+    except Exception as e:
+        print(f"[Info] Frontend dev server start skipped (port 8005 may be in use): {e}")
 
 
 def start_backend() -> None:
+    try:
+        import torch
+    except ImportError:
+        pass
+
     from backend.app import create_app, socketio
     from backend.rl.device import get_torch_runtime_info
 
@@ -240,7 +265,15 @@ def start_backend() -> None:
     device_label = "CUDA" if runtime.get("device") == "cuda" else "CPU"
     extra = f" ({runtime.get('device_name')})" if runtime.get("device_name") else ""
     print(f"[OK] Torch runtime: {device_label}{extra}")
-    socketio.run(app, host="0.0.0.0", port=8004, debug=False)
+
+    # Safely start background warmup thread after all imports and runtime checks are done
+    try:
+        from backend.api.socket_handlers import _warmup_imports_and_models
+        threading.Thread(target=_warmup_imports_and_models, daemon=True).start()
+    except Exception as e:
+        print(f"[Warning] Failed to start background warmup thread: {e}")
+
+    socketio.run(app, host="0.0.0.0", port=8004, debug=False, allow_unsafe_werkzeug=True)
 
 
 def shutil_which(command: str) -> str | None:
@@ -249,14 +282,16 @@ def shutil_which(command: str) -> str | None:
 
 
 def main() -> None:
-    ensure_local_runtime()
-    print("[Traffic] VeloCity starting...")
-
-    fe_thread = threading.Thread(target=start_frontend, daemon=True)
-    fe_thread.start()
-
-    time.sleep(1)
-    start_backend()
+    try:
+        ensure_local_runtime()
+        print("[Traffic] VeloCity starting...")
+        # Start frontend dev server in a background thread concurrently
+        threading.Thread(target=start_frontend, daemon=True).start()
+        start_backend()
+    except BaseException as e:
+        import traceback
+        traceback.print_exc()
+        sys.exit(2)
 
 
 if __name__ == "__main__":

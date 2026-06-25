@@ -6,6 +6,7 @@ import PilotReport from './pages/PilotReport'
 import SimulationManager from './pages/SimulationManager'
 import Analyzer from './pages/Analyzer'
 import DecisionReplay from './pages/DecisionReplay'
+import RoadOptimizerPage from './pages/RoadOptimizer'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/compare" element={<CompareSession />} />
         <Route path="/report" element={<PilotReport />} />
         <Route path="/decisions/:sessionId" element={<DecisionReplay />} />
+        <Route path="/optimizer" element={<RoadOptimizerPage />} />
       </Routes>
     </div>
   )

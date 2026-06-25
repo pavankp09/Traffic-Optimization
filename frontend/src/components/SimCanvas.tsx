@@ -167,6 +167,13 @@ interface SimCanvasProps {
   isPaused?: boolean
   isRunning?: boolean
   responsive?: boolean
+  /** When provided, overrides global configStore for intersection geometry (used by Road Optimizer scenarios) */
+  simConfigOverride?: {
+    intersection_type?: string
+    n_lanes?: number
+    lanes_per_arm?: number
+    lane_config?: Partial<Record<'N' | 'S' | 'E' | 'W', number>>
+  } | null
 }
 
 export default function SimCanvas({
@@ -183,6 +190,7 @@ export default function SimCanvas({
   isPaused = false,
   isRunning = false,
   responsive = false,
+  simConfigOverride,
 }: SimCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -251,9 +259,16 @@ export default function SimCanvas({
   const currentFrame = useSimulationStore((s) => s.currentFrame)
   const adverseEvents = useSimulationStore((s) => s.viewMode === 'split' ? s.splitAdverseEvents : s.adverseEvents)
   const trainedModels = useSimulationStore((s) => s.trainedModels)
-  const intersectionType = useConfigStore((s) => s.simConfig.intersection_type)
-  const nLanes = useConfigStore((s) => s.simConfig.n_lanes)
-  const laneConfig = useConfigStore((s) => s.simConfig.lane_config)
+  const storeIntersectionType = useConfigStore((s) => s.simConfig.intersection_type)
+  const storeNLanes = useConfigStore((s) => s.simConfig.n_lanes)
+  const storeLaneConfig = useConfigStore((s) => s.simConfig.lane_config)
+  const storeUTurnPhase = useConfigStore((s) => s.simConfig.u_turn_phase)
+
+  // Use override values from Road Optimizer scenario when provided, else fall back to global store
+  const intersectionType = simConfigOverride?.intersection_type ?? storeIntersectionType
+  const nLanes = simConfigOverride?.n_lanes ?? simConfigOverride?.lanes_per_arm ?? storeNLanes
+  const laneConfig = simConfigOverride?.lane_config ?? storeLaneConfig
+  const uTurnPhase = (simConfigOverride as any)?.u_turn_phase ?? storeUTurnPhase ?? false
 
   const frame = frameOverride !== undefined ? frameOverride : currentFrame
 
@@ -276,6 +291,23 @@ export default function SimCanvas({
       setSelectedVehicleData(null)
     }
   }, [isRunning])
+
+  // Safety: auto-dismiss the loading overlay after 12 seconds if no frame arrives.
+  // This prevents the user being permanently stuck if the backend is slow or errored.
+  const [initTimedOut, setInitTimedOut] = useState(false)
+  useEffect(() => {
+    if (!isRunning) {
+      setInitTimedOut(false)
+      return
+    }
+    // Already have a frame — no need for timeout
+    if (frame) {
+      setInitTimedOut(false)
+      return
+    }
+    const t = setTimeout(() => setInitTimedOut(true), 12000)
+    return () => clearTimeout(t)
+  }, [isRunning, frame])
 
   // ── Sync incoming frame → history buffer ───────────────────────────────────
   useEffect(() => {
@@ -364,7 +396,7 @@ export default function SimCanvas({
 
     clearCanvas(ctx, cfg)
     drawGrid(ctx, cfg)
-    drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
+    drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig, u_turn_phase: uTurnPhase })
 
     const f = displayFrame ?? frame
     if (f) {
@@ -482,7 +514,7 @@ export default function SimCanvas({
     }
 
     ctx.restore()  // pop the dpr scale
-  }, [frame, adverseEvents, activeWidth, activeHeight, showTrails, label, trainedModels, intersectionType, nLanes, laneConfig, selectedVehicleId])
+  }, [frame, adverseEvents, activeWidth, activeHeight, showTrails, label, trainedModels, intersectionType, nLanes, laneConfig, selectedVehicleId, simConfigOverride])
 
   // ── Always keep renderRef pointing to the latest render function ──────────
   renderRef.current = render
@@ -578,7 +610,7 @@ export default function SimCanvas({
   )
 
   // If no speed controls requested and not responsive, render the bare canvas
-  if (!responsive && !onSpeedChange && !onPlayPause && !(isRunning && !frame)) return canvas
+  if (!responsive && !onSpeedChange && !onPlayPause && !(isRunning && !frame && !initTimedOut)) return canvas
 
   // isCompact: use cycling speed badge when canvas is too narrow for the full row
   // Below 680px, full bar (play+stop+5 speeds) would overlap the road arms
@@ -589,7 +621,7 @@ export default function SimCanvas({
       {canvas}
 
       {/* Starting/Loading Overlay */}
-      {isRunning && !frame && (
+      {isRunning && !frame && !initTimedOut && (
         <div className="absolute inset-0 bg-[#07090d]/85 backdrop-blur-md flex flex-col items-center justify-center rounded-xl animate-fadeIn z-20">
           <div className="flex flex-col items-center gap-4 text-center p-6 max-w-sm">
             <div className="relative w-12 h-12 flex items-center justify-center">

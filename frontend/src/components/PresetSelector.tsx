@@ -5,9 +5,10 @@ import { FALLBACK_PRESETS, PRESET_GROUP_LABELS, PRESET_GROUP_ORDER } from '../co
 
 interface PresetSelectorProps {
   onPresetLoaded?: (preset: Preset) => void
+  compact?: boolean
 }
 
-export default function PresetSelector({ onPresetLoaded }: PresetSelectorProps) {
+export default function PresetSelector({ onPresetLoaded, compact = false }: PresetSelectorProps) {
   const [presets, setPresets] = useState<PresetSummary[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -78,24 +79,27 @@ export default function PresetSelector({ onPresetLoaded }: PresetSelectorProps) 
   }
 
   return (
-    <div className="w-full" ref={wrapperRef}>
-      <label className="block text-xs text-gray-500 mb-1.5">Load Preset</label>
+    <div className={compact ? "relative w-full" : "w-full"} ref={wrapperRef}>
+      {!compact && <label className="block text-xs text-gray-500 mb-1.5">Load Preset</label>}
 
       <div className="relative">
         <button
           type="button"
-          className="w-full bg-gray-800 border border-slate-500/50 hover:border-slate-400 rounded-xl px-3 py-2.5 text-left text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-slate-500/40 transition-colors"
+          className={compact
+            ? "w-full bg-[#090a0f] border border-white/[0.08] hover:border-white/20 rounded-lg px-3 py-1.5 text-left text-xs font-semibold text-gray-100 focus:outline-none transition-colors min-w-[220px]"
+            : "w-full bg-gray-800 border border-slate-500/50 hover:border-slate-400 rounded-xl px-3 py-2.5 text-left text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-slate-500/40 transition-colors"
+          }
           onClick={() => setIsOpen((v) => !v)}
           disabled={loading}
         >
           <div className="flex items-center justify-between gap-2">
             <span className="truncate">{selectedName}</span>
-            <span className="text-gray-400 text-xs">{isOpen ? '?' : '?'}</span>
+            <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
           </div>
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 mt-1.5 w-full max-h-[360px] overflow-y-auto rounded-xl border border-slate-600 bg-[#1b2433] shadow-2xl">
+          <div className={`absolute z-[100] mt-1.5 w-full max-h-[360px] overflow-y-auto rounded-xl border border-slate-600 bg-[#1b2433] shadow-2xl ${compact ? "right-0 min-w-[220px]" : ""}`}>
             <button
               type="button"
               className="w-full text-left px-3 py-2 text-sm text-slate-200 border-b border-slate-700 hover:bg-slate-700/30"
@@ -129,18 +133,20 @@ export default function PresetSelector({ onPresetLoaded }: PresetSelectorProps) 
         )}
       </div>
 
-      <div className="mt-1 min-h-[18px] text-[11px]">
-        {loading ? (
-          <span className="text-slate-400">Loading preset...</span>
-        ) : activePreset ? (
-          <span className="text-slate-300">
-            Active: <span className="text-slate-100">{activePreset.name}</span>
-            {isDirty ? <span className="text-amber-400"> (modified)</span> : null}
-          </span>
-        ) : (
-          <span className="text-slate-500">Choose a scenario preset</span>
-        )}
-      </div>
+      {!compact && (
+        <div className="mt-1 min-h-[18px] text-[11px]">
+          {loading ? (
+            <span className="text-slate-400">Loading preset...</span>
+          ) : activePreset ? (
+            <span className="text-slate-300">
+              Active: <span className="text-slate-100">{activePreset.name}</span>
+              {isDirty ? <span className="text-amber-400"> (modified)</span> : null}
+            </span>
+          ) : (
+            <span className="text-slate-500">Choose a scenario preset</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

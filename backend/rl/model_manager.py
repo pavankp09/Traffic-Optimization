@@ -104,7 +104,9 @@ class ModelManager:
         """
         new_path = os.path.join(self.model_dir, name, "latest.zip")
         if os.path.isfile(new_path):
-            model = PPO.load(new_path, env=None)
+            from backend.rl.device import cuda_lock
+            with cuda_lock:
+                model = PPO.load(new_path, env=None)
             logger.info("Model loaded from new layout: %s", new_path)
             return model
 
@@ -121,7 +123,9 @@ class ModelManager:
                 f"Model not found: {zip_path}"
             )
 
-        model = PPO.load(zip_path, env=None)
+        from backend.rl.device import cuda_lock
+        with cuda_lock:
+            model = PPO.load(zip_path, env=None)
         logger.info("Model loaded: %s", zip_path)
         return model
 
@@ -150,7 +154,11 @@ class ModelManager:
                     if filename == "latest.zip":
                         name = algo_name
                         version = 999999
-                        saved_at = datetime.utcnow().isoformat()
+                        try:
+                            mtime = os.path.getmtime(path)
+                            saved_at = datetime.utcfromtimestamp(mtime).isoformat()
+                        except Exception:
+                            saved_at = datetime.utcnow().isoformat()
                         metadata = {}
                     elif filename.startswith("latest_") and filename.endswith(".zip"):
                         name = algo_name
@@ -159,7 +167,16 @@ class ModelManager:
                             version = int(ts_str.replace("_", ""))
                         except ValueError:
                             version = 1
-                        saved_at = datetime.utcnow().isoformat()
+                        
+                        try:
+                            dt = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
+                            saved_at = dt.isoformat()
+                        except Exception:
+                            try:
+                                mtime = os.path.getmtime(path)
+                                saved_at = datetime.utcfromtimestamp(mtime).isoformat()
+                            except Exception:
+                                saved_at = datetime.utcnow().isoformat()
                         metadata = {}
                     else:
                         match = re.match(r'^(.+)_v(\d+)\.zip$', filename)

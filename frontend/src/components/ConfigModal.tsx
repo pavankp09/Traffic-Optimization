@@ -6,6 +6,7 @@ import { useSimulationStore } from '../store/simulationStore'
 import HelpPopover from './HelpPopover'
 import type { SimConfig, AdverseConfig } from '../types'
 import { TrainingModeSelector } from './TrainingModeSelector'
+import PresetSelector from './PresetSelector'
 
 // ─── Nav Section Definitions ─────────────────────────────────────────────────
 const ALL_NAV_GROUPS = [
@@ -410,9 +411,132 @@ const PRESET_METADATA: Record<string, { icon: string; tagline: string }> = {
 }
 
 function SectionJ({ isBaseline }: { isBaseline: boolean }) {
-  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, tabConfigs } = useConfigStore()
+  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, tabConfigs, activePreset } = useConfigStore()
   const [presetScale, setPresetScale] = useState<'All' | 'Very Light' | 'Light' | 'Medium' | 'Heavy' | 'Extreme' | 'Custom'>('All')
   const [activeQuickPresetId, setActiveQuickPresetId] = useState<string>('m_standard')
+  const [presets, setPresets] = useState<any[]>([])
+  const [presetsLoading, setPresetsLoading] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const [customPresetName, setCustomPresetName] = useState('')
+  const [savingPreset, setSavingPreset] = useState(false)
+
+  // Fetch presets list from API and filter to locations & custom presets
+  const fetchPresets = useCallback(() => {
+    setPresetsLoading(true)
+    fetch('/api/presets')
+      .then(res => res.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data.data || [])
+        // Keep Hyderabad Locations (B_location group) and custom presets (custom group)
+        const filteredList = list.filter((p: any) => p.group === 'B_location' || p.group === 'custom')
+
+        // Separate custom presets and B_location presets
+        const customPresets = filteredList.filter((p: any) => p.group === 'custom')
+        const locationPresets = filteredList.filter((p: any) => p.group === 'B_location')
+
+        // Sort/move Hyderabad Test Location to the front of locations
+        const testLoc = locationPresets.find((p: any) => p.id === 'hyd_test_location')
+        let sortedLocations = locationPresets
+        if (testLoc) {
+          const filtered = locationPresets.filter((p: any) => p.id !== 'hyd_test_location')
+          sortedLocations = [testLoc, ...filtered]
+        }
+
+        // Combine sorted locations followed by custom presets
+        setPresets([...sortedLocations, ...customPresets])
+      })
+      .catch(() => {})
+      .finally(() => setPresetsLoading(false))
+  }, [])
+
+  useEffect(() => {
+    fetchPresets()
+  }, [fetchPresets])
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  // Auto-select Scenario Pack based on the currently loaded preset config (closest matching volume)
+  useEffect(() => {
+    const volume = simConfig.total_vph
+    if (!volume) return
+    let closest: any = QUICK_PRESETS[0]
+    let minDiff = Math.abs(volume - QUICK_PRESETS[0].vehicles)
+    for (let i = 1; i < QUICK_PRESETS.length; i++) {
+      const diff = Math.abs(volume - QUICK_PRESETS[i].vehicles)
+      if (diff < minDiff) {
+        minDiff = diff
+        closest = QUICK_PRESETS[i]
+      }
+    }
+    setActiveQuickPresetId(closest.id)
+    setPresetScale(closest.scale)
+  }, [simConfig.total_vph])
+
+  const handlePresetChange = async (presetId: string) => {
+    if (!presetId) {
+      useConfigStore.setState({ activePreset: null })
+      setPresetScale('All')
+      return
+    }
+    try {
+      const res = await fetch(`/api/presets/${presetId}`).then((r) => r.json())
+      const preset = res?.data ?? null
+      if (preset) {
+        useConfigStore.getState().loadPreset(preset)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSaveCustomPreset = async () => {
+    if (!customPresetName.trim()) return
+    setSavingPreset(true)
+
+    try {
+      const response = await fetch('/api/presets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: customPresetName.trim(),
+          sim_config: simConfig,
+          adverse_config: adverseConfig,
+          group: 'custom',
+          description: 'User-created custom preset',
+        }),
+      }).then((res) => res.json())
+
+      if (response.success && response.data) {
+        const newPreset = response.data
+        // Load the saved preset as active in the store
+        useConfigStore.getState().loadPreset(newPreset)
+        // Refresh the local presets list so the dropdown has it
+        fetchPresets()
+        setCustomPresetName('')
+        alert(`Custom preset "${newPreset.name}" saved successfully!`)
+      } else {
+        alert(`Failed to save preset: ${response.error || 'Unknown error'}`)
+      }
+    } catch (e) {
+      console.error(e)
+      alert("Error saving custom preset.")
+    } finally {
+      setSavingPreset(false)
+    }
+  }
 
   // When Same as Baseline is active on RL, read values from baselineConfig
   const baselineConfig = tabConfigs.baseline || simConfig
@@ -616,8 +740,97 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
       {/* Main configuration container */}
       <div className={`space-y-6 transition-all duration-300 ${isSyncActive ? 'opacity-40 pointer-events-none filter blur-[0.2px]' : ''}`}>
 
+        {/* Load Scenario Preset */}
+        <div className="bg-[#0b0c10] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Load Scenario Preset</h4>
+          </div>
+          <div className="flex items-center gap-3 max-w-xl">
+            <div className="flex-1 relative" ref={dropdownRef}>
+              <button
+                type="button"
+                className="w-full bg-[#050508] border border-white/[0.06] hover:border-white/20 rounded-xl px-4 py-3 text-[12.5px] text-slate-200 focus:outline-none transition-all font-semibold shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.5)] text-left flex items-center justify-between cursor-pointer"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                disabled={presetsLoading}
+              >
+                <span>{activePreset ? activePreset.name : '- Select a location preset -'}</span>
+                <span className="text-[#94a3b8] text-[9px]">{dropdownOpen ? '▲' : '▼'}</span>
+              </button>
+
+              {dropdownOpen && (
+                <div
+                  className="absolute left-0 mt-2 w-full max-h-[280px] overflow-y-auto rounded-xl border border-white/[0.12] shadow-2xl p-1.5 space-y-0.5 animate-fadeIn ro-dropdown-list"
+                  style={{ backgroundColor: '#000000', opacity: 1, zIndex: 99999, isolation: 'isolate' }}
+                >
+                  {presets.map((p) => {
+                    const isSelected = activePreset?.id === p.id
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`w-full text-left px-3 py-2.5 text-[12.5px] rounded-lg transition-colors flex items-center justify-between cursor-pointer ${isSelected
+                          ? 'bg-[#8fb8ce]/10 text-[#8fb8ce] font-bold'
+                          : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
+                          }`}
+                        onClick={() => {
+                          handlePresetChange(p.id)
+                          setDropdownOpen(false)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{p.name}</span>
+                          {p.group === 'custom' && (
+                            <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                              Custom
+                            </span>
+                          )}
+                        </div>
+                        {isSelected && <span className="text-[10px]">✓</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {activePreset ? (
+              <button
+                type="button"
+                onClick={() => handlePresetChange('')}
+                className="px-4 py-2.5 h-[42px] flex items-center justify-center text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/[0.06] hover:bg-rose-500/[0.12] border border-rose-500/30 hover:border-rose-400/50 rounded-xl cursor-pointer transition-all duration-200 shadow-[0_2px_8px_rgba(244,63,94,0.08)] active:scale-[0.98] flex-shrink-0"
+              >
+                Reset Preset
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <input
+                  type="text"
+                  placeholder="Enter preset name..."
+                  value={customPresetName}
+                  onChange={(e) => setCustomPresetName(e.target.value)}
+                  className="bg-[#050508] border border-white/[0.06] hover:border-white/20 focus:border-[#8fb8ce]/40 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none transition-all font-semibold shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.5)] w-[180px]"
+                  disabled={savingPreset}
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveCustomPreset}
+                  disabled={savingPreset || !customPresetName.trim()}
+                  className={`px-4 py-2.5 h-[42px] flex items-center justify-center text-xs font-semibold rounded-xl cursor-pointer transition-all duration-200 shadow-[0_2px_8px_rgba(16,185,129,0.08)] active:scale-[0.98] flex-shrink-0 ${
+                    customPresetName.trim()
+                      ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] border border-emerald-500/30 hover:border-emerald-400/50'
+                      : 'text-slate-600 bg-white/[0.02] border border-white/[0.04] cursor-not-allowed'
+                  }`}
+                >
+                  {savingPreset ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Presets card grid */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+        <div className={`bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm transition-all duration-300 ${activePreset ? 'opacity-50 pointer-events-none select-none' : ''}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
@@ -702,7 +915,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
           </div>
         </div>
 
-        {/* Road Layout moved to dedicated tab */}
+        {/* Wraps demand and vehicle mix to be read-only if activePreset is selected */}
+        <div className={activePreset ? "opacity-50 pointer-events-none select-none space-y-6" : "space-y-6"}>
 
         {/* Traffic Demand */}
         <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
@@ -808,8 +1022,12 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
           </div>
         </div>
 
-        {/* Simulation Duration */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
+        </div>
+
+        {/* Simulation Duration is always unlocked for user editing */}
+        <div className="space-y-6">
+          {/* Simulation Duration */}
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm">
           <div className="flex items-center gap-2 mb-4">
             <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Simulation Duration</h4>
@@ -863,10 +1081,13 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
               </div>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Driving Behavior */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm opacity-40 select-none">
+        {/* Wraps driving behavior to be read-only if activePreset is selected */}
+        <div className={activePreset ? "opacity-50 pointer-events-none select-none space-y-6" : "space-y-6"}>
+          {/* Driving Behavior */}
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm opacity-40 select-none">
           <div className="flex items-center gap-2 mb-4">
             <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Driving Behavior <span className="text-[9px] text-slate-500 font-normal lowercase">(disabled)</span></h4>
@@ -894,6 +1115,8 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
               )
             })}
           </div>
+        </div>
+
         </div>
 
       </div>
@@ -1106,7 +1329,7 @@ interface ConfigModalProps {
 }
 
 export default function ConfigModal({ open, mode = 'simulation', onClose, onApply, isBaselineView = false, activeModelKey = 'custom' }: ConfigModalProps) {
-  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, isDirty } = useConfigStore()
+  const { simConfig, adverseConfig, updateSimConfig, updateAdverseConfig, isDirty, activePreset } = useConfigStore()
   const isRunning = useSimulationStore((s) => s.isRunning)
 
   const [activeSection, setActiveSection] = useState('J')
@@ -1335,13 +1558,26 @@ export default function ConfigModal({ open, mode = 'simulation', onClose, onAppl
 
           {/* Section content */}
           <div className={`flex-1 overflow-y-auto custom-scrollbar px-6 py-6 ${isRunning ? 'pointer-events-none opacity-40 select-none' : ''}`}>
-            {activeSection === 'D' && <SectionD simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'E' && <SectionE simConfig={simConfig} updateSimConfig={updateSimConfig} activeModelKey={activeModelKey} />}
-            {activeSection === 'F' && <SectionF simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'H' && <SectionH simConfig={simConfig} updateSimConfig={updateSimConfig} />}
-            {activeSection === 'I' && <SectionI adverseConfig={adverseConfig} updateAdverseConfig={updateAdverseConfig} />}
-            {activeSection === 'J' && <SectionJ isBaseline={isBaselineView} />}
-            {activeSection === 'L' && <SectionL isBaseline={isBaselineView} />}
+            {activePreset && activeSection !== 'J' && (
+              <div className="mb-6 p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 text-blue-400 text-xs flex items-center gap-3 animate-fadeIn">
+                <span className="text-base">🔒</span>
+                <div>
+                  <p className="font-bold">Settings Locked to Preset</p>
+                  <p className="text-slate-400 mt-0.5">
+                    Configuration settings are locked to preset <span className="text-slate-200 font-semibold">{activePreset.name}</span>. To edit, clear the preset selection in the Scenario Packs tab.
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className={activePreset && activeSection !== 'J' ? 'pointer-events-none opacity-50 select-none' : ''}>
+              {activeSection === 'D' && <SectionD simConfig={simConfig} updateSimConfig={updateSimConfig} />}
+              {activeSection === 'E' && <SectionE simConfig={simConfig} updateSimConfig={updateSimConfig} activeModelKey={activeModelKey} />}
+              {activeSection === 'F' && <SectionF simConfig={simConfig} updateSimConfig={updateSimConfig} />}
+              {activeSection === 'H' && <SectionH simConfig={simConfig} updateSimConfig={updateSimConfig} />}
+              {activeSection === 'I' && <SectionI adverseConfig={adverseConfig} updateAdverseConfig={updateAdverseConfig} />}
+              {activeSection === 'J' && <SectionJ isBaseline={isBaselineView} />}
+              {activeSection === 'L' && <SectionL isBaseline={isBaselineView} />}
+            </div>
           </div>
 
           {/* Footer: Apply */}

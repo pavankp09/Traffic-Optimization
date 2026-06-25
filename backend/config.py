@@ -91,6 +91,7 @@ class SimulationConfig:
     all_red_seconds: int = 2
     pedestrian_walk_seconds: int = 30
     total_cycle_cap_seconds: int = 120
+    simulation_duration_s: int = 1800
 
     # 5D - RL Agent & Training
     algorithm: str = "PPO"                      # PPO|A2C|DQN|SAC_Discrete
@@ -129,7 +130,7 @@ class SimulationConfig:
     training_stage: int = 1                 # 1=Fast Mock, 2=Enriched, 3=SUMO, 4=Curriculum
 
     # 5E - Simulation Engine
-    sim_speed_multiplier: int = 10              # 1|5|10|0(max)
+    sim_speed_multiplier: int = 5              # 1|5|10|0(max)
     step_length_seconds: float = 0.5
     car_following_model: str = "IDM"            # Krauss|IDM|EIDM
     lane_change_model: str = "SL2015"           # LC2013|SL2015

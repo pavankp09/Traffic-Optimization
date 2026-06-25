@@ -133,15 +133,40 @@ def config_validate():
 # Presets
 # ---------------------------------------------------------------------------
 
-@api_bp.route("/presets")
+@api_bp.route("/presets", methods=["GET", "POST"])
+def manage_presets():
+    if request.method == "POST":
+        return save_custom_preset()
+    return list_presets()
+
+
 def list_presets():
+    presets = []
+    try:
+        from backend.app import get_db
+        from backend.db.models import CustomPreset
+        db = get_db()
+        try:
+            customs = db.query(CustomPreset).all()
+            for cp in customs:
+                presets.append({
+                    "id": cp.id,
+                    "name": cp.name,
+                    "group": cp.group_name or "custom",
+                    "description": cp.description or "",
+                    "tags": cp.tags or [],
+                })
+        finally:
+            db.close()
+        if presets:
+            return ok(presets)
+    except Exception as exc:
+        logger.warning("Failed to load presets from DB: %s", exc)
+
     try:
         from backend.config_presets import list_presets as _list_presets
         presets = _list_presets()
-    except ImportError:
-        presets = []
     except Exception as exc:
-        logger.warning("Failed to load presets: %s", exc)
         presets = []
     return ok(presets)
 
@@ -149,15 +174,89 @@ def list_presets():
 @api_bp.route("/presets/<preset_id>")
 def get_preset(preset_id):
     try:
+        from backend.app import get_db
+        from backend.db.models import CustomPreset
+        db = get_db()
+        try:
+            cp = db.query(CustomPreset).filter(CustomPreset.id == preset_id).first()
+            if cp is not None:
+                return ok({
+                    "id": cp.id,
+                    "name": cp.name,
+                    "group": cp.group_name or "custom",
+                    "description": cp.description or "",
+                    "sim_config": cp.sim_config,
+                    "adverse_config": cp.adverse_config or {},
+                    "tags": cp.tags or [],
+                })
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Failed to query custom preset from DB: %s", exc)
+
+    try:
         from backend.config_presets import get_preset as _get_preset
         preset = _get_preset(preset_id)
-        if preset is None:
-            return err(f"Preset '{preset_id}' not found", 404)
-        return ok(preset)
-    except ImportError:
-        return err("Presets module not available", 503)
+        if preset is not None:
+            return ok({
+                "id": preset.id,
+                "name": preset.name,
+                "group": preset.group,
+                "description": preset.description,
+                "sim_config": preset.sim_config,
+                "adverse_config": preset.adverse_config or {},
+                "tags": preset.tags or [],
+            })
     except Exception as exc:
-        return err(str(exc), 500)
+        logger.debug("Preset not found in standard presets fallback: %s", exc)
+
+    return err(f"Preset '{preset_id}' not found", 404)
+
+
+def save_custom_preset():
+    body = request.get_json(silent=True) or {}
+    preset_id = body.get("id")
+    name = body.get("name")
+    sim_config = body.get("sim_config")
+
+    if not name or not sim_config:
+        return err("Missing name or sim_config", 400)
+
+    if not preset_id:
+        import uuid
+        preset_id = f"custom_{uuid.uuid4().hex[:12]}"
+
+    try:
+        from backend.app import get_db
+        from backend.db.models import CustomPreset
+        db = get_db()
+        try:
+            cp = db.query(CustomPreset).filter(CustomPreset.id == preset_id).first()
+            if cp is None:
+                cp = CustomPreset(id=preset_id)
+                db.add(cp)
+
+            cp.name = name
+            cp.group_name = body.get("group", "custom")
+            cp.description = body.get("description", "User-created custom preset")
+            cp.sim_config = sim_config
+            cp.adverse_config = body.get("adverse_config", {})
+            cp.tags = body.get("tags", [])
+            db.commit()
+
+            return ok({
+                "id": cp.id,
+                "name": cp.name,
+                "group": cp.group_name,
+                "description": cp.description,
+                "sim_config": cp.sim_config,
+                "adverse_config": cp.adverse_config,
+                "tags": cp.tags,
+            })
+        finally:
+            db.close()
+    except Exception as exc:
+        return err(f"Failed to save custom preset to DB: {exc}", 500)
 
 
 # ---------------------------------------------------------------------------

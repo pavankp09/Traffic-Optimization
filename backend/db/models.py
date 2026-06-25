@@ -131,6 +131,12 @@ class SimulationRun(Base):
     session_id = Column(Integer, ForeignKey("training_sessions.id"), nullable=False)
     sim_config = Column(JSON, nullable=False)
     adverse_config = Column(JSON, nullable=False)
+    preset_name = Column(String(100), nullable=True)
+    run_type = Column(String(30), nullable=True)
+    model_name = Column(String(50), nullable=True)
+    avg_wait_s = Column(Float, nullable=True)
+    throughput = Column(Integer, nullable=True)
+    green_util_pct = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("TrainingSession", back_populates="simulation_runs")
@@ -155,6 +161,19 @@ class VehicleCrossing(Base):
 
     session = relationship("TrainingSession", back_populates="vehicle_crossings")
     simulation_run = relationship("SimulationRun", back_populates="vehicle_crossings")
+
+
+class CustomPreset(Base):
+    __tablename__ = "custom_presets"
+
+    id = Column(String(100), primary_key=True)
+    name = Column(String(100), nullable=False)
+    group_name = Column(String(50), default="custom")
+    description = Column(Text, nullable=True)
+    sim_config = Column(JSON, nullable=False)
+    adverse_config = Column(JSON, nullable=True)
+    tags = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
@@ -207,8 +226,54 @@ def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
                 conn.execute(text("ALTER TABLE metric_records ADD COLUMN carbon_index_rl_g_veh FLOAT"))
             if "carbon_index_baseline_g_veh" not in existing_cols_mr:
                 conn.execute(text("ALTER TABLE metric_records ADD COLUMN carbon_index_baseline_g_veh FLOAT"))
+
+            # Migration for simulation_runs
+            columns_info_sr = conn.execute(text("PRAGMA table_info(simulation_runs)")).fetchall()
+            existing_cols_sr = {col[1] for col in columns_info_sr}
+            if "preset_name" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN preset_name VARCHAR(100)"))
+            if "run_type" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN run_type VARCHAR(30)"))
+            if "model_name" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN model_name VARCHAR(50)"))
+            if "avg_wait_s" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN avg_wait_s FLOAT"))
+            if "throughput" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN throughput INTEGER"))
+            if "green_util_pct" not in existing_cols_sr:
+                conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN green_util_pct FLOAT"))
     except Exception:
         # Ignore errors if altering failed or db was in-memory/read-only
+        pass
+
+    # Seed built-in presets into custom_presets table if empty or missing
+    try:
+        from sqlalchemy.orm import Session
+        from backend.config_presets import ALL_PRESETS
+        with Session(engine) as session:
+            for preset_id, preset in ALL_PRESETS.items():
+                exists = session.query(CustomPreset).filter(CustomPreset.id == preset_id).first()
+                if not exists:
+                    cp = CustomPreset(
+                        id=preset_id,
+                        name=preset.name,
+                        group_name=preset.group,
+                        description=preset.description,
+                        sim_config=preset.sim_config,
+                        adverse_config=preset.adverse_config,
+                        tags=preset.tags
+                    )
+                    session.add(cp)
+                else:
+                    exists.name = preset.name
+                    exists.group_name = preset.group
+                    exists.description = preset.description
+                    exists.sim_config = preset.sim_config
+                    exists.adverse_config = preset.adverse_config
+                    exists.tags = preset.tags
+            session.commit()
+    except Exception:
+        # Ignore errors if database is locked or read-only during seeding
         pass
 
     return engine

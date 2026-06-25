@@ -13,7 +13,7 @@ function getSocket(): Socket {
   if (!_socket) {
     _socket = io({
       // connects to same origin (proxied by vite dev server → Flask backend)
-      transports: ['polling'],
+      transports: ['websocket', 'polling'],
       autoConnect: false,
       reconnectionDelay: 300,        // try reconnecting quickly on restore
       reconnectionDelayMax: 2000,    // cap at 2s so it never feels "stuck"
@@ -369,11 +369,46 @@ function registerGlobalListeners(socket: Socket) {
     useSimulationStore.getState().setRuntimeInfo(data.runtime ?? null)
   })
 
+  // ── Generic primary-frame handler ────────────────────────────────────────
+  // The backend emits `sim:frame` (no suffix) as the primary frame for whatever
+  // model is active. This routes it to currentFrame unconditionally when the
+  // session ID matches, fixing the "stuck on INITIALIZING" overlay in scenarios
+  // where the model-specific handler's selectedModelSingle guard doesn't fire.
+  socket.on('sim:frame', (frame: SimFrame) => {
+    const store = useSimulationStore.getState()
+    const activeSid = store.sessionId
+    const session_id = frame.session_id
+
+    if (session_id && session_id.startsWith('popup_')) {
+      const parts = session_id.split('_')
+      const ep = Number(parts[1])
+      if (!isNaN(ep)) {
+        store.setPopupFrame(ep, frame)
+        store.setPopupSimTime(ep, frame.sim_time_s ?? 0)
+        return
+      }
+    }
+
+    if (session_id && session_id === activeSid) {
+      if (!store.isRunning) store.setRunning(true)
+      store.setFrame(frame)
+    }
+  })
+
   socket.on('sim:frame:baseline', (frame: SimFrame) => {
     const store = useSimulationStore.getState()
     const activeSid = store.sessionId
     const splitSid = store.splitSessionId
     const session_id = frame.session_id
+    
+    console.debug('[Socket] Received sim:frame:baseline', {
+      session_id,
+      activeSid,
+      match: session_id === activeSid,
+      isRunning: store.isRunning,
+      selectedModelSingle: store.selectedModelSingle
+    })
+
     if (session_id && session_id.startsWith('popup_')) {
       const parts = session_id.split('_')
       const ep = Number(parts[1])
@@ -392,7 +427,7 @@ function registerGlobalListeners(socket: Socket) {
       useSessionStore.getState().setBaselineMetrics(simMetrics)
 
       const selected = store.selectedModelSingle
-      if (selected === 'baseline') {
+      if (selected === 'baseline' || selected === 'baseline_fixed' || selected === 'baseline_webster') {
         store.setFrame(frame)
       }
     } else if (session_id === splitSid && splitSid) {
@@ -566,7 +601,7 @@ function registerGlobalListeners(socket: Socket) {
     if (session_id === activeSid && activeSid) {
       _resetLiveTrackers(session_id)
       store.setRunning(true)
-      if (store.selectedModelSingle === 'baseline') {
+      if (store.selectedModelSingle === 'baseline' || store.selectedModelSingle === 'baseline_fixed' || store.selectedModelSingle === 'baseline_webster') {
         useSessionStore.getState().setBaselineCompleted(false)
       }
     } else if (session_id === splitSid && splitSid) {
@@ -591,7 +626,7 @@ function registerGlobalListeners(socket: Socket) {
     }
     if (session_id === activeSid && activeSid) {
       store.setRunning(false)
-      if (store.selectedModelSingle === 'baseline') {
+      if (store.selectedModelSingle === 'baseline' || store.selectedModelSingle === 'baseline_fixed' || store.selectedModelSingle === 'baseline_webster') {
         useSessionStore.getState().setBaselineCompleted(!!data?.completed)
       }
     } else if (session_id === splitSid && splitSid) {

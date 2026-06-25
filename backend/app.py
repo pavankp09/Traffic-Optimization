@@ -1,5 +1,24 @@
 """Flask application factory for Traffic Signal Optimizer."""
+try:
+    import torch
+except ImportError:
+    pass
+
 import os
+import sys
+
+# Dynamic alias for numpy._core to core for SB3/Pickle compatibility
+# between environments running different NumPy versions (1.x vs 2.x).
+try:
+    import numpy as np
+    if not hasattr(np, "_core"):
+        import numpy.core as core
+        sys.modules['numpy._core'] = core
+        import numpy.core.numeric as numeric
+        sys.modules['numpy._core.numeric'] = numeric
+except ImportError:
+    pass
+
 from flask import Flask
 from flask_socketio import SocketIO
 from flask_cors import CORS
@@ -48,14 +67,18 @@ def create_app(config=None) -> Flask:
     CORS(app, origins=cors_origins)
 
     # Database
-    _db_engine = create_engine(db_url, echo=False)
-    Base.metadata.create_all(_db_engine)
+    from backend.db.models import init_db
+    _db_engine = init_db(db_url)
     _SessionLocal = sessionmaker(bind=_db_engine)
 
     # Blueprints
     from backend.api.routes import api_bp, _reset_store
     _reset_store()  # reset SessionStore singleton so it picks up new DB URL
     app.register_blueprint(api_bp, url_prefix="/api")
+
+    # Road Optimizer blueprint
+    from backend.optimizer.optimizer_routes import optimizer_bp
+    app.register_blueprint(optimizer_bp)
 
     # Socket.IO
     # ping_timeout=120: browsers throttle JS timers to 1Hz when minimized.
@@ -65,7 +88,7 @@ def create_app(config=None) -> Flask:
         app,
         cors_allowed_origins=cors_origins,
         async_mode=None,   # Auto-detect best async mode (eventlet/gevent/threading)
-        allow_upgrades=False,
+        allow_upgrades=True,
         logger=False,
         engineio_logger=False,
         ping_interval=25,

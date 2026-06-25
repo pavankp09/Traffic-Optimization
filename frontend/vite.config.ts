@@ -15,16 +15,19 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy, _options) => {
           const originalEmit = proxy.emit
-          proxy.emit = function (event, ...args) {
+          proxy.emit = function (event: any, ...args: any[]) {
             if (event === 'error') {
               const err = args[0] as any
-              if (err && (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET')) {
+              const ignoredErrors = ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT']
+              if (err && ignoredErrors.includes(err.code)) {
                 const res = args[2] as any
-                if (res && !res.headersSent && typeof res.writeHead === 'function') {
-                  res.writeHead(502, { 'Content-Type': 'text/plain' })
-                  res.end('Bad Gateway: Backend server is starting up or offline.')
-                } else if (res && typeof res.destroy === 'function') {
-                  res.destroy()
+                if (res) {
+                  if (!res.headersSent && typeof res.writeHead === 'function') {
+                    res.writeHead(502, { 'Content-Type': 'text/plain' })
+                    res.end('Bad Gateway: Backend server is starting up or offline.')
+                  } else if (typeof res.destroy === 'function') {
+                    res.destroy()
+                  }
                 }
                 return true
               }
@@ -39,22 +42,54 @@ export default defineConfig({
         ws: true,
         configure: (proxy, _options) => {
           const originalEmit = proxy.emit
-          proxy.emit = function (event, ...args) {
+          proxy.emit = function (event: any, ...args: any[]) {
             if (event === 'error') {
               const err = args[0] as any
-              if (err && (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET')) {
+              const ignoredErrors = ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT']
+              if (err && ignoredErrors.includes(err.code)) {
                 const res = args[2] as any
-                if (res && !res.headersSent && typeof res.writeHead === 'function') {
-                  res.writeHead(502, { 'Content-Type': 'text/plain' })
-                  res.end('Bad Gateway: Backend server is starting up or offline.')
-                } else if (res && typeof res.destroy === 'function') {
-                  res.destroy()
+                if (res) {
+                  if (!res.headersSent && typeof res.writeHead === 'function') {
+                    res.writeHead(502, { 'Content-Type': 'text/plain' })
+                    res.end('Bad Gateway: Backend server is starting up or offline.')
+                  } else if (typeof res.destroy === 'function') {
+                    res.destroy()
+                  }
                 }
                 return true
               }
             }
             return originalEmit.apply(this, [event, ...args])
           }
+
+          proxy.on('open', (proxySocket?: any) => {
+            if (!proxySocket) return
+            const originalEmitSocket = proxySocket.emit
+            proxySocket.emit = function (event: any, ...args: any[]) {
+              if (event === 'error') {
+                const err = args[0] as any
+                const ignoredErrors = ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT']
+                if (err && ignoredErrors.includes(err.code)) {
+                  return true
+                }
+              }
+              return originalEmitSocket.apply(this, [event, ...args])
+            }
+          })
+
+          proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
+            const originalEmitSocket = socket.emit
+            socket.emit = function (event: any, ...args: any[]) {
+              if (event === 'error') {
+                const err = args[0] as any
+                const ignoredErrors = ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT']
+                if (err && ignoredErrors.includes(err.code)) {
+                  return true
+                }
+              }
+              return originalEmitSocket.apply(this, [event, ...args])
+            }
+          })
         }
       },
     },

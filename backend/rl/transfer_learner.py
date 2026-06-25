@@ -113,7 +113,9 @@ class TransferLearner:
             fine-tuning or inference.
         """
         logger.info("Loading base model from %s", self.base_model_path)
-        model = PPO.load(self.base_model_path, device=get_torch_device())
+        from backend.rl.device import cuda_lock
+        with cuda_lock:
+            model = PPO.load(self.base_model_path, device=get_torch_device())
 
         if self.new_env is not None:
             model.set_env(self.new_env)
@@ -211,6 +213,22 @@ class TransferLearner:
         self._model.save(output_path)
         if not output_path.endswith(".zip"):
             output_path = output_path + ".zip"
+
+        # Also save a copy with the creation timestamp in the backup directory if it is the latest model
+        if "latest.zip" in output_path:
+            try:
+                import shutil
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                out_dir = os.path.dirname(output_path)
+                backup_dir = os.path.join(out_dir, "backup")
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_path = os.path.join(backup_dir, f"latest_{timestamp}.zip")
+                shutil.copy2(output_path, backup_path)
+                logger.info("Saved copy of fine-tuned latest model to backup: %s", backup_path)
+            except Exception as e:
+                logger.warning("Failed to save timestamped copy of fine-tuned model: %s", e)
+
         logger.info("Fine-tuned model saved to %s", output_path)
         return output_path
 
