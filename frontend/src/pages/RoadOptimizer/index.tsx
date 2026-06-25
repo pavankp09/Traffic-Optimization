@@ -400,8 +400,14 @@ export default function RoadOptimizerPage() {
 
   // Display-adjusted counts for the sidebar and scenario header chip.
   // A scenario that has SSE status='done' but whose visual canvas simulation is
-  // still playing (isAnyVisualSimRunning) should appear as Running=1, Completed-1.
-  const visuallyRunningScenarioId = isAnyVisualSimRunning && activeSimScenario ? activeSimScenario.scenario_id : null
+  // still playing should appear as Running=1, Completed-1.
+  // Derive the running scenario_id from the store sessionId (always 'road_opt_visual_<id>')
+  // instead of activeSimScenario — activeSimScenario is nulled when the overlay closes
+  // but the socket session keeps running.
+  const _storeSessionId = useSimulationStore.getState().sessionId
+  const visuallyRunningScenarioId = isAnyVisualSimRunning && _storeSessionId?.startsWith('road_opt_visual_')
+    ? _storeSessionId.replace('road_opt_visual_', '')
+    : null
   const visuallyRunningIsDone = visuallyRunningScenarioId
     ? (scenarios.find(s => s.scenario_id === visuallyRunningScenarioId)?.status === 'done')
     : false
