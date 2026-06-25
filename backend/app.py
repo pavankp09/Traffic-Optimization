@@ -53,7 +53,7 @@ def create_app(config=None) -> Flask:
 
     # Locate the frontend dist directory relative to the backend app directory
     dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
-    app = Flask(__name__, static_folder=dist_dir, static_url_path="")
+    app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = APP_CONFIG.secret_key
 
     # Support passing a plain dict for testing
@@ -106,14 +106,16 @@ def create_app(config=None) -> Flask:
     init_socket_handlers(socketio, app)
 
     # Serves the index.html at root, and falls back to it for SPA routing
-    from flask import jsonify
+    from flask import jsonify, send_from_directory
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve(path):
         if path.startswith('api/'):
             return jsonify({"success": False, "error": "Not Found"}), 404
-        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-            return app.send_static_file(path)
-        return app.send_static_file('index.html')
+        # Serve static file if it exists in dist
+        file_path = os.path.join(dist_dir, path)
+        if path != "" and os.path.exists(file_path):
+            return send_from_directory(dist_dir, path)
+        return send_from_directory(dist_dir, 'index.html')
 
     return app
