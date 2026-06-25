@@ -33,6 +33,7 @@ def _default_cors_origins() -> list[str]:
         "http://localhost:8005",
         "http://127.0.0.1:8005",
         "http://localhost:3000",
+        "*",  # Allow all origins by default for easy EC2/public IP deployment
     ]
     frontend_origin = os.getenv("FRONTEND_ORIGIN", "").strip()
     if frontend_origin:
