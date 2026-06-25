@@ -102,12 +102,22 @@ class ModelManager:
 
         Raises FileNotFoundError if not found.
         """
-        new_path = os.path.join(self.model_dir, name, "latest.zip")
+        algo_dir = os.path.join(self.model_dir, name)
+        new_path = os.path.join(algo_dir, "latest.zip")
+        
+        # If latest.zip doesn't exist, search for latest*.zip in the algorithm folder
+        if not os.path.isfile(new_path) and os.path.isdir(algo_dir):
+            import glob
+            matches = glob.glob(os.path.join(algo_dir, "latest*.zip"))
+            if matches:
+                matches.sort()  # Sort chronologically by timestamp in name
+                new_path = matches[-1]
+
         if os.path.isfile(new_path):
             from backend.rl.device import cuda_lock
             with cuda_lock:
                 model = PPO.load(new_path, env=None)
-            logger.info("Model loaded from new layout: %s", new_path)
+            logger.info("Model loaded from layout: %s", new_path)
             return model
 
         if version is None:
