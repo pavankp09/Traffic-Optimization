@@ -82,15 +82,31 @@ export default function ScenarioBoard({
                 id="ro-done-sims-trigger"
                 className="ro-btn ro-btn-primary"
                 onClick={onDoneSimulations}
-                disabled={doneCount === 0 || isBulkRunning}
-                title={doneCount === 0 ? 'Run at least one simulation to continue' : undefined}
+                disabled={doneCount === 0 || isBulkRunning || runningCount > 0 || isAnyVisualSimRunning}
+                title={
+                  doneCount === 0
+                    ? 'Run at least one simulation to continue'
+                    : (runningCount > 0 || isBulkRunning || isAnyVisualSimRunning)
+                    ? 'Wait for the running simulation to finish'
+                    : undefined
+                }
                 style={{
                   fontSize: 12,
-                  background: doneCount > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.04)',
-                  borderColor: doneCount > 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.12)',
-                  color: doneCount > 0 ? '#34d399' : 'rgba(52, 211, 153, 0.35)',
-                  border: `1px solid ${doneCount > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.1)'}`,
-                  cursor: doneCount === 0 ? 'not-allowed' : 'pointer',
+                  ...(doneCount > 0 && !isBulkRunning && runningCount === 0 && !isAnyVisualSimRunning
+                    ? {
+                        background: 'rgba(16, 185, 129, 0.1)',
+                        borderColor: 'rgba(16, 185, 129, 0.35)',
+                        color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        cursor: 'pointer',
+                      }
+                    : {
+                        background: 'rgba(16, 185, 129, 0.04)',
+                        borderColor: 'rgba(16, 185, 129, 0.12)',
+                        color: 'rgba(52, 211, 153, 0.35)',
+                        border: '1px solid rgba(16, 185, 129, 0.1)',
+                        cursor: 'not-allowed',
+                      }),
                 }}
               >
                 Done
