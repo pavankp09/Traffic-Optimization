@@ -192,6 +192,21 @@ def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
             database_url = f"sqlite:///{abs_path}"
 
     engine = create_engine(database_url, echo=False)
+
+    # Enable WAL mode for SQLite to prevent corruption and support high concurrency
+    if "sqlite" in database_url:
+        from sqlalchemy import event
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+            except Exception:
+                pass
+            finally:
+                cursor.close()
+
     Base.metadata.create_all(engine)
 
     # In-place dynamic column migration for existing databases
