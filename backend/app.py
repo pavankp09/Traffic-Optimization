@@ -1,4 +1,7 @@
 """Flask application factory for Traffic Signal Optimizer."""
+import eventlet
+eventlet.monkey_patch()
+
 try:
     import torch
 except ImportError:
@@ -92,7 +95,7 @@ def create_app(config=None) -> Flask:
     socketio.init_app(
         app,
         cors_allowed_origins=cors_allowed,
-        async_mode="threading",   # Force threading to avoid eventlet monkey-patching blocks
+        async_mode="eventlet",   # Use eventlet since we added monkey_patch() at the top
         allow_upgrades=True,
         logger=False,
         engineio_logger=False,
