@@ -36,6 +36,15 @@ try:
     diag_logger.info("=== Systemd Service Diagnostics ===")
     diag_logger.info("Current Working Directory: %s", os.getcwd())
     diag_logger.info("Python Executable: %s", sys.executable)
+    
+    # Check SELinux
+    try:
+        import subprocess
+        selinux = subprocess.check_output(["getenforce"], text=True).strip()
+        diag_logger.info("SELinux Mode: %s", selinux)
+    except Exception as e:
+        diag_logger.info("SELinux check (getenforce) failed or not present: %s", e)
+
     diag_logger.info("Environment variables containing proxy/http/aws/token/region:")
     for k, v in os.environ.items():
         kl = k.lower()
