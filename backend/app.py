@@ -86,9 +86,12 @@ def create_app(config=None) -> Flask:
     # ping_timeout=120: browsers throttle JS timers to 1Hz when minimized.
     # Default 60s timeout causes disconnect on minimize. 120s survives any
     # minimize-restore cycle without dropping the WebSocket connection.
+    cors_allowed = cors_origins
+    if "*" in cors_origins:
+        cors_allowed = "*"
     socketio.init_app(
         app,
-        cors_allowed_origins=cors_origins,
+        cors_allowed_origins=cors_allowed,
         async_mode=None,   # Auto-detect best async mode (eventlet/gevent/threading)
         allow_upgrades=True,
         logger=False,
