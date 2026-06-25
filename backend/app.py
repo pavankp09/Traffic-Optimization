@@ -92,7 +92,7 @@ def create_app(config=None) -> Flask:
     socketio.init_app(
         app,
         cors_allowed_origins=cors_allowed,
-        async_mode=None,   # Auto-detect best async mode (eventlet/gevent/threading)
+        async_mode="threading",   # Force threading to avoid eventlet monkey-patching blocks
         allow_upgrades=True,
         logger=False,
         engineio_logger=False,
