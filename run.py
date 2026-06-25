@@ -31,6 +31,13 @@ import time
 from pathlib import Path
 from typing import Iterable
 
+# Try to load environment variables from .env in the project root directory
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
+
 # Dynamic alias for numpy._core to core for SB3/Pickle compatibility
 # between environments running different NumPy versions (1.x vs 2.x).
 try:

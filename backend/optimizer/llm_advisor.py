@@ -121,14 +121,20 @@ def get_llm_recommendation(
     # 1. Determine provider and key
     model_lower = model.lower()
     if model_lower.startswith("claude-"):
-        # Access should be through Bedrock (AWS credentials)
+        # Access should be through Bedrock (AWS credentials or Token)
+        aws_auth_mode = os.getenv("AWS_AUTH_MODE", "").strip().upper()
+        aws_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
         aws_access_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
-        has_aws = bool(aws_access_key and aws_secret_key) or os.path.exists(os.path.expanduser("~/.aws/credentials")) or os.path.exists(os.path.expanduser("~/.aws/config"))
+        
+        has_aws_token = (aws_auth_mode == "TOKEN" and bool(aws_token))
+        has_aws_keys = bool(aws_access_key and aws_secret_key)
+        has_aws_config = os.path.exists(os.path.expanduser("~/.aws/credentials")) or os.path.exists(os.path.expanduser("~/.aws/config"))
+        has_aws = has_aws_token or has_aws_keys or has_aws_config
         
         if has_aws:
             provider = "Bedrock"
-            key_name = "AWS credentials"
+            key_name = "AWS Bedrock Token" if has_aws_token else "AWS credentials"
             api_key = "aws-configured"
         else:
             api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -217,29 +223,46 @@ def get_llm_recommendation(
             try:
                 import boto3
                 region = os.getenv("AWS_DEFAULT_REGION", os.getenv("AWS_REGION", "us-east-1"))
+                endpoint_url = os.getenv("AWS_BEDROCK_ENDPOINT_URL", os.getenv("AWS_ENDPOINT_URL", "")).strip() or None
                 
+                aws_auth_mode = os.getenv("AWS_AUTH_MODE", "").strip().upper()
+                aws_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
                 aws_access_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
                 aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
                 aws_session_token = os.getenv("AWS_SESSION_TOKEN", "").strip()
                 
-                if aws_access_key and aws_secret_key:
+                if aws_auth_mode == "TOKEN" and aws_token:
+                    # Explicitly set environment variable so boto3's client picks it up
+                    os.environ["AWS_BEARER_TOKEN_BEDROCK"] = aws_token
+                    client = boto3.client(
+                        "bedrock-runtime",
+                        region_name=region,
+                        endpoint_url=endpoint_url
+                    )
+                elif aws_access_key and aws_secret_key:
                     if aws_session_token:
                         client = boto3.client(
                             "bedrock-runtime",
                             region_name=region,
                             aws_access_key_id=aws_access_key,
                             aws_secret_access_key=aws_secret_key,
-                            aws_session_token=aws_session_token
+                            aws_session_token=aws_session_token,
+                            endpoint_url=endpoint_url
                         )
                     else:
                         client = boto3.client(
                             "bedrock-runtime",
                             region_name=region,
                             aws_access_key_id=aws_access_key,
-                            aws_secret_access_key=aws_secret_key
+                            aws_secret_access_key=aws_secret_key,
+                            endpoint_url=endpoint_url
                         )
                 else:
-                    client = boto3.client("bedrock-runtime", region_name=region)
+                    client = boto3.client(
+                        "bedrock-runtime",
+                        region_name=region,
+                        endpoint_url=endpoint_url
+                    )
                 
                 # Determine Bedrock Model ID
                 model_id = "anthropic.claude-3-haiku-20240307-v1:0"
