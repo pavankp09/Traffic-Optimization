@@ -83,12 +83,14 @@ export default function ScenarioBoard({
                 className="ro-btn ro-btn-primary"
                 onClick={onDoneSimulations}
                 disabled={doneCount === 0 || isBulkRunning}
+                title={doneCount === 0 ? 'Run at least one simulation to continue' : undefined}
                 style={{
                   fontSize: 12,
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  borderColor: 'rgba(16, 185, 129, 0.35)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                  background: doneCount > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.04)',
+                  borderColor: doneCount > 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.12)',
+                  color: doneCount > 0 ? '#34d399' : 'rgba(52, 211, 153, 0.35)',
+                  border: `1px solid ${doneCount > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.1)'}`,
+                  cursor: doneCount === 0 ? 'not-allowed' : 'pointer',
                 }}
               >
                 Done
@@ -117,12 +119,15 @@ export default function ScenarioBoard({
                 id="ro-done-adding-trigger"
                 className="ro-btn ro-btn-primary"
                 onClick={onDone}
+                disabled={!hasModifications}
+                title={!hasModifications ? 'Add at least one scenario to continue' : undefined}
                 style={{
                   fontSize: 12,
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  borderColor: 'rgba(16, 185, 129, 0.35)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                  background: hasModifications ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.04)',
+                  borderColor: hasModifications ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.12)',
+                  color: hasModifications ? '#34d399' : 'rgba(52, 211, 153, 0.35)',
+                  border: `1px solid ${hasModifications ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.1)'}`,
+                  cursor: hasModifications ? 'pointer' : 'not-allowed',
                 }}
               >
                 Done

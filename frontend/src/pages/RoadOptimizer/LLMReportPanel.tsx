@@ -8,6 +8,8 @@ interface Props {
   intersectionName: string
   autoRequest?: boolean
   onReportComplete?: () => void
+  persistedReport?: LLMRecommendation | null
+  onReportFetched?: (report: LLMRecommendation) => void
 }
 
 const FEASIBILITY_COLORS: Record<string, string> = {
@@ -34,9 +36,12 @@ export default function LLMReportPanel({
   intersectionName,
   autoRequest = false,
   onReportComplete,
+  persistedReport,
+  onReportFetched,
 }: Props) {
   const [loading, setLoading] = useState(false)
-  const [report, setReport] = useState<LLMRecommendation | null>(null)
+  // Initialize from persisted report so tab switching doesn't lose the result
+  const [report, setReport] = useState<LLMRecommendation | null>(persistedReport ?? null)
   const [error, setError] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState<string>('claude-3-haiku-20240307')
 
@@ -67,6 +72,8 @@ export default function LLMReportPanel({
       })
       const data: LLMRecommendation = await res.json()
       setReport(data)
+      // Notify parent to persist this report across tab switches
+      if (onReportFetched) onReportFetched(data)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to get recommendation')
     } finally {
@@ -134,8 +141,13 @@ export default function LLMReportPanel({
                 <div className="ro-spinner" style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff', width: 12, height: 12 }} />
                 Analyzing…
               </>
+            ) : report ? (
+              <>
+                <span style={{ color: '#34d399', marginRight: 5, fontSize: 14, fontWeight: 700 }}>&#10003;</span>
+                Refresh Report
+              </>
             ) : (
-              report ? 'Refresh Report' : 'Get AI Recommendation'
+              'Get AI Recommendation'
             )}
           </button>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import './optimizer.css'
-import type { Scenario, IntersectionConfig } from './types'
+import type { Scenario, IntersectionConfig, LLMRecommendation } from './types'
 import ScenarioBoard from './ScenarioBoard'
 import ResultsPanel from './ResultsPanel'
 import LLMReportPanel from './LLMReportPanel'
@@ -322,6 +322,9 @@ export default function RoadOptimizerPage() {
   const [activeSimConfig, setActiveSimConfig] = useState<Record<string, any> | null>(null)
   const [availableModelKeys, setAvailableModelKeys] = useState<string[]>(['baseline', 'baseline_fixed'])
   const [rawModelsList, setRawModelsList] = useState<any[]>([])
+  // Persist AI recommendation report across tab switches and track completion
+  const [aiReport, setAiReport] = useState<LLMRecommendation | null>(null)
+  const [aiRecommendationDone, setAiRecommendationDone] = useState(false)
 
   useEffect(() => {
     fetch('/api/models')
@@ -930,7 +933,9 @@ export default function RoadOptimizerPage() {
             const isActive = activeStep === s.step
             const isCompleted = s.step < maxUnlockedStep
             const isClickable = s.step <= maxUnlockedStep
-            const cardClass = `ro-guide-step-card ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`
+            // Step 5 gets a special tick when the AI report has been fetched
+            const isAiDone = s.step === 5 && aiRecommendationDone
+            const cardClass = `ro-guide-step-card ${isActive ? 'active' : ''} ${isCompleted || isAiDone ? 'completed' : ''}`
             return (
               <button
                 key={s.step}
@@ -939,7 +944,7 @@ export default function RoadOptimizerPage() {
                 onClick={() => handleStepClick(s.step)}
                 disabled={!isClickable}
               >
-                <div className="ro-guide-step-num">STEP 0{s.step} {isCompleted ? '✓' : ''}</div>
+                <div className="ro-guide-step-num">STEP 0{s.step} {(isCompleted || isAiDone) ? '✓' : ''}</div>
                 <div className="ro-guide-step-title">{s.title}</div>
                 <div className="ro-guide-step-desc">{s.desc}</div>
               </button>
@@ -973,6 +978,12 @@ export default function RoadOptimizerPage() {
                   <span>Running</span>
                   <span style={{ color: '#10b981', fontWeight: 600 }}>
                     {runningCount}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8, marginTop: 4 }}>
+                  <span>AI Recommendation</span>
+                  <span style={{ fontWeight: 700, color: aiRecommendationDone ? '#34d399' : '#475569' }}>
+                    {aiRecommendationDone ? '✓ Done' : '—'}
                   </span>
                 </div>
               </div>
@@ -1214,6 +1225,11 @@ export default function RoadOptimizerPage() {
             <LLMReportPanel
               scenarios={scenarios}
               intersectionName={intersection.name}
+              persistedReport={aiReport}
+              onReportFetched={(r) => {
+                setAiReport(r)
+                setAiRecommendationDone(true)
+              }}
             />
           )}
         </div>
