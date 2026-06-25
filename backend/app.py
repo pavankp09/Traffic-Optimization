@@ -1,7 +1,7 @@
 """Flask application factory for Traffic Signal Optimizer."""
 try:
     import eventlet
-    eventlet.monkey_patch()
+    eventlet.monkey_patch(dns=False)
     _has_eventlet = True
 except ImportError:
     _has_eventlet = False
