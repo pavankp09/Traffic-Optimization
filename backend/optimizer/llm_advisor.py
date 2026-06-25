@@ -121,9 +121,30 @@ def get_llm_recommendation(
     # 1. Determine provider and key
     model_lower = model.lower()
     if model_lower.startswith("claude-"):
-        provider = "Anthropic"
-        key_name = "ANTHROPIC_API_KEY"
-        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        # Access should be through Bedrock (AWS credentials or Token)
+        aws_auth_mode = os.getenv("AWS_AUTH_MODE", "").strip().upper()
+        aws_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+        
+        has_aws_token = (aws_auth_mode == "TOKEN" and bool(aws_token))
+        has_aws_keys = bool(aws_access_key and aws_secret_key)
+        has_aws_config = os.path.exists(os.path.expanduser("~/.aws/credentials")) or os.path.exists(os.path.expanduser("~/.aws/config"))
+        has_aws = has_aws_token or has_aws_keys or has_aws_config
+        
+        if has_aws:
+            provider = "Bedrock"
+            key_name = "AWS Bedrock Token" if has_aws_token else "AWS credentials"
+            api_key = "aws-configured"
+        else:
+            api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+            if api_key:
+                provider = "Anthropic"
+                key_name = "ANTHROPIC_API_KEY"
+            else:
+                provider = "Bedrock"
+                key_name = "AWS credentials"
+                api_key = ""
     elif "llama" in model_lower or "mixtral" in model_lower:
         provider = "Groq"
         key_name = "GROQ_API_KEY"
@@ -197,6 +218,110 @@ def get_llm_recommendation(
             raw = res_data["choices"][0]["message"]["content"] or "{}"
             data = json.loads(raw)
             return {"success": True, "key_missing": False, "data": data}
+
+        elif provider == "Bedrock":
+            try:
+                import boto3
+                region = os.getenv("AWS_DEFAULT_REGION", os.getenv("AWS_REGION", "us-east-1"))
+                endpoint_url = os.getenv("AWS_BEDROCK_ENDPOINT_URL", os.getenv("AWS_ENDPOINT_URL", "")).strip() or None
+                
+                aws_auth_mode = os.getenv("AWS_AUTH_MODE", "").strip().upper()
+                aws_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+                aws_access_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+                aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+                aws_session_token = os.getenv("AWS_SESSION_TOKEN", "").strip()
+                
+                if aws_auth_mode == "TOKEN" and aws_token:
+                    # Explicitly set environment variable so boto3's client picks it up
+                    os.environ["AWS_BEARER_TOKEN_BEDROCK"] = aws_token
+                    client = boto3.client(
+                        "bedrock-runtime",
+                        region_name=region,
+                        endpoint_url=endpoint_url
+                    )
+                elif aws_access_key and aws_secret_key:
+                    if aws_session_token:
+                        client = boto3.client(
+                            "bedrock-runtime",
+                            region_name=region,
+                            aws_access_key_id=aws_access_key,
+                            aws_secret_access_key=aws_secret_key,
+                            aws_session_token=aws_session_token,
+                            endpoint_url=endpoint_url
+                        )
+                    else:
+                        client = boto3.client(
+                            "bedrock-runtime",
+                            region_name=region,
+                            aws_access_key_id=aws_access_key,
+                            aws_secret_access_key=aws_secret_key,
+                            endpoint_url=endpoint_url
+                        )
+                else:
+                    client = boto3.client(
+                        "bedrock-runtime",
+                        region_name=region,
+                        endpoint_url=endpoint_url
+                    )
+                
+                # Determine Bedrock Model ID
+                model_id = "anthropic.claude-3-haiku-20240307-v1:0"
+                if "sonnet" in model_lower:
+                    model_id = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+                
+                # Try Converse API first
+                try:
+                    response = client.converse(
+                        modelId=model_id,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [{"text": prompt}]
+                            }
+                        ],
+                        system=[{"text": system_prompt}],
+                        inferenceConfig={
+                            "temperature": 0.3,
+                            "maxTokens": 2000
+                        }
+                    )
+                    raw = response["output"]["message"]["content"][0]["text"] or "{}"
+                except AttributeError:
+                    # Fallback to invoke_model for older boto3 versions
+                    body = json.dumps({
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 2000,
+                        "system": system_prompt,
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3
+                    })
+                    response = client.invoke_model(
+                        modelId=model_id,
+                        body=body
+                    )
+                    response_body = json.loads(response.get('body').read())
+                    raw = response_body.get('content')[0].get('text') or "{}"
+                
+                # Parse JSON response
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```json"):
+                    raw_clean = raw_clean[7:]
+                elif raw_clean.startswith("```"):
+                    raw_clean = raw_clean[3:]
+                if raw_clean.endswith("```"):
+                    raw_clean = raw_clean[:-3]
+                data = json.loads(raw_clean.strip())
+                return {"success": True, "key_missing": False, "data": data}
+                
+            except ImportError:
+                return {
+                    "success": False,
+                    "key_missing": False,
+                    "error": "boto3 package not installed. Run: pip install boto3",
+                    "data": _template_recommendation(intersection_name, scenarios),
+                }
 
         elif provider == "Anthropic":
             url = "https://api.anthropic.com/v1/messages"

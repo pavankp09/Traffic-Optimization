@@ -38,7 +38,7 @@ export default function LLMReportPanel({
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<LLMRecommendation | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o')
+  const [selectedModel, setSelectedModel] = useState<string>('claude-3-haiku-20240307')
 
   const doneScenarios = scenarios.filter(s => s.status === 'done' && s.kpi)
   const canRequest = doneScenarios.length >= 1

@@ -14,6 +14,13 @@ except ImportError:
 import os
 import sys
 
+# Try to load environment variables from .env in the project root directory
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+except ImportError:
+    pass
+
 # Dynamic alias for numpy._core to core for SB3/Pickle compatibility
 # between environments running different NumPy versions (1.x vs 2.x).
 try:
