@@ -172,14 +172,14 @@ export default function LLMReportPanel({
         </div>
       )}
 
-      {/* API key warning */}
-      {report?.key_missing && (
+      {/* Fallback / Configuration Warning */}
+      {(report?.key_missing || report?.error) && (
         <div className="ro-warning" style={{ marginBottom: 16 }}>
           <span>Warning: </span>
           <div>
-            <strong>Missing API Configuration.</strong> Showing heuristic analysis fallback.
+            <strong>AI Recommendation Unavailable.</strong> Showing heuristic analysis fallback.
             <div style={{ marginTop: 4, fontSize: 11.5, opacity: 0.9 }}>
-              {error || report.error || 'Please configure the corresponding API key in your .env file.'}
+              {report?.error || error || 'Please configure the corresponding API key in your .env file.'}
             </div>
           </div>
         </div>
