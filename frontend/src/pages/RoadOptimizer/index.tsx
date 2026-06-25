@@ -398,6 +398,16 @@ export default function RoadOptimizerPage() {
   // True when any visual sim overlay is actively running (not just the SSE evaluations)
   const isAnyVisualSimRunning = (isRunning || isPaused) && !!useSimulationStore.getState().sessionId?.startsWith('road_opt_visual_')
 
+  // Display-adjusted counts for the sidebar and scenario header chip.
+  // A scenario that has SSE status='done' but whose visual canvas simulation is
+  // still playing (isAnyVisualSimRunning) should appear as Running=1, Completed-1.
+  const visuallyRunningScenarioId = isAnyVisualSimRunning && activeSimScenario ? activeSimScenario.scenario_id : null
+  const visuallyRunningIsDone = visuallyRunningScenarioId
+    ? (scenarios.find(s => s.scenario_id === visuallyRunningScenarioId)?.status === 'done')
+    : false
+  const displayDoneCount = visuallyRunningIsDone ? Math.max(0, doneCount - 1) : doneCount
+  const displayRunningCount = runningCount + (isAnyVisualSimRunning ? 1 : 0)
+
   // ── Run scenario via SSE ──
   const handleRun = useCallback((scenarioId: string) => {
     const foundScenario = scenarios.find(s => s.scenario_id === scenarioId)
@@ -968,7 +978,7 @@ export default function RoadOptimizerPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Completed</span>
-                  <span style={{ color: '#34d399', fontWeight: 600 }}>{doneCount}</span>
+                  <span style={{ color: '#34d399', fontWeight: 600 }}>{displayDoneCount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Queue Remaining</span>
@@ -977,7 +987,7 @@ export default function RoadOptimizerPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
                   <span>Running</span>
                   <span style={{ color: '#10b981', fontWeight: 600 }}>
-                    {runningCount}
+                    {displayRunningCount}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8, marginTop: 4 }}>
@@ -1211,6 +1221,7 @@ export default function RoadOptimizerPage() {
               onInjectDemo={handleInjectDemo}
               onShowSim={handleShowSim}
               isAnyVisualSimRunning={isAnyVisualSimRunning}
+              visuallyRunningScenarioId={visuallyRunningScenarioId}
               availableModelKeys={availableModelKeys}
               onModelChange={handleModelChange}
             />

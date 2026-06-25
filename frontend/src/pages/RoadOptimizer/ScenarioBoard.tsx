@@ -18,6 +18,8 @@ interface Props {
   onInjectDemo: () => void
   onShowSim?: (s: Scenario) => void
   isAnyVisualSimRunning?: boolean
+  // The scenario_id currently being visually simulated (may have SSE status='done')
+  visuallyRunningScenarioId?: string | null
   availableModelKeys: string[]
   onModelChange: (scenarioId: string, model: string) => void
 }
@@ -37,6 +39,7 @@ export default function ScenarioBoard({
   onInjectDemo,
   onShowSim,
   isAnyVisualSimRunning = false,
+  visuallyRunningScenarioId = null,
   availableModelKeys,
   onModelChange,
 }: Props) {
@@ -44,6 +47,14 @@ export default function ScenarioBoard({
 
   const doneCount = scenarios.filter(s => s.status === 'done').length
   const runningCount = scenarios.filter(s => s.status === 'running').length
+
+  // Adjust chip counts: if the visual sim is playing for a 'done' scenario,
+  // show it as running (not completed) in the header chips.
+  const visuallyRunningIsDone = visuallyRunningScenarioId
+    ? (scenarios.find(s => s.scenario_id === visuallyRunningScenarioId)?.status === 'done')
+    : false
+  const displayDoneCount = visuallyRunningIsDone ? Math.max(0, doneCount - 1) : doneCount
+  const displayRunningCount = runningCount + (isAnyVisualSimRunning ? 1 : 0)
 
   // Scenarios other than baseline
   const hasModifications = scenarios.some(s => s.scenario_type !== 'baseline')
@@ -56,9 +67,9 @@ export default function ScenarioBoard({
       <div className="ro-scenarios-header">
         <div className="ro-section-header">
           Scenarios
-          {doneCount > 0 && <span className="ro-section-chip">{doneCount} complete</span>}
-          {runningCount > 0 && <span className="ro-section-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
-            <span className="ro-pulse">● </span>{runningCount} running
+          {displayDoneCount > 0 && <span className="ro-section-chip">{displayDoneCount} complete</span>}
+          {displayRunningCount > 0 && <span className="ro-section-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+            <span className="ro-pulse">● </span>{displayRunningCount} running
           </span>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
