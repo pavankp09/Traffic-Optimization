@@ -35,3 +35,8 @@ models/A2C/backup
 # Temporary patch scripts
 patch_renderer.py
 
+# Database runtime & logs
+backend/db/traffic.db-shm
+backend/db/traffic.db-wal
+backend/db/vehicle_crossings.csv
+
