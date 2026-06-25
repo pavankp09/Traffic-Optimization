@@ -310,12 +310,23 @@ def main() -> None:
         ensure_local_runtime()
         print("[Traffic] VeloCity starting...")
         
-        # Only start frontend dev server if build folder (dist) doesn't exist
-        # This allows serving the built frontend directly from Flask in production
+        # Always serve the built frontend directly from Flask on port 8004.
+        # If the build folder (dist) doesn't exist, build it automatically first.
         dist_dir = PROJECT_ROOT / "frontend" / "dist"
         if not dist_dir.exists():
-            print("[Info] Frontend 'dist' folder not found. Starting frontend dev server...")
-            threading.Thread(target=start_frontend, daemon=True).start()
+            print("[Info] Frontend 'dist' folder not found. Building frontend assets...")
+            try:
+                npm = "npm.cmd" if sys.platform == "win32" else "npm"
+                frontend_dir = PROJECT_ROOT / "frontend"
+                node_modules = frontend_dir / "node_modules"
+                if not node_modules.exists():
+                    print("[Info] Installing frontend dependencies...")
+                    subprocess.run([npm, "install", "--silent"], cwd=frontend_dir, check=True)
+                print("[Info] Building production bundle...")
+                subprocess.run([npm, "run", "build"], cwd=frontend_dir, check=True)
+            except Exception as e:
+                print(f"[Error] Failed to build frontend: {e}")
+                print("[Info] Please build frontend manually in 'frontend' folder: npm install && npm run build")
         else:
             print("[Info] Frontend 'dist' folder found. Flask will serve frontend assets on port 8004.")
             
