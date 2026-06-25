@@ -305,16 +305,35 @@ def shutil_which(command: str) -> str | None:
     return which(command)
 
 
+def should_rebuild_frontend() -> bool:
+    dist_index = PROJECT_ROOT / "frontend" / "dist" / "index.html"
+    if not dist_index.exists():
+        return True
+
+    dist_mtime = dist_index.stat().st_mtime
+    src_dir = PROJECT_ROOT / "frontend" / "src"
+    if not src_dir.exists():
+        return False
+
+    for root, dirs, files in os.walk(src_dir):
+        for f in files:
+            file_path = Path(root) / f
+            try:
+                if file_path.stat().st_mtime > dist_mtime:
+                    return True
+            except OSError:
+                pass
+    return False
+
+
 def main() -> None:
     try:
         ensure_local_runtime()
         print("[Traffic] VeloCity starting...")
         
-        # Always serve the built frontend directly from Flask on port 8004.
-        # If the build folder (dist) doesn't exist, build it automatically first.
-        dist_dir = PROJECT_ROOT / "frontend" / "dist"
-        if not dist_dir.exists():
-            print("[Info] Frontend 'dist' folder not found. Building frontend assets...")
+        # Check if the built frontend needs an update (newer files in src than in dist)
+        if should_rebuild_frontend():
+            print("[Info] Frontend changes detected or build missing. Rebuilding assets...")
             try:
                 npm = "npm.cmd" if sys.platform == "win32" else "npm"
                 frontend_dir = PROJECT_ROOT / "frontend"
@@ -328,7 +347,7 @@ def main() -> None:
                 print(f"[Error] Failed to build frontend: {e}")
                 print("[Info] Please build frontend manually in 'frontend' folder: npm install && npm run build")
         else:
-            print("[Info] Frontend 'dist' folder found. Flask will serve frontend assets on port 8004.")
+            print("[Info] Frontend assets up-to-date. Serving on port 8004.")
             
         start_backend()
     except BaseException as e:
