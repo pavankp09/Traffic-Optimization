@@ -21,6 +21,63 @@ try:
 except ImportError:
     pass
 
+# Diagnostics for systemd network/env troubleshooting
+try:
+    import socket
+    import urllib.request
+    import logging
+
+    diag_logger = logging.getLogger("systemd_diagnostics")
+    diag_logger.setLevel(logging.INFO)
+    sh = logging.StreamHandler(sys.stderr)
+    sh.setFormatter(logging.Formatter("[DIAGNOSTIC] %(message)s"))
+    diag_logger.addHandler(sh)
+
+    diag_logger.info("=== Systemd Service Diagnostics ===")
+    diag_logger.info("Current Working Directory: %s", os.getcwd())
+    diag_logger.info("Python Executable: %s", sys.executable)
+    diag_logger.info("Environment variables containing proxy/http/aws/token/region:")
+    for k, v in os.environ.items():
+        kl = k.lower()
+        if any(x in kl for x in ["proxy", "http", "aws", "token", "region"]):
+            # Mask secrets
+            val = v
+            if any(x in kl for x in ["token", "secret", "key"]):
+                val = v[:6] + "..." if len(v) > 6 else "..."
+            diag_logger.info("  %s = %s", k, val)
+
+    # Test DNS Resolution
+    host = "bedrock-runtime.us-east-1.amazonaws.com"
+    diag_logger.info("Testing DNS Resolution for %s...", host)
+    try:
+        ip = socket.gethostbyname(host)
+        diag_logger.info("  DNS Success! Resolved %s to %s", host, ip)
+    except Exception as e:
+        diag_logger.error("  DNS Failed: %s", e)
+
+    # Test TCP Connection
+    diag_logger.info("Testing TCP Connection to %s:443...", host)
+    try:
+        s = socket.create_connection((host, 443), timeout=5)
+        diag_logger.info("  TCP Connection Success!")
+        s.close()
+    except Exception as e:
+        diag_logger.error("  TCP Connection Failed: %s", e)
+
+    # Test HTTP Request via urllib
+    url = f"https://{host}/"
+    diag_logger.info("Testing HTTPS Request to %s...", url)
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as response:
+            diag_logger.info("  HTTPS Request Success! HTTP Status Code: %s", response.status)
+    except Exception as e:
+        diag_logger.error("  HTTPS Request Failed: %s", e)
+    diag_logger.info("=== End of Systemd Diagnostics ===")
+except Exception as diag_err:
+    print(f"[DIAGNOSTIC ERROR] Failed to run diagnostics: {diag_err}", file=sys.stderr)
+
+
 # Dynamic alias for numpy._core to core for SB3/Pickle compatibility
 # between environments running different NumPy versions (1.x vs 2.x).
 try:
