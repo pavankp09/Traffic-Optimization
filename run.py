@@ -285,8 +285,16 @@ def main() -> None:
     try:
         ensure_local_runtime()
         print("[Traffic] VeloCity starting...")
-        # Start frontend dev server in a background thread concurrently
-        threading.Thread(target=start_frontend, daemon=True).start()
+        
+        # Only start frontend dev server if build folder (dist) doesn't exist
+        # This allows serving the built frontend directly from Flask in production
+        dist_dir = PROJECT_ROOT / "frontend" / "dist"
+        if not dist_dir.exists():
+            print("[Info] Frontend 'dist' folder not found. Starting frontend dev server...")
+            threading.Thread(target=start_frontend, daemon=True).start()
+        else:
+            print("[Info] Frontend 'dist' folder found. Flask will serve frontend assets on port 8004.")
+            
         start_backend()
     except BaseException as e:
         import traceback
