@@ -13,7 +13,7 @@ except Exception:
 if _in_venv:
     try:
         import eventlet
-        eventlet.monkey_patch()
+        eventlet.monkey_patch(dns=False)
     except ImportError:
         pass
 
