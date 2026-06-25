@@ -119,7 +119,7 @@ def create_app(config=None) -> Flask:
             return jsonify({"success": False, "error": "Not Found"}), 404
         # Serve static file if it exists in dist
         file_path = os.path.join(dist_dir, path)
-        if path != "" and os.path.exists(file_path):
+        if path != "" and os.path.exists(file_path) and os.path.isfile(file_path):
             return send_from_directory(dist_dir, path)
         return send_from_directory(dist_dir, 'index.html')
 

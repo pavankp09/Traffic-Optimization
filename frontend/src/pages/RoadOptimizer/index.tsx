@@ -29,6 +29,7 @@ const BASELINE_SCENARIO: Scenario = {
   label: 'Baseline (Current State)',
   scenario_type: 'baseline',
   training_depth: 'quick',
+  evaluation_model: 'baseline_fixed',
   status: 'idle',
   progress: 0,
   current_episode: 0,
@@ -287,7 +288,10 @@ function getRecommendedScenariosForLocation(presetId: string, timestamp: number)
     });
   }
 
-  return list;
+  return list.map(scen => ({
+    ...scen,
+    evaluation_model: 'baseline_fixed'
+  }));
 }
 
 export default function RoadOptimizerPage() {
@@ -427,7 +431,7 @@ export default function RoadOptimizerPage() {
           simulation_duration_s: simConfig.simulation_duration_s,
           ...(foundScenario.user_overrides ?? {}),
         },
-        evaluation_model: selectedModelSingle,
+        evaluation_model: foundScenario.evaluation_model || (foundScenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1'),
       },
     }
 
@@ -514,7 +518,7 @@ export default function RoadOptimizerPage() {
       setActiveSimScenario(scenario)
       setActiveSimConfig(getScenarioSimConfig(scenario, simConfig, intersection))
       
-      const targetModel = scenario.scenario_type === 'baseline' ? 'baseline' : selectedModelSingle
+      const targetModel = scenario.evaluation_model || (scenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1')
       let finalFrame = store.baselineFrame
       if (targetModel === 'rl1') finalFrame = store.rl1Frame
       else if (targetModel === 'rl2') finalFrame = store.rl2Frame
@@ -538,7 +542,6 @@ export default function RoadOptimizerPage() {
     clearFrames()
 
     setSessionId(visualSessionId)
-    setSelectedModelSingle(selectedModelSingle)
     setRunning(true)
     setPaused(false)
     setSimSpeed(5) // Default to 5x speed
@@ -552,7 +555,7 @@ export default function RoadOptimizerPage() {
     }
 
     const mutatedSimConfig = getScenarioSimConfig(scenario, simConfig, intersection)
-    const targetModel = scenario.scenario_type === 'baseline' ? 'baseline' : selectedModelSingle
+    const targetModel = scenario.evaluation_model || (scenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1')
 
     // Store the mutated config so SimCanvas renders correct geometry for this scenario
     setActiveSimConfig(mutatedSimConfig)
@@ -647,6 +650,7 @@ export default function RoadOptimizerPage() {
   const handleAdd = useCallback((s: Omit<Scenario, 'status' | 'progress' | 'current_episode' | 'total_episodes' | 'live_reward' | 'kpi' | 'error'>) => {
     setScenarios(prev => [...prev, {
       ...s,
+      evaluation_model: 'baseline_fixed',
       status: 'idle',
       progress: 0,
       current_episode: 0,
@@ -663,6 +667,16 @@ export default function RoadOptimizerPage() {
     setRunQueue(prev => prev.filter(qid => qid !== id))
   }, [])
 
+  // ── Model change per scenario level ──
+  const handleModelChange = useCallback((scenarioId: string, model: string) => {
+    setScenarios(prev => prev.map(s => {
+      if (s.scenario_id === scenarioId) {
+        return { ...s, evaluation_model: model }
+      }
+      return s
+    }))
+  }, [])
+
   // ── Inject Demo Suite ──
   const handleInjectDemo = useCallback(() => {
     const demoIdSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 5)}`
@@ -672,6 +686,7 @@ export default function RoadOptimizerPage() {
         label: 'Free Left Turn Scheme',
         scenario_type: 'free_left',
         training_depth: 'quick' as const,
+        evaluation_model: 'baseline_fixed',
         status: 'idle' as const,
         progress: 0,
         current_episode: 0,
@@ -686,6 +701,7 @@ export default function RoadOptimizerPage() {
         label: 'Mid-Block U-Turn Bypass',
         scenario_type: 'u_turn_mid',
         training_depth: 'quick' as const,
+        evaluation_model: 'baseline_fixed',
         status: 'idle' as const,
         progress: 0,
         current_episode: 0,
@@ -802,6 +818,7 @@ export default function RoadOptimizerPage() {
       label: 'Baseline (Current State)',
       scenario_type: 'baseline',
       training_depth: 'quick',
+      evaluation_model: 'baseline_fixed',
       status: 'idle',
       progress: 0,
       current_episode: 0,
@@ -988,74 +1005,10 @@ export default function RoadOptimizerPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
 
-                  {/* Model Selector Dropdown */}
-                  <div className="ro-model-selector-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Model / Policy Evaluation
-                    </label>
-                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                      <select
-                        className="ro-select"
-                        style={{
-                          background: '#090a0f',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: '8px',
-                          color: '#e2e8f0',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '6px 32px 6px 12px',
-                          cursor: 'pointer',
-                          outline: 'none',
-                          minWidth: '220px',
-                          appearance: 'none',
-                          WebkitAppearance: 'none',
-                          MozAppearance: 'none'
-                        }}
-                        value={selectedModelSingle}
-                        onChange={(e) => {
-                          setSelectedModelSingle(e.target.value)
-                          useConfigStore.getState().loadTabConfig(e.target.value)
-                        }}
-                      >
-                        {availableModelKeys.includes('baseline') && (
-                          <option value="baseline">Webster Adaptive Baseline (No RL)</option>
-                        )}
-                        {availableModelKeys.includes('baseline_fixed') && (
-                          <option value="baseline_fixed">Fixed-Time Baseline (No RL)</option>
-                        )}
-                        {availableModelKeys.includes('rl1') && (
-                          <option value="rl1">Pre-trained PPO Model (Recommended)</option>
-                        )}
-                        {availableModelKeys.includes('rl2') && (
-                          <option value="rl2">Pre-trained DQN Model</option>
-                        )}
-                        {availableModelKeys.includes('rl3') && (
-                          <option value="rl3">Pre-trained SAC Model</option>
-                        )}
-                        {availableModelKeys.includes('rl4') && (
-                          <option value="rl4">Pre-trained A2C Model</option>
-                        )}
-                      </select>
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '50%',
-                          right: '12px',
-                          transform: 'translateY(-50%)',
-                          pointerEvents: 'none',
-                          color: '#94a3b8',
-                          fontSize: '9px'
-                        }}
-                      >
-                        ▼
-                      </div>
-                    </div>
-                  </div>
-
                   <button
                     className="ro-btn ro-btn-primary"
                     onClick={() => setIsConfigOpen(true)}
-                    style={{ fontSize: 12, height: 'fit-content', marginTop: '14px' }}
+                    style={{ fontSize: 12, height: 'fit-content' }}
                   >
                     Configure Base Settings
                   </button>
@@ -1067,7 +1020,6 @@ export default function RoadOptimizerPage() {
                       style={{
                         fontSize: 12,
                         height: 'fit-content',
-                        marginTop: '14px',
                         background: 'rgba(16, 185, 129, 0.1)',
                         borderColor: 'rgba(16, 185, 129, 0.35)',
                         color: '#34d399',
@@ -1168,34 +1120,7 @@ export default function RoadOptimizerPage() {
                   </div>
                 </div>
 
-                {/* Selected RL Model Diagnostics Card */}
-                {selectedModelSingle.startsWith('rl') && (() => {
-                  const info = getSelectedModelInfo()
-                  if (!info) return null
-                  return (
-                    <div className="ro-config-card animate-fadeIn">
-                      <div className="ro-config-card-title">Trained Agent Diagnostics</div>
-                      <div className="ro-config-rows">
-                        <div className="ro-config-row">
-                          <span className="ro-config-label">Model Key</span>
-                          <span className="ro-config-value">{selectedModelSingle.toUpperCase()}</span>
-                        </div>
-                        <div className="ro-config-row">
-                          <span className="ro-config-label">Model Type</span>
-                          <span className="ro-config-value">{info.name}</span>
-                        </div>
-                        <div className="ro-config-row">
-                          <span className="ro-config-label">Status</span>
-                          <span className="ro-config-value" style={{ color: '#34d399' }}>Active / Pre-trained</span>
-                        </div>
-                        <div className="ro-config-row">
-                          <span className="ro-config-label">Trained Date</span>
-                          <span className="ro-config-value">{info.trainedDate}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
+
 
                 {/* Adverse Risk Model Card */}
                 <div className="ro-config-card">
@@ -1280,6 +1205,8 @@ export default function RoadOptimizerPage() {
               onInjectDemo={handleInjectDemo}
               onShowSim={handleShowSim}
               isAnyVisualSimRunning={isAnyVisualSimRunning}
+              availableModelKeys={availableModelKeys}
+              onModelChange={handleModelChange}
             />
           )}
           {activeTab === 'results' && (
@@ -1331,7 +1258,7 @@ export default function RoadOptimizerPage() {
                     Visual Simulation & Telemetry Studio
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Active Scenario: <span className="text-[#8fb8ce] font-semibold">{currentSimScenario.label}</span> ({selectedModelSingle.toUpperCase()} model)
+                    Active Scenario: <span className="text-[#8fb8ce] font-semibold">{currentSimScenario.label}</span> ({(currentSimScenario.evaluation_model || (currentSimScenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1')).toUpperCase()} model)
                   </p>
                   {currentSimScenario?.status === 'running' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
@@ -1395,7 +1322,7 @@ export default function RoadOptimizerPage() {
                     width={720}
                     height={560}
                     showTrails={true}
-                    label={`${currentSimScenario.label} — ${selectedModelSingle.toUpperCase()}`}
+                    label={`${currentSimScenario.label} — ${(currentSimScenario.evaluation_model || (currentSimScenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1')).toUpperCase()}`}
                     isRunning={isRunning}
                     isPaused={isPaused}
                     speedValue={simSpeed}
@@ -1415,7 +1342,7 @@ export default function RoadOptimizerPage() {
                 </div>
                 
                 <div style={{ width: 560, height: 560, flexShrink: 0 }}>
-                  <SimLiveStatsPanel modelKey={currentSimScenario.scenario_type === 'baseline' ? 'baseline' : selectedModelSingle} />
+                  <SimLiveStatsPanel modelKey={currentSimScenario.evaluation_model || (currentSimScenario.scenario_type === 'baseline' ? 'baseline_fixed' : 'rl1')} />
                 </div>
               </div>
               

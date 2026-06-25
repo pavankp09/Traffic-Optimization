@@ -53,6 +53,7 @@ export interface Scenario {
   phase_scheme?: string
   extra_arm_target?: number
   user_overrides?: Record<string, unknown>
+  evaluation_model?: string
   // runtime state
   status: ScenarioStatus
   progress: number       // 0-100

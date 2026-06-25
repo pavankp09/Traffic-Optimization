@@ -18,6 +18,8 @@ interface Props {
   onInjectDemo: () => void
   onShowSim?: (s: Scenario) => void
   isAnyVisualSimRunning?: boolean
+  availableModelKeys: string[]
+  onModelChange: (scenarioId: string, model: string) => void
 }
 
 export default function ScenarioBoard({
@@ -35,6 +37,8 @@ export default function ScenarioBoard({
   onInjectDemo,
   onShowSim,
   isAnyVisualSimRunning = false,
+  availableModelKeys,
+  onModelChange,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
 
@@ -147,6 +151,8 @@ export default function ScenarioBoard({
               onRemove={onRemove}
               onShowSim={onShowSim}
               isAnyVisualSimRunning={isAnyVisualSimRunning}
+              availableModelKeys={availableModelKeys}
+              onModelChange={onModelChange}
             />
           ))}
         </div>

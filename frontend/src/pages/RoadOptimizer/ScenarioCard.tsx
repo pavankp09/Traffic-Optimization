@@ -24,6 +24,8 @@ interface Props {
   onRemove: (id: string) => void
   onShowSim?: (s: Scenario) => void
   isAnyVisualSimRunning?: boolean
+  availableModelKeys: string[]
+  onModelChange: (scenarioId: string, model: string) => void
 }
 
 function KpiChip({ label, value }: { label: string; value: string | number }) {
@@ -34,7 +36,17 @@ function KpiChip({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-export default function ScenarioCard({ scenario, intersection, isRunMode, onRun, onRemove, onShowSim, isAnyVisualSimRunning = false }: Props) {
+export default function ScenarioCard({
+  scenario,
+  intersection,
+  isRunMode,
+  onRun,
+  onRemove,
+  onShowSim,
+  isAnyVisualSimRunning = false,
+  availableModelKeys,
+  onModelChange
+}: Props) {
   const store = useSimulationStore()
   const { simConfig } = useConfigStore()
 
@@ -122,54 +134,161 @@ export default function ScenarioCard({ scenario, intersection, isRunMode, onRun,
         </div>
       )}
 
-      {/* Unified Simulation Action Button (only in run mode) */}
+      {/* Model Selection Dropdown and Simulation Action Buttons */}
+      {!isRunMode && (
+        <div style={{ marginTop: 12, width: '100%' }}>
+          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.05em' }}>
+            Evaluation Model
+          </div>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <select
+              className="ro-select"
+              style={{
+                background: '#090a0f',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                color: '#e2e8f0',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '6px 24px 6px 10px',
+                cursor: (scenario.status === 'running' || isThisSimRunning) ? 'not-allowed' : 'pointer',
+                outline: 'none',
+                width: '100%',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none'
+              }}
+              value={scenario.evaluation_model || (isBaseline ? 'baseline_fixed' : 'rl1')}
+              disabled={scenario.status === 'running' || isThisSimRunning}
+              onChange={(e) => onModelChange(scenario.scenario_id, e.target.value)}
+            >
+              {availableModelKeys.map(key => {
+                let label = key;
+                if (key === 'baseline') label = 'Webster Adaptive (No RL)';
+                else if (key === 'baseline_fixed') label = 'Fixed-Time Baseline (No RL)';
+                else if (key === 'rl1') label = 'Pre-trained PPO Model';
+                else if (key === 'rl2') label = 'Pre-trained DQN Model';
+                else if (key === 'rl3') label = 'Pre-trained SAC Model';
+                else if (key === 'rl4') label = 'Pre-trained A2C Model';
+                return <option key={key} value={key}>{label}</option>
+              })}
+            </select>
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                right: '10px',
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none',
+                color: '#94a3b8',
+                fontSize: '8px'
+              }}
+            >
+              ▼
+            </div>
+          </div>
+        </div>
+      )}
+
       {isRunMode && (
-        (scenario.status === 'running' || isThisSimRunning) ? (
-          <button
-            className="ro-btn ro-btn-secondary"
-            style={{ width: '100%', marginTop: 12, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            onClick={() => onShowSim?.(scenario)}
-          >
-            <span>📺</span>
-            View Simulation
-          </button>
-        ) : scenario.status === 'done' ? (
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, width: '100%' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, width: '100%', alignItems: 'center' }}>
+          {/* Dropdown Next to Buttons */}
+          <div style={{ flex: 1.2, position: 'relative' }}>
+            <select
+              className="ro-select"
+              style={{
+                background: '#090a0f',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                color: '#e2e8f0',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '6px 24px 6px 10px',
+                cursor: (scenario.status === 'running' || isThisSimRunning) ? 'not-allowed' : 'pointer',
+                outline: 'none',
+                width: '100%',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none'
+              }}
+              value={scenario.evaluation_model || (isBaseline ? 'baseline_fixed' : 'rl1')}
+              disabled={scenario.status === 'running' || isThisSimRunning}
+              onChange={(e) => onModelChange(scenario.scenario_id, e.target.value)}
+            >
+              {availableModelKeys.map(key => {
+                let label = key;
+                if (key === 'baseline') label = 'Webster Adaptive';
+                else if (key === 'baseline_fixed') label = 'Fixed-Time';
+                else if (key === 'rl1') label = 'Pre-trained PPO';
+                else if (key === 'rl2') label = 'Pre-trained DQN';
+                else if (key === 'rl3') label = 'Pre-trained SAC';
+                else if (key === 'rl4') label = 'Pre-trained A2C';
+                return <option key={key} value={key}>{label}</option>
+              })}
+            </select>
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                right: '10px',
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none',
+                color: '#94a3b8',
+                fontSize: '8px'
+              }}
+            >
+              ▼
+            </div>
+          </div>
+
+          {/* Action Button(s) */}
+          {(scenario.status === 'running' || isThisSimRunning) ? (
             <button
               className="ro-btn ro-btn-secondary"
-              style={{ flex: 1.2, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' }}
               onClick={() => onShowSim?.(scenario)}
-              title={isOtherSimRunning ? 'Close the current simulation first' : 'Watch visual simulation playback'}
-              disabled={isOtherSimRunning}
             >
               <span>📺</span>
               View Sim
             </button>
+          ) : scenario.status === 'done' ? (
+            <React.Fragment>
+              <button
+                className="ro-btn ro-btn-secondary"
+                style={{ flex: 1, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px', whiteSpace: 'nowrap' }}
+                onClick={() => onShowSim?.(scenario)}
+                title={isOtherSimRunning ? 'Close the current simulation first' : 'Watch visual simulation playback'}
+                disabled={isOtherSimRunning}
+              >
+                <span>📺</span>
+                View
+              </button>
+              <button
+                id={`ro-run-${scenario.scenario_id}`}
+                className="ro-btn ro-btn-primary"
+                style={{ flex: 0.8, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer', padding: '8px 4px', whiteSpace: 'nowrap' }}
+                onClick={() => onRun(scenario.scenario_id)}
+                disabled={isOtherSimRunning}
+                title={isOtherSimRunning ? 'Stop the running simulation first' : 'Re-run training/evaluation'}
+              >
+                Re-run
+              </button>
+            </React.Fragment>
+          ) : (
             <button
               id={`ro-run-${scenario.scenario_id}`}
               className="ro-btn ro-btn-primary"
-              style={{ flex: 1, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer' }}
-              onClick={() => onRun(scenario.scenario_id)}
+              style={{ flex: 1, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+              onClick={() => {
+                onRun(scenario.scenario_id)
+              }}
               disabled={isOtherSimRunning}
-              title={isOtherSimRunning ? 'Stop the running simulation first' : 'Re-run training/evaluation'}
+              title={isOtherSimRunning ? 'Stop the running simulation first' : ''}
             >
-              Re-run
+              {scenario.status === 'error' ? 'Retry' : 'Run'}
             </button>
-          </div>
-        ) : (
-          <button
-            id={`ro-run-${scenario.scenario_id}`}
-            className="ro-btn ro-btn-primary"
-            style={{ width: '100%', marginTop: 12, fontSize: 12, opacity: isOtherSimRunning ? 0.45 : 1, cursor: isOtherSimRunning ? 'not-allowed' : 'pointer' }}
-            onClick={() => {
-              onRun(scenario.scenario_id)
-            }}
-            disabled={isOtherSimRunning}
-            title={isOtherSimRunning ? 'Stop the running simulation first' : ''}
-          >
-            {scenario.status === 'error' ? 'Retry Simulation' : 'Run Simulation'}
-          </button>
-        )
+          )}
+        </div>
       )}
     </div>
   )
