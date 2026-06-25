@@ -46,6 +46,26 @@ try:
                 val = v[:6] + "..." if len(v) > 6 else "..."
             diag_logger.info("  %s = %s", k, val)
 
+    # Read /etc/resolv.conf
+    resolv_path = "/etc/resolv.conf"
+    if os.path.exists(resolv_path):
+        try:
+            with open(resolv_path, "r") as f:
+                content = f.read()
+            diag_logger.info("Contents of %s:\n%s", resolv_path, content)
+        except Exception as e:
+            diag_logger.error("Failed to read %s: %s", resolv_path, e)
+    else:
+        diag_logger.warning("%s does not exist", resolv_path)
+
+    # Test DNS Resolution for google.com
+    diag_logger.info("Testing DNS Resolution for google.com...")
+    try:
+        ip = socket.gethostbyname("google.com")
+        diag_logger.info("  DNS Success! Resolved google.com to %s", ip)
+    except Exception as e:
+        diag_logger.error("  DNS Failed for google.com: %s", e)
+
     # Test DNS Resolution
     host = "bedrock-runtime.us-east-1.amazonaws.com"
     diag_logger.info("Testing DNS Resolution for %s...", host)
@@ -54,6 +74,7 @@ try:
         diag_logger.info("  DNS Success! Resolved %s to %s", host, ip)
     except Exception as e:
         diag_logger.error("  DNS Failed: %s", e)
+
 
     # Test TCP Connection
     diag_logger.info("Testing TCP Connection to %s:443...", host)
