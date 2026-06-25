@@ -21,11 +21,15 @@ try:
 except ImportError:
     pass
 
-# Diagnostics for systemd network/env troubleshooting
+# Comprehensive Diagnostics for systemd network/env troubleshooting
 try:
     import socket
     import urllib.request
     import logging
+    import os
+    import sys
+    import platform
+    import subprocess
 
     diag_logger = logging.getLogger("systemd_diagnostics")
     diag_logger.setLevel(logging.INFO)
@@ -33,79 +37,169 @@ try:
     sh.setFormatter(logging.Formatter("[DIAGNOSTIC] %(message)s"))
     diag_logger.addHandler(sh)
 
-    diag_logger.info("=== Systemd Service Diagnostics ===")
-    diag_logger.info("Current Working Directory: %s", os.getcwd())
-    diag_logger.info("Python Executable: %s", sys.executable)
-    
-    # Check SELinux
-    try:
-        import subprocess
-        selinux = subprocess.check_output(["getenforce"], text=True).strip()
-        diag_logger.info("SELinux Mode: %s", selinux)
-    except Exception as e:
-        diag_logger.info("SELinux check (getenforce) failed or not present: %s", e)
+    diag_logger.info("==================================================")
+    diag_logger.info("=== START COMPREHENSIVE SYSTEMD DIAGNOSTICS ===")
+    diag_logger.info("==================================================")
 
-    diag_logger.info("Environment variables containing proxy/http/aws/token/region:")
+    # 1. OS & Python Info
+    diag_logger.info("--- OS & Python Info ---")
+    diag_logger.info("Platform: %s", platform.platform())
+    diag_logger.info("Python Executable: %s", sys.executable)
+    diag_logger.info("Python Version: %s", sys.version)
+    diag_logger.info("Current Working Directory: %s", os.getcwd())
+
+    # 2. User & UID
+    diag_logger.info("--- User & Process Info ---")
+    try:
+        diag_logger.info("UID/GID: %s / %s", os.getuid(), os.getgid())
+        import pwd
+        diag_logger.info("Effective User: %s", pwd.getpwuid(os.getuid()).pw_name)
+    except Exception as e:
+        diag_logger.info("Process User Info: %s", e)
+
+    # 3. SELinux & AppArmor
+    diag_logger.info("--- SELinux & AppArmor Info ---")
+    # SELinux
+    try:
+        if os.path.exists("/sys/fs/selinux/enforce"):
+            with open("/sys/fs/selinux/enforce", "r") as f:
+                val = f.read().strip()
+                diag_logger.info("SELinux Mode (sysfs): %s", "Enforcing" if val == "1" else "Permissive/Disabled")
+        else:
+            try:
+                out = subprocess.check_output(["/usr/sbin/getenforce"], text=True).strip()
+                diag_logger.info("SELinux Mode (getenforce): %s", out)
+            except Exception:
+                diag_logger.info("SELinux: Not active or files missing")
+    except Exception as e:
+        diag_logger.error("SELinux check error: %s", e)
+
+    # AppArmor
+    try:
+        if os.path.exists("/sys/kernel/security/apparmor"):
+            diag_logger.info("AppArmor: Active")
+        else:
+            diag_logger.info("AppArmor: Not active")
+    except Exception as e:
+        diag_logger.info("AppArmor check error: %s", e)
+
+    # 4. Environment Variables
+    diag_logger.info("--- Environment Variables ---")
     for k, v in os.environ.items():
         kl = k.lower()
-        if any(x in kl for x in ["proxy", "http", "aws", "token", "region"]):
+        if any(x in kl for x in ["proxy", "http", "aws", "token", "region", "path"]):
             # Mask secrets
             val = v
-            if any(x in kl for x in ["token", "secret", "key"]):
-                val = v[:6] + "..." if len(v) > 6 else "..."
+            if any(x in kl for x in ["token", "secret", "key"]) and len(v) > 6:
+                val = v[:6] + "..."
+            elif any(x in kl for x in ["token", "secret", "key"]):
+                val = "..."
             diag_logger.info("  %s = %s", k, val)
 
-    # Read /etc/resolv.conf
+    # 5. Proxy Configuration
+    diag_logger.info("--- Proxy Settings (urllib) ---")
+    try:
+        diag_logger.info("Proxies detected by urllib: %s", urllib.request.getproxies())
+    except Exception as e:
+        diag_logger.error("Failed to query urllib proxies: %s", e)
+
+    # 6. Read /etc/resolv.conf and DNS configurations
+    diag_logger.info("--- DNS Nameservers (/etc/resolv.conf) ---")
     resolv_path = "/etc/resolv.conf"
+    nameservers = []
     if os.path.exists(resolv_path):
         try:
             with open(resolv_path, "r") as f:
                 content = f.read()
             diag_logger.info("Contents of %s:\n%s", resolv_path, content)
+            
+            # Extract nameservers
+            for line in content.splitlines():
+                if line.strip().startswith("nameserver"):
+                    parts = line.split()
+                    if len(parts) > 1:
+                        nameservers.append(parts[1])
         except Exception as e:
             diag_logger.error("Failed to read %s: %s", resolv_path, e)
     else:
         diag_logger.warning("%s does not exist", resolv_path)
 
-    # Test DNS Resolution for google.com
-    diag_logger.info("Testing DNS Resolution for google.com...")
-    try:
-        ip = socket.gethostbyname("google.com")
-        diag_logger.info("  DNS Success! Resolved google.com to %s", ip)
-    except Exception as e:
-        diag_logger.error("  DNS Failed for google.com: %s", e)
+    # 7. Network Connectivity Tests
+    diag_logger.info("--- Network Connectivity Tests ---")
+    
+    # Test direct IP ping/connection (1.1.1.1 / 8.8.8.8) to check if routing works
+    test_ips = [("1.1.1.1", 53), ("1.1.1.1", 443), ("8.8.8.8", 53)]
+    for ip, port in test_ips:
+        diag_logger.info("Testing TCP Connection to IP %s:%s...", ip, port)
+        try:
+            s = socket.create_connection((ip, port), timeout=3)
+            diag_logger.info("  SUCCESS: Connected to %s:%s!", ip, port)
+            s.close()
+        except Exception as e:
+            diag_logger.error("  FAILED: TCP connection to %s:%s: %s", ip, port, e)
 
-    # Test DNS Resolution
-    host = "bedrock-runtime.us-east-1.amazonaws.com"
-    diag_logger.info("Testing DNS Resolution for %s...", host)
-    try:
-        ip = socket.gethostbyname(host)
-        diag_logger.info("  DNS Success! Resolved %s to %s", host, ip)
-    except Exception as e:
-        diag_logger.error("  DNS Failed: %s", e)
+    # Test UDP connectivity to nameservers
+    for ns in nameservers:
+        diag_logger.info("Testing UDP socket to DNS nameserver %s:53...", ns)
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(3)
+            sock.connect((ns, 53))
+            diag_logger.info("  SUCCESS: UDP socket connect to %s:53 succeeded", ns)
+            sock.send(b"\x00")
+            diag_logger.info("  SUCCESS: Sent payload byte to %s:53", ns)
+            sock.close()
+        except Exception as e:
+            diag_logger.error("  FAILED: UDP socket test to %s:53: %s", ns, e)
 
+    # 8. DNS Resolution Tests
+    diag_logger.info("--- DNS Resolution Tests ---")
+    hosts_to_resolve = [
+        "google.com", 
+        "bedrock-runtime.us-east-1.amazonaws.com"
+    ]
+    for h in hosts_to_resolve:
+        diag_logger.info("Resolving host: %s...", h)
+        try:
+            ips = socket.getaddrinfo(h, 443, proto=socket.IPPROTO_TCP)
+            resolved_ips = list(set([ip[4][0] for ip in ips]))
+            diag_logger.info("  SUCCESS: Resolved %s to %s", h, resolved_ips)
+        except Exception as e:
+            diag_logger.error("  FAILED to resolve %s: %s", h, e)
 
-    # Test TCP Connection
-    diag_logger.info("Testing TCP Connection to %s:443...", host)
-    try:
-        s = socket.create_connection((host, 443), timeout=5)
-        diag_logger.info("  TCP Connection Success!")
-        s.close()
-    except Exception as e:
-        diag_logger.error("  TCP Connection Failed: %s", e)
+    # 9. HTTPS Request Tests
+    diag_logger.info("--- HTTPS Request Tests ---")
+    test_urls = [
+        "https://www.google.com",
+        "https://bedrock-runtime.us-east-1.amazonaws.com"
+    ]
+    for u in test_urls:
+        diag_logger.info("Sending HEAD request to %s...", u)
+        try:
+            req = urllib.request.Request(u, method="HEAD")
+            with urllib.request.urlopen(req, timeout=3) as response:
+                diag_logger.info("  SUCCESS: Status Code: %s", response.status)
+        except Exception as e:
+            diag_logger.error("  FAILED: HEAD request to %s: %s", u, e)
 
-    # Test HTTP Request via urllib
-    url = f"https://{host}/"
-    diag_logger.info("Testing HTTPS Request to %s...", url)
+    # 10. boto3 Client test
+    diag_logger.info("--- Boto3 Client Initialization Test ---")
     try:
-        req = urllib.request.Request(url, method="HEAD")
-        with urllib.request.urlopen(req, timeout=5) as response:
-            diag_logger.info("  HTTPS Request Success! HTTP Status Code: %s", response.status)
+        import boto3
+        region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        diag_logger.info("Attempting to construct boto3 bedrock-runtime client (region=%s)...", region)
+        client = boto3.client("bedrock-runtime", region_name=region)
+        diag_logger.info("  SUCCESS: constructed client of type: %s", type(client))
+        diag_logger.info("  Active credentials provider: %s", client.meta.events)
     except Exception as e:
-        diag_logger.error("  HTTPS Request Failed: %s", e)
-    diag_logger.info("=== End of Systemd Diagnostics ===")
+        diag_logger.error("  FAILED to init boto3 client: %s", e)
+
+    diag_logger.info("==================================================")
+    diag_logger.info("=== END COMPREHENSIVE SYSTEMD DIAGNOSTICS ===")
+    diag_logger.info("==================================================")
 except Exception as diag_err:
     print(f"[DIAGNOSTIC ERROR] Failed to run diagnostics: {diag_err}", file=sys.stderr)
+
 
 
 # Dynamic alias for numpy._core to core for SB3/Pickle compatibility
