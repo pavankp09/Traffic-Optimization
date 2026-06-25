@@ -43,7 +43,8 @@ export default function LLMReportPanel({
   // Initialize from persisted report so tab switching doesn't lose the result
   const [report, setReport] = useState<LLMRecommendation | null>(persistedReport ?? null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedModel, setSelectedModel] = useState<string>('claude-3-haiku-20240307')
+  const [selectedModel, setSelectedModel] = useState<string>('claude-haiku-4-5')
+  const [expandedScenarios, setExpandedScenarios] = useState<Record<string, boolean>>({})
 
   const doneScenarios = scenarios.filter(s => s.status === 'done' && s.kpi)
   const canRequest = doneScenarios.length >= 1
@@ -99,8 +100,9 @@ export default function LLMReportPanel({
           <span className="ro-section-chip" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8', marginLeft: 12 }}>
             {selectedModel === 'gpt-4o' ? 'GPT-4o' :
              selectedModel === 'gpt-4-turbo' ? 'GPT-4 Turbo' :
-             selectedModel.startsWith('claude-3-5') ? 'Claude 3.5 Sonnet' :
-             selectedModel.startsWith('claude-3') ? 'Claude 3 Haiku' :
+             selectedModel === 'claude-fable-5' ? 'Claude Fable 5' :
+             selectedModel === 'claude-sonnet-4-6' ? 'Claude Sonnet 4.6' :
+             selectedModel === 'claude-haiku-4-5' ? 'Claude Haiku 4.5' :
              selectedModel.includes('70b') ? 'Llama 3 70B' : 'Mixtral 8x7B'}
           </span>
         </div>
@@ -119,9 +121,10 @@ export default function LLMReportPanel({
                 <option value="gpt-4o">GPT-4o (Default)</option>
                 <option value="gpt-4-turbo">GPT-4 Turbo</option>
               </optgroup>
-              <optgroup label="Anthropic / Claude">
-                <option value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet</option>
-                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+              <optgroup label="Anthropic / Claude (via Bedrock)">
+                <option value="claude-haiku-4-5">Claude Haiku 4.5 ✦ Fast &amp; Default</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6 ✦ High Quality</option>
+                <option value="claude-fable-5">Claude Fable 5 ✦ Premium</option>
               </optgroup>
               <optgroup label="Groq Llama / Mixtral">
                 <option value="llama3-70b-8192">Llama 3 70B</option>
@@ -185,94 +188,195 @@ export default function LLMReportPanel({
       {/* Report */}
       {report?.data && (
         <>
-          {/* Executive Summary */}
-          <div className="ro-llm-banner">
-            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {report.data.llm_used === false ? 'Heuristic Analysis' : 'AI Analysis'} · {report.data.intersection}
-            </div>
-            <p className="ro-llm-summary">{report.data.summary}</p>
-          </div>
+          {/* Executive Summary & Main Dashboard Cards */}
+          {(() => {
+            const topScenario = report.data.ranked_scenarios?.find(
+              (s: any) => s.label.toLowerCase() === report.data.top_recommendation.label.toLowerCase() ||
+                          report.data.top_recommendation.label.toLowerCase().includes(s.label.toLowerCase()) ||
+                          s.label.toLowerCase().includes(report.data.top_recommendation.label.toLowerCase())
+            );
+            const costBenefitScenario = report.data.ranked_scenarios?.find(
+              (s: any) => s.label.toLowerCase() === report.data.best_cost_benefit.label.toLowerCase() ||
+                          report.data.best_cost_benefit.label.toLowerCase().includes(s.label.toLowerCase()) ||
+                          s.label.toLowerCase().includes(report.data.best_cost_benefit.label.toLowerCase())
+            );
 
-          {/* Top Recommendation callout */}
-          {report.data.top_recommendation && (
-            <div className="ro-top-rec-card" style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Top Recommendation
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginBottom: 6 }}>
-                {report.data.top_recommendation.label}
-              </div>
-              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
-                {report.data.top_recommendation.reason}
-              </div>
-              <div style={{ marginTop: 10, fontSize: 12, color: '#34d399', fontWeight: 600 }}>
-                Estimated benefit: {report.data.top_recommendation.estimated_benefit}
-              </div>
-            </div>
-          )}
+            return (
+              <div className="ro-rec-dashboard">
+                {/* Left Column: Top Pick */}
+                <div className="ro-rec-card ro-rec-card-hero">
+                  <div className="ro-rec-badge ro-rec-badge-hero">
+                    ★ Top Recommendation
+                  </div>
+                  <div className="ro-rec-title">
+                    {report.data.top_recommendation.label}
+                  </div>
+                  
+                  {topScenario && (
+                    <div className="ro-rec-metric-grid">
+                      <div className="ro-rec-metric-item">
+                        <span className="ro-rec-metric-value" style={{ color: '#34d399' }}>
+                          {topScenario.vs_baseline_wait_pct !== undefined ? (
+                            `${topScenario.vs_baseline_wait_pct > 0 ? '+' : ''}${topScenario.vs_baseline_wait_pct.toFixed(1)}%`
+                          ) : 'N/A'}
+                        </span>
+                        <span className="ro-rec-metric-label">Delay Δ</span>
+                      </div>
+                      <div className="ro-rec-metric-item">
+                        <span className="ro-rec-metric-value" style={{ color: '#34d399' }}>
+                          {topScenario.vs_baseline_throughput_pct !== undefined ? (
+                            `${topScenario.vs_baseline_throughput_pct > 0 ? '+' : ''}${topScenario.vs_baseline_throughput_pct.toFixed(1)}%`
+                          ) : 'N/A'}
+                        </span>
+                        <span className="ro-rec-metric-label">Flow Δ</span>
+                      </div>
+                      <div className="ro-rec-metric-item">
+                        <span className="ro-rec-metric-value" style={{ color: '#fbbf24' }}>
+                          {topScenario.feasibility || 'Moderate'}
+                        </span>
+                        <span className="ro-rec-metric-label">Feasibility</span>
+                      </div>
+                    </div>
+                  )}
 
-          {/* Best Cost-Benefit */}
-          {report.data.best_cost_benefit && (
-            <div style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                Best Cost-Benefit
+                  <div className="ro-rec-text">
+                    {report.data.top_recommendation.reason}
+                  </div>
+
+                  {report.data.top_recommendation.estimated_benefit && (
+                    <div className="ro-rec-benefit-box">
+                      <strong>Expected Benefit:</strong> {report.data.top_recommendation.estimated_benefit}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Cost-Benefit Winner & Exec Summary */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {report.data.best_cost_benefit && (
+                    <div className="ro-rec-card ro-rec-card-cost" style={{ flex: 1 }}>
+                      <div className="ro-rec-badge ro-rec-badge-cost">
+                        $ Best Cost-Benefit
+                      </div>
+                      <div className="ro-rec-title" style={{ fontSize: 16 }}>
+                        {report.data.best_cost_benefit.label}
+                      </div>
+                      
+                      {costBenefitScenario && (
+                        <div className="ro-rec-metric-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', padding: 8, marginBottom: 10 }}>
+                          <div className="ro-rec-metric-item">
+                            <span className="ro-rec-metric-value" style={{ color: '#34d399', fontSize: 12 }}>
+                              {costBenefitScenario.vs_baseline_wait_pct !== undefined ? (
+                                `${costBenefitScenario.vs_baseline_wait_pct > 0 ? '+' : ''}${costBenefitScenario.vs_baseline_wait_pct.toFixed(1)}%`
+                              ) : 'N/A'}
+                            </span>
+                            <span className="ro-rec-metric-label" style={{ fontSize: 8 }}>Delay Δ</span>
+                          </div>
+                          <div className="ro-rec-metric-item">
+                            <span className="ro-rec-metric-value" style={{ color: '#34d399', fontSize: 12 }}>
+                              {costBenefitScenario.vs_baseline_throughput_pct !== undefined ? (
+                                `${costBenefitScenario.vs_baseline_throughput_pct > 0 ? '+' : ''}${costBenefitScenario.vs_baseline_throughput_pct.toFixed(1)}%`
+                              ) : 'N/A'}
+                            </span>
+                            <span className="ro-rec-metric-label" style={{ fontSize: 8 }}>Flow Δ</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="ro-rec-text" style={{ margin: 0, fontSize: 11.5 }}>
+                        {report.data.best_cost_benefit.reason}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Executive Insights Block */}
+                  <div className="ro-rec-card" style={{ padding: 16 }}>
+                    <div className="ro-rec-summary-tag">
+                      ✦ AI Executive Insights
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#94a3b8', lineHeight: 1.6, fontStyle: 'italic' }}>
+                      "{report.data.summary}"
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#fbbf24' }}>{report.data.best_cost_benefit.label}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{report.data.best_cost_benefit.reason}</div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Ranked scenarios */}
           {report.data.ranked_scenarios?.length > 0 && (
             <>
               <div className="ro-card-title" style={{ marginBottom: 12 }}>Scenario Analysis</div>
               <div className="ro-ranked-list">
-                {report.data.ranked_scenarios.map((item: LLMRankedScenario) => (
-                  <div key={item.scenario_id} className="ro-ranked-item">
-                    <div className="ro-ranked-header">
-                      <RankBadge rank={item.rank} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
-                          <span style={{ color: STRENGTH_COLORS[item.recommendation_strength] || '#94a3b8', marginRight: 6 }}>●</span>
-                          {item.label}
+                {report.data.ranked_scenarios.map((item: LLMRankedScenario) => {
+                  const isExpanded = expandedScenarios[item.scenario_id] ?? false;
+                  return (
+                    <div key={item.scenario_id} className="ro-ranked-item">
+                      <div 
+                        className="ro-ranked-header"
+                        onClick={() => setExpandedScenarios(prev => ({ ...prev, [item.scenario_id]: !isExpanded }))}
+                        style={{ cursor: 'pointer', userSelect: 'none', marginBottom: isExpanded ? 8 : 0 }}
+                      >
+                        <RankBadge rank={item.rank} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
+                            <span style={{ color: STRENGTH_COLORS[item.recommendation_strength] || '#94a3b8', marginRight: 6 }}>●</span>
+                            {item.label}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{item.headline}</div>
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{item.headline}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {item.feasibility && (
+                            <span className={`ro-feasibility-badge ${FEASIBILITY_COLORS[item.feasibility] || 'ro-feasibility-Moderate'}`}>
+                              {item.feasibility}
+                            </span>
+                          )}
+                          <div style={{ 
+                            color: '#64748b', 
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', 
+                            transition: 'transform 0.2s ease', 
+                            display: 'flex', 
+                            alignItems: 'center' 
+                          }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                        </div>
                       </div>
-                      {item.feasibility && (
-                        <span className={`ro-feasibility-badge ${FEASIBILITY_COLORS[item.feasibility] || 'ro-feasibility-Moderate'}`}>
-                          {item.feasibility}
-                        </span>
+
+                      {isExpanded && (
+                        <div className="animate-fadeIn" style={{ marginTop: 10 }}>
+                          <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, margin: '8px 0 12px 0' }}>
+                            {item.analysis}
+                          </p>
+
+                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                            {item.vs_baseline_wait_pct !== undefined && (
+                              <div style={{ fontSize: 11, color: '#64748b' }}>
+                                Wait Δ: <span className={item.vs_baseline_wait_pct < 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
+                                  {item.vs_baseline_wait_pct > 0 ? '+' : ''}{item.vs_baseline_wait_pct?.toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
+                            {item.vs_baseline_throughput_pct !== undefined && (
+                              <div style={{ fontSize: 11, color: '#64748b' }}>
+                                Throughput Δ: <span className={item.vs_baseline_throughput_pct > 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
+                                  {item.vs_baseline_throughput_pct > 0 ? '+' : ''}{item.vs_baseline_throughput_pct?.toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {item.implementation_notes && (
+                            <div style={{ fontSize: 11, color: '#475569', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 10 }}>
+                              <strong>Notes: </strong>{item.implementation_notes}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-
-                    <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, margin: '8px 0' }}>
-                      {item.analysis}
-                    </p>
-
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                      {item.vs_baseline_wait_pct !== undefined && (
-                        <div style={{ fontSize: 11, color: '#64748b' }}>
-                          Wait Δ: <span className={item.vs_baseline_wait_pct < 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
-                            {item.vs_baseline_wait_pct > 0 ? '+' : ''}{item.vs_baseline_wait_pct?.toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
-                      {item.vs_baseline_throughput_pct !== undefined && (
-                        <div style={{ fontSize: 11, color: '#64748b' }}>
-                          Throughput Δ: <span className={item.vs_baseline_throughput_pct > 0 ? 'ro-delta-positive' : 'ro-delta-negative'}>
-                            {item.vs_baseline_throughput_pct > 0 ? '+' : ''}{item.vs_baseline_throughput_pct?.toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {item.implementation_notes && (
-                      <div style={{ fontSize: 11, color: '#475569', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
-                        Notes: {item.implementation_notes}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}

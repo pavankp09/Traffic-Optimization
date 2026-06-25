@@ -1358,6 +1358,449 @@
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   Hero KPI Strip
+══════════════════════════════════════════════════════════════════ */
+.ro-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
 
+@media (max-width: 1100px) {
+  .ro-kpi-strip { grid-template-columns: repeat(3, 1fr); }
+}
 
+.ro-kpi-tile {
+  background: #0f131a;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ro-kpi-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 80% 0%, var(--tile-glow, #10b981) 0%, transparent 65%);
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+.ro-kpi-tile:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.3);
+}
+
+.ro-kpi-tile-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.ro-kpi-tile-val {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.ro-kpi-tile-unit {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+.ro-kpi-tile-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.01em;
+  margin-top: 2px;
+}
+
+.ro-kpi-tile-sub {
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.3;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Enhanced Winner Cards — Sub-metrics & Progress
+══════════════════════════════════════════════════════════════════ */
+.ro-best-sub-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.ro-best-sub-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.ro-best-sub-label {
+  color: #475569;
+  min-width: 72px;
+  font-weight: 500;
+}
+
+.ro-best-sub-val {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.ro-los-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+}
+
+.ro-best-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ro-best-progress-label {
+  font-size: 10px;
+  color: #475569;
+  font-weight: 600;
+  min-width: 96px;
+}
+
+.ro-best-progress-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ro-best-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ro-best-progress-green {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.ro-best-progress-indigo {
+  background: linear-gradient(90deg, #4f46e5, #818cf8);
+}
+
+.ro-best-progress-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  min-width: 34px;
+  text-align: right;
+}
+
+.ro-best-card {
+  align-items: flex-start !important;
+}
+
+.ro-best-metric {
+  padding-top: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Real-World Impact Banner
+══════════════════════════════════════════════════════════════════ */
+.ro-impact-banner {
+  background: linear-gradient(135deg, #0a1120 0%, #0e1628 100%);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ro-impact-banner::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ro-impact-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ro-impact-icon {
+  font-size: 18px;
+}
+
+.ro-impact-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+  flex: 1;
+}
+
+.ro-impact-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ro-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .ro-impact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.ro-impact-item {
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.ro-impact-num {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ro-impact-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 3px;
+}
+
+.ro-impact-sub {
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.3;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LOS Grade Chart
+══════════════════════════════════════════════════════════════════ */
+.ro-los-grade-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.ro-los-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ro-los-grade-name {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ro-los-grade-bar-wrapper {
+  flex: 1;
+}
+
+.ro-los-grade-bar-bg {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ro-los-grade-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   AI Recommendation Dashboard Grid
+══════════════════════════════════════════════════════════════════ */
+.ro-rec-dashboard {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .ro-rec-dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ro-rec-card {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.ro-rec-card-hero {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.03) 0%, rgba(15, 23, 42, 0.4) 100%);
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.02);
+}
+
+.ro-rec-card-cost {
+  border-color: rgba(245, 158, 11, 0.2);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.03) 0%, rgba(15, 23, 42, 0.4) 100%);
+  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.02);
+}
+
+.ro-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  width: fit-content;
+  margin-bottom: 12px;
+}
+
+.ro-rec-badge-hero {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.ro-rec-badge-cost {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.ro-rec-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+
+.ro-rec-text {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.ro-rec-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.ro-rec-metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ro-rec-metric-value {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.ro-rec-metric-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ro-rec-benefit-box {
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px dashed rgba(16, 185, 129, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: #a7f3d0;
+  line-height: 1.5;
+}
+
+.ro-rec-summary-card {
+  background: rgba(30, 41, 59, 0.25);
+  border: 1px dashed rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin-top: 14px;
+  position: relative;
+}
+
+.ro-rec-summary-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #818cf8;
+  margin-bottom: 4px;
+}
 
