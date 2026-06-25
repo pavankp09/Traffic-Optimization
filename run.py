@@ -31,10 +31,17 @@ VENV_DIR = PROJECT_ROOT / ".venv"
 BACKEND_REQUIREMENTS = PROJECT_ROOT / "backend" / "requirements.txt"
 TORCH_PACKAGES = {"torch", "torchvision", "torchaudio"}
 BACKEND_MARKER = VENV_DIR / ".uv-backend"
-TORCH_REQUIREMENTS = {
-    "cuda": ["torch==2.11.0+cu128", "torchvision==0.26.0+cu128", "torchaudio==2.11.0+cu128"],
-    "cpu": ["torch==2.11.0", "torchvision==0.26.0", "torchaudio==2.11.0"],
-}
+if sys.version_info < (3, 10):
+    # PyTorch versions supporting Python 3.9 (such as EC2 default environments)
+    TORCH_REQUIREMENTS = {
+        "cuda": ["torch==2.1.2+cu121", "torchvision==0.16.2+cu121", "torchaudio==2.1.2+cu121"],
+        "cpu": ["torch==2.1.2", "torchvision==0.16.2", "torchaudio==2.1.2"],
+    }
+else:
+    TORCH_REQUIREMENTS = {
+        "cuda": ["torch==2.11.0+cu128", "torchvision==0.26.0+cu128", "torchaudio==2.11.0+cu128"],
+        "cpu": ["torch==2.11.0", "torchvision==0.26.0", "torchaudio==2.11.0"],
+    }
 
 
 def choose_torch_backend(platform_name: str | None = None, has_nvidia_gpu: bool | None = None) -> str:
