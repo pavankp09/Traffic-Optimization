@@ -66,11 +66,15 @@ export function useSimulation() {
         }
 
         const selectedSplit = useSimulationStore.getState().selectedModelsSplit
+        const activePreset = useConfigStore.getState().activePreset
         emit('sim:start', {
           session_id: sid,
           model_key: selectedSplit && selectedSplit.length > 0 ? selectedSplit.join(',') : 'all',
           sim_config: runtimeSimConfig,
           adverse_config: currentAdverseConfig,
+          preset_name: activePreset?.name || '',
+          run_type: 'split',
+          model_name: selectedSplit && selectedSplit.length > 0 ? selectedSplit.join(',') : 'all',
         })
       } else {
         // Get the active model key so the backend only runs that world
@@ -106,11 +110,17 @@ export function useSimulation() {
           simulation_duration_s: durationSeconds ?? mergedConfig.simulation_duration_s ?? 1800,
           sim_speed_multiplier: START_SPEED,
         }
+        const activePreset = useConfigStore.getState().activePreset
         emit('sim:start', {
           session_id: sid,
           model_key: modelKey,
           sim_config: runtimeSimConfig,
           adverse_config: currentAdverseConfig,
+          preset_name: activePreset?.name || '',
+          run_type: modelKey === 'baseline' ? 'baseline' : 'rl',
+          model_name: modelKey === 'baseline'
+            ? (runtimeSimConfig.baseline_controller || 'fixed_time')
+            : (runtimeSimConfig.rl_algorithm || 'PPO'),
         })
 
         // When Baseline tab simulation starts, also trigger baseline computation
@@ -164,12 +174,18 @@ export function useSimulation() {
         sim_speed_multiplier: START_SPEED,
       }
 
+      const activePreset = useConfigStore.getState().activePreset
       emit('sim:start', {
         session_id: sid,
         model_key: modelKey,
         sim_config: runtimeSimConfig,
         adverse_config: currentAdverseConfig,
         replay_episode: episodeNumber,
+        preset_name: activePreset?.name || '',
+        run_type: modelKey === 'baseline' ? 'baseline' : 'rl',
+        model_name: modelKey === 'baseline'
+          ? (runtimeSimConfig.baseline_controller || 'fixed_time')
+          : (runtimeSimConfig.rl_algorithm || 'PPO'),
       })
     },
     [emit, resetSimulation, setSessionId, setActiveSession, setSimSpeed, setTraining, setTrainingPaused, setTrainingModelKey, getMergedConfig]

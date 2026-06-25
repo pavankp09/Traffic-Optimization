@@ -392,6 +392,9 @@ class SessionStore:
         session_id: str,
         sim_config: SimulationConfig,
         adverse_config: AdverseConfig,
+        preset_name: Optional[str] = None,
+        run_type: Optional[str] = None,
+        model_name: Optional[str] = None,
     ) -> None:
         """Creates a SimulationRun row in the DB snapshotting configurations."""
         import dataclasses
@@ -412,12 +415,40 @@ class SessionStore:
                     session_id=ts_row.id,
                     sim_config=dataclasses.asdict(sim_config),
                     adverse_config=dataclasses.asdict(adverse_config),
+                    preset_name=preset_name,
+                    run_type=run_type,
+                    model_name=model_name,
                 )
                 session.add(row)
                 session.commit()
-                logger.info("Saved simulation run %s for session %s", simulation_id, session_id)
+                logger.info("Saved simulation run %s for session %s (preset=%s, run_type=%s, model=%s)", 
+                            simulation_id, session_id, preset_name, run_type, model_name)
         except Exception:
             logger.exception("Failed to save simulation run to database")
+            raise
+
+    def update_simulation_run_metrics(
+        self,
+        simulation_id: str,
+        avg_wait_s: float,
+        throughput: int,
+        green_util_pct: float,
+    ) -> None:
+        """Updates the final results / metrics of a simulation run."""
+        try:
+            with Session(self._engine) as session:
+                row = session.query(SimulationRun).filter(SimulationRun.simulation_id == simulation_id).first()
+                if row is None:
+                    logger.warning("update_simulation_run_metrics: SimulationRun not found for %s", simulation_id)
+                    return
+                row.avg_wait_s = avg_wait_s
+                row.throughput = throughput
+                row.green_util_pct = green_util_pct
+                session.commit()
+                logger.info("Updated simulation run %s metrics: wait=%s, tput=%s, util=%s", 
+                            simulation_id, avg_wait_s, throughput, green_util_pct)
+        except Exception:
+            logger.exception("Failed to update simulation run metrics in database")
             raise
 
     def save_vehicle_crossing(

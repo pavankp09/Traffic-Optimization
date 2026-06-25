@@ -42,7 +42,7 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   reward_wt_switch: 0.5,
   simulation_duration_s: 1800,
   warm_up_s: 60,
-  sim_speed_multiplier: 20,
+  sim_speed_multiplier: 5,
   enable_rtsp: false,
   rtsp_url: '',
   yolo_confidence: 0.5,
@@ -52,6 +52,75 @@ const DEFAULT_SIM_CONFIG: SimConfig = {
   baseline_coordination: 83,
   same_as_baseline: false,
   training_mode: 'stage1',
+}
+
+const HYD_TEST_LOCATION_PRESET: Preset = {
+  id: 'hyd_test_location',
+  name: 'Hyderabad Test Location',
+  group: 'B_location',
+  description: 'Test location containing only location coordinates',
+  tags: ['test_location', 'hyderabad'],
+  sim_config: {
+    osm_lat: 17.3850,
+    osm_lon: 78.4867,
+    total_vph: 15000,
+    simulation_duration_s: 3600,
+    canvas_size: 'large',
+    canvas_width: 1600,
+    canvas_height: 1000,
+    traffic_pattern: 'morning_peak',
+    spawn_mult_bike: 5.0,
+    spawn_mult_car: 6.0,
+    spawn_mult_auto: 3.0,
+    spawn_mult_bus: 2.0,
+    spawn_mult_truck: 1.0,
+    pct_two_wheeler: 44.5,
+    pct_car: 40.0,
+    pct_auto_rickshaw: 10.0,
+    pct_tsrtc_bus: 4.4,
+    pct_truck: 1.1,
+    pct_ev_scooter: 0,
+    pct_e_rickshaw: 0,
+    pct_cab: 0,
+    pct_delivery_bike: 0,
+    pct_school_bus: 0,
+    baseline_wait_delay: 780,
+    baseline_throughput: 1950,
+    baseline_green_util: 95,
+    baseline_coordination: 45,
+  },
+  adverse_config: {},
+}
+
+const HYD_TEST_LOCATION_SIM_CONFIG: SimConfig = {
+  ...DEFAULT_SIM_CONFIG,
+  osm_lat: 17.3850,
+  osm_lon: 78.4867,
+  total_vph: 15000,
+  simulation_duration_s: 3600,
+  canvas_size: 'large',
+  canvas_width: 1600,
+  canvas_height: 1000,
+  traffic_pattern: 'morning_peak',
+  spawn_mult_bike: 5.0,
+  spawn_mult_car: 6.0,
+  spawn_mult_auto: 3.0,
+  spawn_mult_bus: 2.0,
+  spawn_mult_truck: 1.0,
+  pct_two_wheeler: 44.5,
+  pct_car: 40.0,
+  pct_auto_rickshaw: 10.0,
+  pct_tsrtc_bus: 4.4,
+  pct_truck: 1.1,
+  pct_ev_scooter: 0,
+  pct_e_rickshaw: 0,
+  pct_cab: 0,
+  pct_delivery_bike: 0,
+  pct_school_bus: 0,
+  baseline_wait_delay: 780,
+  baseline_throughput: 1950,
+  baseline_green_util: 95,
+  baseline_coordination: 45,
 }
 
 const DEFAULT_ADVERSE_CONFIG: AdverseConfig = {
@@ -87,7 +156,15 @@ interface ConfigState {
 
 const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
   baseline: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
+    rl_algorithm: 'Fixed-Time',
+    learning_rate: 0,
+    discount_factor: 0,
+    hidden_layer_size: 0,
+    ppo_epochs: 0,
+  },
+  baseline_fixed: {
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'Fixed-Time',
     learning_rate: 0,
     discount_factor: 0,
@@ -95,7 +172,7 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
     ppo_epochs: 0,
   },
   rl1: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'PPO',
     learning_rate: 0.0003,
     discount_factor: 0.99,
@@ -103,28 +180,28 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
     ppo_epochs: 250,
   },
   rl2: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'DQN',
     learning_rate: 0.0001,
     discount_factor: 0.95,
     hidden_layer_size: 128,
   },
   rl3: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'SAC',
     learning_rate: 0.0003,
     discount_factor: 0.98,
     hidden_layer_size: 256,
   },
   rl4: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'A2C',
     learning_rate: 0.0007,
     discount_factor: 0.99,
     hidden_layer_size: 32,
   },
   custom: {
-    ...DEFAULT_SIM_CONFIG,
+    ...HYD_TEST_LOCATION_SIM_CONFIG,
     rl_algorithm: 'PPO',
     learning_rate: 0.0003,
     discount_factor: 0.99,
@@ -134,9 +211,9 @@ const INITIAL_TAB_CONFIGS: Record<string, SimConfig> = {
 }
 
 export const useConfigStore = create<ConfigState>((set) => ({
-  simConfig: DEFAULT_SIM_CONFIG,
+  simConfig: HYD_TEST_LOCATION_SIM_CONFIG,
   adverseConfig: DEFAULT_ADVERSE_CONFIG,
-  activePreset: null,
+  activePreset: HYD_TEST_LOCATION_PRESET,
   isDirty: false,
   tabConfigs: INITIAL_TAB_CONFIGS,
 
@@ -168,25 +245,42 @@ export const useConfigStore = create<ConfigState>((set) => ({
       const presetSimConfig: SimConfig = {
         ...DEFAULT_SIM_CONFIG,
         ...(preset.sim_config as Partial<SimConfig>),
+        total_vph: volume,
+        n_lanes: (preset.sim_config as any).n_lanes || (preset.sim_config as any).lanes_per_arm || 3,
+        rl_algorithm: (preset.sim_config as any).rl_algorithm || (preset.sim_config as any).algorithm || 'PPO',
+        warm_up_s: (preset.sim_config as any).warm_up_s || (preset.sim_config as any).warm_up_seconds || 60,
         baseline_wait_delay: calculatedWait,
         baseline_throughput: calculatedTput,
         baseline_green_util: calculatedUtil,
         baseline_coordination: calculatedCoord,
       }
 
+      const activeModel = useSimulationStore.getState().selectedModelSingle
+      const sameAsBaseline = presetSimConfig.same_as_baseline ?? state.simConfig.same_as_baseline
+      const newTabConfigs = { ...state.tabConfigs, [activeModel]: presetSimConfig }
+
+      if (activeModel !== 'baseline' && sameAsBaseline) {
+        newTabConfigs.baseline = {
+          ...newTabConfigs.baseline,
+          ...presetSimConfig,
+          rl_algorithm: newTabConfigs.baseline?.rl_algorithm || 'Fixed-Time',
+        }
+      }
+
       return {
         simConfig: presetSimConfig,
         adverseConfig: { ...DEFAULT_ADVERSE_CONFIG, ...(preset.adverse_config as Partial<AdverseConfig>) },
         activePreset: preset,
+        tabConfigs: newTabConfigs,
         isDirty: false,
       }
     }),
 
   resetToDefaults: () =>
     set({
-      simConfig: DEFAULT_SIM_CONFIG,
+      simConfig: HYD_TEST_LOCATION_SIM_CONFIG,
       adverseConfig: DEFAULT_ADVERSE_CONFIG,
-      activePreset: null,
+      activePreset: HYD_TEST_LOCATION_PRESET,
       isDirty: false,
       tabConfigs: INITIAL_TAB_CONFIGS,
     }),

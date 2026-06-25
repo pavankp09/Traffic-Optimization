@@ -114,6 +114,17 @@ class MockTrafficEnv(gym.Env):
 
         self._lanes = max(1, sim_config.lanes_per_arm)
 
+        # Signal Phase Scheme lost-time overhead adjustments
+        scheme = getattr(sim_config, "phase_scheme", "5phase")
+        if scheme == "2phase":
+            self._lost_time_s = 4.0
+        elif scheme == "4phase":
+            self._lost_time_s = 5.0
+        elif scheme == "6phase":
+            self._lost_time_s = 7.0
+        else:
+            self._lost_time_s = 6.0
+
         # Filter active arms depending on intersection type
         active_arms = ["N", "E", "W"] if sim_config.intersection_type in ("t_junction", "t_junction_free_left") else ARMS
         configured_vps = sim_config.traffic_volume_vph / 3600.0
@@ -126,8 +137,22 @@ class MockTrafficEnv(gym.Env):
                 w = {"N": 0.35, "S": 0.35, "E": 0.15, "W": 0.15}
         else:
             w = {a: (1.0 / n_arms if a in active_arms else 0.0) for a in ARMS}
-        # Set arrival rate: active arms get their share, inactive arms get 0
-        self._arrival_rate = {a: configured_vps * w[a] * n_arms if a in active_arms else 0.0 for a in ARMS}
+
+        # Adjust arrival rate if some turning traffic bypasses the signal queue:
+        # 1. Free Left Turn (left-turning traffic doesn't wait for signal)
+        left_turn_bypass = 0.0
+        if getattr(sim_config, "dedicated_turn_lanes", "right_only") == "both" or sim_config.intersection_type == "four_way_free_left":
+            left_turn_bypass = max(0.0, 1.0 - getattr(sim_config, "turn_ratio_straight", 0.60) - getattr(sim_config, "turn_ratio_right", 0.25))
+
+        # 2. Mid-Block U-Turn (U-turning traffic doesn't wait for main signal)
+        uturn_bypass = 0.0
+        if getattr(sim_config, "u_turn_phase", False):
+            uturn_bypass = getattr(sim_config, "turn_ratio_uturn", 0.15)
+
+        bypass_factor = max(0.2, 1.0 - left_turn_bypass - uturn_bypass)
+
+        # Set arrival rate: active arms get their share, inactive arms get 0, scaled by turning bypass factor
+        self._arrival_rate = {a: configured_vps * w[a] * n_arms * bypass_factor if a in active_arms else 0.0 for a in ARMS}
 
         # Episode state
         self._queue: dict[str, float] = {a: 0.0 for a in ARMS}
@@ -137,9 +162,12 @@ class MockTrafficEnv(gym.Env):
         self._since_served: dict[str, int] = {a: 0 for a in ARMS}  # decisions since last served
         self._decision = 0
         self._ep_throughput = 0
-        self._ep_queue_area = 0.0
         self._ep_arrivals = 0.0
         self._ep_time = 0.0
+
+        # Compute maximum decisions based on simulation duration (average 30s per decision)
+        duration_s = getattr(sim_config, "simulation_duration_s", 1800) or 1800
+        self._max_decisions = max(10, int(duration_s / 30))
 
     def _obs(self) -> np.ndarray:
         feats: list[float] = []
@@ -156,7 +184,7 @@ class MockTrafficEnv(gym.Env):
             feats.append(float(np.clip(delta / _QUEUE_NORM, -1.0, 1.0)))
         # 5 phase one-hot + 1 progress
         feats.extend([1.0 if i == self._current_phase else 0.0 for i in range(N_PHASES)])
-        feats.append(self._decision / _EPISODE_DECISIONS)
+        feats.append(self._decision / self._max_decisions)
         return np.asarray(feats, dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
@@ -181,7 +209,7 @@ class MockTrafficEnv(gym.Env):
         green = PHASE_GREEN[phase]
 
         switched = phase != self._current_phase
-        lost = _LOST_TIME_S if switched else 0.0
+        lost = self._lost_time_s if switched else 0.0
         # Stage 2: startup lost time — vehicles take time to start moving after green
         startup_loss = (
             self.sim_config.startup_lost_time_s
@@ -306,7 +334,7 @@ class MockTrafficEnv(gym.Env):
             + baseline_bonus
         )
 
-        terminated = self._decision >= _EPISODE_DECISIONS
+        terminated = self._decision >= self._max_decisions
         info = {
             "mean_wait": float(ep_mean_wait),
             "throughput": int(throughput_vph),
@@ -349,7 +377,9 @@ def run_fixed_time_baseline(
     env.reset(seed=seed)
     fixed_dur_idx = DURATIONS.index(30)
     info: dict = {}
-    for i in range(_EPISODE_DECISIONS):
+    duration_s = getattr(sim_config, "simulation_duration_s", 1800) or 1800
+    max_decisions = max(10, int(duration_s / 30))
+    for i in range(max_decisions):
         phase = 0 if (i % 2 == 0) else 1
         action = phase * N_DURATIONS + fixed_dur_idx
         _, _, term, _, info = env.step(action)

@@ -8,6 +8,7 @@ export const PRESET_GROUP_LABELS: Record<string, string> = {
   E_events: 'Events',
   F_adverse: 'Adverse Scenarios',
   G_research: 'Research',
+  custom: 'Custom Presets',
 }
 
 export const PRESET_GROUP_ORDER = [
@@ -18,6 +19,7 @@ export const PRESET_GROUP_ORDER = [
   'E_events',
   'F_adverse',
   'G_research',
+  'custom',
 ] as const
 
 export const FALLBACK_PRESETS: PresetSummary[] = [
@@ -35,6 +37,12 @@ export const FALLBACK_PRESETS: PresetSummary[] = [
   { id: 'hyd_lb_nagar', name: 'LB Nagar - Outer Ring Road', group: 'B_location', description: '', tags: [] },
   { id: 'hyd_secunderabad', name: 'Secunderabad - Rail Commuter Hub', group: 'B_location', description: '', tags: [] },
   { id: 'hyd_gachibowli', name: 'Gachibowli - IT Area', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_madhapur', name: 'Madhapur Tech Zone', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_kondapur', name: 'Kondapur Junction', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_financial_district', name: 'Financial District - Tech Park', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_raidurg', name: 'Raidurg - Mindspace Circle', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_nanakramguda', name: 'Nanakramguda Circle', group: 'B_location', description: '', tags: [] },
+  { id: 'hyd_test_location', name: 'Hyderabad Test Location', group: 'B_location', description: 'Test location containing only location coordinates', tags: [] },
 
   { id: 'mix_ev_dominated', name: 'EV-Dominated Mix', group: 'C_vehicle_mix', description: '', tags: [] },
   { id: 'mix_heavy_vehicles', name: 'Heavy Vehicle Mix', group: 'C_vehicle_mix', description: '', tags: [] },

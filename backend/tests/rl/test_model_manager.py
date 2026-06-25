@@ -163,6 +163,42 @@ class TestModelManagerList:
         assert "metadata" in entry
         assert "saved_at" in entry
 
+    def test_list_models_latest_and_backup(self, tmp_path):
+        """Verify list_models() properly parses saved_at for latest.zip and backup latest_*.zip."""
+        manager = ModelManager(model_dir=str(tmp_path))
+        
+        # Create a mock layout
+        # models/PPO/latest.zip
+        # models/PPO/backup/latest_20260624_123000.zip
+        ppo_dir = tmp_path / "PPO"
+        backup_dir = ppo_dir / "backup"
+        backup_dir.mkdir(parents=True)
+        
+        latest_file = ppo_dir / "latest.zip"
+        latest_file.write_bytes(b"mock zip PPO latest")
+        
+        backup_file = backup_dir / "latest_20260624_123000.zip"
+        backup_file.write_bytes(b"mock zip PPO backup")
+        
+        # We can set modification time of latest.zip specifically to test it
+        import time
+        from datetime import datetime
+        fixed_time = time.time() - 3600 # 1 hour ago
+        os.utime(str(latest_file), (fixed_time, fixed_time))
+        
+        models = manager.list_models()
+        assert len(models) == 2
+        
+        latest_entry = next(m for m in models if m["version"] == 999999)
+        backup_entry = next(m for m in models if m["version"] == 20260624123000)
+        
+        # Verify latest_entry saved_at is mtime
+        expected_latest_saved_at = datetime.utcfromtimestamp(fixed_time).isoformat()
+        assert latest_entry["saved_at"] == expected_latest_saved_at
+        
+        # Verify backup_entry saved_at parsed from timestamp string
+        assert backup_entry["saved_at"] == "2026-06-24T12:30:00"
+
 
 class TestModelManagerDelete:
     def test_delete_model(self, tmp_path):

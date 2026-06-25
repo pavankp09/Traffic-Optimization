@@ -57,6 +57,9 @@ type ArmId = 'N' | 'S' | 'E' | 'W'
 export interface LaneRenderConfig {
   n_lanes?: number
   lane_config?: Partial<Record<ArmId, number>>
+  u_turn_phase?: boolean
+  lane_directions?: Partial<Record<ArmId, string[]>>
+  lane_signals?: Partial<Record<ArmId, string[]>>
 }
 
 function clampLaneCount(value: unknown, fallback = 3): number {
@@ -364,7 +367,7 @@ function drawTurnArrow(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   heading: number,
-  type: 'straight' | 'right' | 'left' | 'straight_right' | 'straight_left'
+  type: 'straight' | 'right' | 'left' | 'straight_right' | 'straight_left' | 'uturn'
 ): void {
   ctx.save()
   ctx.translate(x, y)
@@ -410,11 +413,26 @@ function drawTurnArrow(
     ctx.stroke()
   }
 
+  const uturnArc = (ox: number) => {
+    const R = 4.5
+    ctx.beginPath()
+    ctx.moveTo(ox, SHAFT * 0.4)
+    ctx.lineTo(ox, -SHAFT * 0.1)
+    ctx.arc(ox + R, -SHAFT * 0.1, R, Math.PI, 0)
+    ctx.lineTo(ox + R * 2, SHAFT * 0.4)
+    ctx.stroke()
+    const ex = ox + R * 2, ey = SHAFT * 0.4
+    ctx.beginPath()
+    ctx.moveTo(ex - HEAD, ey - HEAD); ctx.lineTo(ex, ey); ctx.lineTo(ex + HEAD, ey - HEAD)
+    ctx.stroke()
+  }
+
   if (type === 'straight') shaft()
   if (type === 'right') rightArc(0)
   if (type === 'left') leftArc(0)
   if (type === 'straight_right') { shaft(); rightArc(4) }
   if (type === 'straight_left') { shaft(); leftArc(-4) }
+  if (type === 'uturn') uturnArc(0)
 
   ctx.restore()
 }
@@ -557,23 +575,53 @@ export function drawIntersection(
   if (!isRoundabout) drawJunctionHatch(ctx, cx, cy, rh)
 
   // ── Lane markings ─────────────────────────────────────────────────────────
+  const u_turn_phase = laneRenderConfig?.u_turn_phase ?? false
+
   // Centre median — double yellow solid lines (N/S road)
   ctx.setLineDash([])
   ctx.strokeStyle = 'rgba(250,204,21,0.65)'
   ctx.lineWidth = 1.5
   for (const sign of [-1, 1]) {
     ctx.beginPath()
-    ctx.moveTo(cx + sign * MEDIAN_PX, 0); ctx.lineTo(cx + sign * MEDIAN_PX, cy - rh)
+    if (u_turn_phase) {
+      const gapStart = cy - 130
+      const gapEnd = cy - 110
+      ctx.moveTo(cx + sign * MEDIAN_PX, 0); ctx.lineTo(cx + sign * MEDIAN_PX, gapStart)
+      ctx.moveTo(cx + sign * MEDIAN_PX, gapEnd); ctx.lineTo(cx + sign * MEDIAN_PX, cy - rh)
+    } else {
+      ctx.moveTo(cx + sign * MEDIAN_PX, 0); ctx.lineTo(cx + sign * MEDIAN_PX, cy - rh)
+    }
     if (!isTJunction) {
-      ctx.moveTo(cx + sign * MEDIAN_PX, cy + rh); ctx.lineTo(cx + sign * MEDIAN_PX, cfg.height)
+      if (u_turn_phase) {
+        const gapStart = cy + 110
+        const gapEnd = cy + 130
+        ctx.moveTo(cx + sign * MEDIAN_PX, cy + rh); ctx.lineTo(cx + sign * MEDIAN_PX, gapStart)
+        ctx.moveTo(cx + sign * MEDIAN_PX, gapEnd); ctx.lineTo(cx + sign * MEDIAN_PX, cfg.height)
+      } else {
+        ctx.moveTo(cx + sign * MEDIAN_PX, cy + rh); ctx.lineTo(cx + sign * MEDIAN_PX, cfg.height)
+      }
     }
     ctx.stroke()
   }
   // Centre median — E/W road
   for (const sign of [-1, 1]) {
     ctx.beginPath()
-    ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
-    ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
+    if (u_turn_phase) {
+      const gapStart = cx - 130
+      const gapEnd = cx - 110
+      ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(gapStart, cy + sign * MEDIAN_PX)
+      ctx.moveTo(gapEnd, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
+    } else {
+      ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
+    }
+    if (u_turn_phase) {
+      const gapStart = cx + 110
+      const gapEnd = cx + 130
+      ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(gapStart, cy + sign * MEDIAN_PX)
+      ctx.moveTo(gapEnd, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
+    } else {
+      ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
+    }
     ctx.stroke()
   }
 
@@ -639,27 +687,42 @@ export function drawIntersection(
   // ── Turn arrows in approach lanes ─────────────────────────────────────────
   if (!isRoundabout && !isYJunction && !isSixArm) {
     const ARROW_OFFSET = 22
+    const getArrowType = (arm: ArmId, idx: number): 'straight' | 'right' | 'left' | 'straight_right' | 'straight_left' | 'uturn' => {
+      if (laneRenderConfig?.lane_directions?.[arm]) {
+        const customType = laneRenderConfig.lane_directions[arm]![idx]
+        if (customType) {
+          if (customType === 'free_left') return 'left'
+          return customType as any
+        }
+      }
+      return (u_turn_phase && idx === 0) ? 'uturn' : 'straight'
+    }
+
     // N arm (southbound, heading = Math.PI = pointing south/down)
     const nArrowY = cy - STOP_PX - ARROW_OFFSET
     for (let idx = 0; idx < lanes.N; idx++) {
-      drawTurnArrow(ctx, cx + laneCenterPx(idx), nArrowY, Math.PI, 'straight')
+      const type = getArrowType('N', idx)
+      drawTurnArrow(ctx, cx + laneCenterPx(idx), nArrowY, Math.PI, type)
     }
     // S arm (northbound, heading = 0 = pointing north/up)
     if (!isTJunction) {
       const sArrowY = cy + STOP_PX + ARROW_OFFSET
       for (let idx = 0; idx < lanes.S; idx++) {
-        drawTurnArrow(ctx, cx - laneCenterPx(idx), sArrowY, 0, 'straight')
+        const type = getArrowType('S', idx)
+        drawTurnArrow(ctx, cx - laneCenterPx(idx), sArrowY, 0, type)
       }
     }
     // E arm (westbound, heading = -Math.PI/2 = pointing west/left)
     const eArrowX = cx + STOP_PX + ARROW_OFFSET
     for (let idx = 0; idx < lanes.E; idx++) {
-      drawTurnArrow(ctx, eArrowX, cy + laneCenterPx(idx), -Math.PI / 2, 'straight')
+      const type = getArrowType('E', idx)
+      drawTurnArrow(ctx, eArrowX, cy + laneCenterPx(idx), -Math.PI / 2, type)
     }
     // W arm (eastbound, heading = Math.PI/2 = pointing east/right)
     const wArrowX = cx - STOP_PX - ARROW_OFFSET
     for (let idx = 0; idx < lanes.W; idx++) {
-      drawTurnArrow(ctx, wArrowX, cy - laneCenterPx(idx), Math.PI / 2, 'straight')
+      const type = getArrowType('W', idx)
+      drawTurnArrow(ctx, wArrowX, cy - laneCenterPx(idx), Math.PI / 2, type)
     }
   }
 
@@ -1484,38 +1547,141 @@ export function drawTrafficSignals(
     return 'red'
   }
 
-  // N arm signal — at stop line, east kerb side, vertical head
-  const nHH = isArrow ? 44 : 28
-  const nPx = cx + nEdge + off + 9
-  const nPy = cy - STOP_PX - nHH
-  drawPole(cx + nEdge, cy - STOP_PX, nPx, nPy + nHH)
-  _signalHead(ctx, nPx, nPy, nMain, nRight, elapsed, isArrow)
+  const getLaneColor = (sigType: string, mainState: string, rightState: string): string => {
+    const LIT: Record<string, string> = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' }
+    if (sigType === 'right_arrow') {
+      return LIT[rightState] || '#ef4444'
+    }
+    return LIT[mainState] || '#ef4444'
+  }
+
+  const _drawLaneLight = (c: CanvasRenderingContext2D, lx: number, ly: number, color: string) => {
+    c.fillStyle = '#10151e'
+    c.beginPath(); c.arc(lx, ly, 5.5, 0, Math.PI * 2); c.fill()
+    c.strokeStyle = 'rgba(255,255,255,0.15)'
+    c.lineWidth = 0.8
+    c.stroke()
+    
+    c.fillStyle = color
+    c.beginPath(); c.arc(lx, ly, 3.5, 0, Math.PI * 2); c.fill()
+    
+    c.strokeStyle = color
+    c.globalAlpha = 0.35
+    c.lineWidth = 1.2
+    c.beginPath(); c.arc(lx, ly, 4.8, 0, Math.PI * 2); c.stroke()
+    c.globalAlpha = 1.0
+  }
+
+  const hasCustomSignals = laneRenderConfig?.lane_signals && Object.keys(laneRenderConfig.lane_signals).length > 0
+
+  // N arm signal
+  if (hasCustomSignals && laneRenderConfig?.lane_signals?.N) {
+    const poleX = cx + nEdge + off
+    const gantryY = cy - STOP_PX - 20
+    drawPole(cx + nEdge, cy - STOP_PX, poleX, gantryY)
+    ctx.strokeStyle = '#374151'
+    ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.moveTo(poleX, gantryY); ctx.lineTo(cx + MEDIAN_PX, gantryY); ctx.stroke()
+    for (let idx = 0; idx < lanes.N; idx++) {
+      const sigType = laneRenderConfig?.lane_signals?.N?.[idx] ?? 'standard'
+      if (sigType === 'none') continue
+      const lx = cx + laneCenterPx(idx)
+      ctx.strokeStyle = '#374151'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(lx, gantryY); ctx.lineTo(lx, gantryY + 3); ctx.stroke()
+      const activeColor = getLaneColor(sigType, nMain, nRight)
+      _drawLaneLight(ctx, lx, gantryY + 9, activeColor)
+    }
+  } else {
+    const nHH = isArrow ? 44 : 28
+    const nPx = cx + nEdge + off + 9
+    const nPy = cy - STOP_PX - nHH
+    drawPole(cx + nEdge, cy - STOP_PX, nPx, nPy + nHH)
+    _signalHead(ctx, nPx, nPy, nMain, nRight, elapsed, isArrow)
+  }
   _drawArmInfo(ctx, 'NORTH', nCount, cx, 22, getArmColorState(nMain, nRight))
 
-  // S arm signal — at stop line, west kerb side, vertical head
+  // S arm signal
   if (!isTJunction) {
-    const sHH = isArrow ? 44 : 28
-    const sPx = cx - sEdge - off - 9
-    const sPy = cy + STOP_PX + sHH
-    drawPole(cx - sEdge, cy + STOP_PX, sPx, sPy - sHH)
-    _signalHead(ctx, sPx, sPy, sMain, sRight, elapsed, isArrow)
+    if (hasCustomSignals && laneRenderConfig?.lane_signals?.S) {
+      const poleX = cx - sEdge - off
+      const gantryY = cy + STOP_PX + 20
+      drawPole(cx - sEdge, cy + STOP_PX, poleX, gantryY)
+      ctx.strokeStyle = '#374151'
+      ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.moveTo(poleX, gantryY); ctx.lineTo(cx - MEDIAN_PX, gantryY); ctx.stroke()
+      for (let idx = 0; idx < lanes.S; idx++) {
+        const sigType = laneRenderConfig?.lane_signals?.S?.[idx] ?? 'standard'
+        if (sigType === 'none') continue
+        const lx = cx - laneCenterPx(idx)
+        ctx.strokeStyle = '#374151'
+        ctx.lineWidth = 1
+        ctx.beginPath(); ctx.moveTo(lx, gantryY); ctx.lineTo(lx, gantryY - 3); ctx.stroke()
+        const activeColor = getLaneColor(sigType, sMain, sRight)
+        _drawLaneLight(ctx, lx, gantryY - 9, activeColor)
+      }
+    } else {
+      const sHH = isArrow ? 44 : 28
+      const sPx = cx - sEdge - off - 9
+      const sPy = cy + STOP_PX + sHH
+      drawPole(cx - sEdge, cy + STOP_PX, sPx, sPy - sHH)
+      _signalHead(ctx, sPx, sPy, sMain, sRight, elapsed, isArrow)
+    }
     _drawArmInfo(ctx, 'SOUTH', sCount, cx, cfg.height - 16, getArmColorState(sMain, sRight))
   }
 
-  // E arm signal — at stop line, south kerb side, horizontal head
-  const eHW = isArrow ? 44 : 28
-  const ePx = cx + STOP_PX + eHW
-  const ePy = cy + eEdge + off + 9
-  drawPole(cx + STOP_PX, cy + eEdge, ePx - eHW, ePy)
-  _signalHeadH(ctx, ePx, ePy, eMain, eRight, elapsed, isArrow)
+  // E arm signal
+  if (hasCustomSignals && laneRenderConfig?.lane_signals?.E) {
+    const poleY = cy + eEdge + off
+    const gantryX = cx + STOP_PX + 20
+    drawPole(cx + STOP_PX, cy + eEdge, gantryX, poleY)
+    ctx.strokeStyle = '#374151'
+    ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.moveTo(gantryX, poleY); ctx.lineTo(gantryX, cy + MEDIAN_PX); ctx.stroke()
+    for (let idx = 0; idx < lanes.E; idx++) {
+      const sigType = laneRenderConfig?.lane_signals?.E?.[idx] ?? 'standard'
+      if (sigType === 'none') continue
+      const ly = cy + laneCenterPx(idx)
+      ctx.strokeStyle = '#374151'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(gantryX, ly); ctx.lineTo(gantryX - 3, ly); ctx.stroke()
+      const activeColor = getLaneColor(sigType, eMain, eRight)
+      _drawLaneLight(ctx, gantryX - 9, ly, activeColor)
+    }
+  } else {
+    const eHW = isArrow ? 44 : 28
+    const ePx = cx + STOP_PX + eHW
+    const ePy = cy + eEdge + off + 9
+    drawPole(cx + STOP_PX, cy + eEdge, ePx - eHW, ePy)
+    _signalHeadH(ctx, ePx, ePy, eMain, eRight, elapsed, isArrow)
+  }
   _drawArmInfo(ctx, 'EAST', eCount, cfg.width - 58, cy, getArmColorState(eMain, eRight))
 
-  // W arm signal — at stop line, north kerb side, horizontal head
-  const wHW = isArrow ? 44 : 28
-  const wPx = cx - STOP_PX - wHW
-  const wPy = cy - wEdge - off - 9
-  drawPole(cx - STOP_PX, cy - wEdge, wPx + wHW, wPy)
-  _signalHeadH(ctx, wPx, wPy, wMain, wRight, elapsed, isArrow)
+  // W arm signal
+  if (hasCustomSignals && laneRenderConfig?.lane_signals?.W) {
+    const poleY = cy - wEdge - off
+    const gantryX = cx - STOP_PX - 20
+    drawPole(cx - STOP_PX, cy - wEdge, gantryX, poleY)
+    ctx.strokeStyle = '#374151'
+    ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.moveTo(gantryX, poleY); ctx.lineTo(gantryX, cy - MEDIAN_PX); ctx.stroke()
+    for (let idx = 0; idx < lanes.W; idx++) {
+      const sigType = laneRenderConfig?.lane_signals?.W?.[idx] ?? 'standard'
+      if (sigType === 'none') continue
+      const ly = cy - laneCenterPx(idx)
+      ctx.strokeStyle = '#374151'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(gantryX, ly); ctx.lineTo(gantryX + 3, ly); ctx.stroke()
+      const activeColor = getLaneColor(sigType, wMain, wRight)
+      _drawLaneLight(ctx, gantryX + 9, ly, activeColor)
+    }
+  } else {
+    const wHW = isArrow ? 44 : 28
+    const wPx = cx - STOP_PX - wHW
+    const wPy = cy - wEdge - off - 9
+    drawPole(cx - STOP_PX, cy - wEdge, wPx + wHW, wPy)
+    _signalHeadH(ctx, wPx, wPy, wMain, wRight, elapsed, isArrow)
+  }
   _drawArmInfo(ctx, 'WEST', wCount, 58, cy, getArmColorState(wMain, wRight))
 }
 

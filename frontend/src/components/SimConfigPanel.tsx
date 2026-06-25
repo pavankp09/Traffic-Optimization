@@ -1727,7 +1727,7 @@ export default function SimConfigPanel({ onUpdateSim, initialSection }: { onUpda
       total_vph: 900,
       traffic_pattern: 'uniform',
       simulation_duration_s: 1800,
-      sim_speed_multiplier: 20,
+      sim_speed_multiplier: 5,
     }
     const baseAdverse: Partial<AdverseConfig> = {}
 

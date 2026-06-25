@@ -890,13 +890,27 @@ class PPOTrainer:
                 logger.warning("Failed to backup old model: %s", e)
 
         self._model.save(path)
+
+        if path == os.path.join(algo_dir, "latest.zip"):
+            from datetime import datetime
+            import shutil
+            new_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_backup_path = os.path.join(backup_dir, f"latest_{new_timestamp}.zip")
+            try:
+                shutil.copy2(path, new_backup_path)
+                logger.info("Saved copy of latest model to backup: %s", new_backup_path)
+            except Exception as e:
+                logger.warning("Failed to save timestamped copy of latest model: %s", e)
+
         return path
 
     def load_model(self, path: str) -> None:
         """Load a previously saved SB3 model from path."""
         if self._env is None:
             self._env = make_env(self.sim_config, self.adverse_config)
-        self._model = PPO.load(path, env=self._env, device=get_torch_device())
+        from backend.rl.device import cuda_lock
+        with cuda_lock:
+            self._model = PPO.load(path, env=self._env, device=get_torch_device())
 
     def predict(self, obs: np.ndarray) -> int:
         """

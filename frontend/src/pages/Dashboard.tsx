@@ -288,6 +288,14 @@ export default function Dashboard() {
             </Link>
           ))}
           <div className="w-px h-4 bg-white/10 mx-1" />
+          <button
+            id="dashboard-road-optimizer-btn"
+            onClick={() => window.open('/optimizer', '_blank')}
+            className="text-[11px] text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-md hover:bg-emerald-500/[0.06] border border-emerald-500/20 hover:border-emerald-500/35 transition-colors font-semibold"
+          >
+            Road Optimizer
+          </button>
+          <div className="w-px h-4 bg-white/10 mx-1" />
           <QuickDemoButton />
         </div>
       </header>
@@ -734,20 +742,21 @@ export default function Dashboard() {
           {/* Analytics row — only shown when not training */}
           {!isTraining && (
             <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between focus:outline-none group"
+              <div
+                className="w-full flex items-center justify-between group select-none cursor-pointer"
                 onClick={() => setIsAnalyticsCollapsed(!isAnalyticsCollapsed)}
               >
                 <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
                   <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
                   Live Optimization Analytics
-                  <HelpPopover text="### Real-Time Analytics\nTelemetrical charts detailing signal optimization improvements:\n- **Before vs After**: Live wait time comparisons (Baseline vs Active Agent).\n- **Queue Heatmap**: Spatial density representing backlog build-up per arm (North, South, East, West).\n- **Phase Timeline**: Chronological track of phase intervals executed by the controller." position="right" />
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <HelpPopover text="### Real-Time Analytics\nTelemetrical charts detailing signal optimization improvements:\n- **Before vs After**: Live wait time comparisons (Baseline vs Active Agent).\n- **Queue Heatmap**: Spatial density representing backlog build-up per arm (North, South, East, West).\n- **Phase Timeline**: Chronological track of phase intervals executed by the controller." position="right" />
+                  </span>
                 </h3>
-                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] text-slate-600 font-mono group-hover:text-slate-400 transition-colors">
                   {isAnalyticsCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
                 </span>
-              </button>
+              </div>
 
               {!isAnalyticsCollapsed && (
                 <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-3 gap-4 animate-fadeIn">
@@ -768,20 +777,21 @@ export default function Dashboard() {
           {/* How the AI learns — only shown when training */}
           {isTraining && (
             <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between focus:outline-none group"
+              <div
+                className="w-full flex items-center justify-between group select-none cursor-pointer"
                 onClick={() => setIsLearningCollapsed(!isLearningCollapsed)}
               >
                 <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
                   <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
                   How the AI Learns
-                  <HelpPopover text={getRlExplainerHelp()} position="right" />
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <HelpPopover text={getRlExplainerHelp()} position="right" />
+                  </span>
                 </h3>
-                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] text-slate-600 font-mono group-hover:text-slate-400 transition-colors">
                   {isLearningCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
                 </span>
-              </button>
+              </div>
 
               {!isLearningCollapsed && (
                 <div className="mt-4 border-t border-white/[0.05] pt-4 space-y-3 animate-fadeIn">
@@ -794,20 +804,21 @@ export default function Dashboard() {
           {/* Training + Insights — only shown when training */}
           {isTraining && (
             <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between focus:outline-none group"
+              <div
+                className="w-full flex items-center justify-between group select-none cursor-pointer"
                 onClick={() => setIsTrainingCollapsed(!isTrainingCollapsed)}
               >
                 <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
                   <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
                   Training Progress &amp; Insights
-                  <HelpPopover text="### Neural Net Training Progress\nStreams real-time episodes and strategy milestones:\n- **Value Chart**: Renders training reward scores over episodes. A value flattening toward zero represents convergence.\n- **Milestone Insights**: Highlight events where the agent beats baseline rules or learns specific priorities." position="right" />
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <HelpPopover text="### Neural Net Training Progress\nStreams real-time episodes and strategy milestones:\n- **Value Chart**: Renders training reward scores over episodes. A value flattening toward zero represents convergence.\n- **Milestone Insights**: Highlight events where the agent beats baseline rules or learns specific priorities." position="right" />
+                  </span>
                 </h3>
-                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] text-slate-600 font-mono group-hover:text-slate-400 transition-colors">
                   {isTrainingCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
                 </span>
-              </button>
+              </div>
 
               {!isTrainingCollapsed && (
                 <div className="mt-4 border-t border-white/[0.05] pt-4 grid grid-cols-2 gap-4 animate-fadeIn">
@@ -833,20 +844,21 @@ export default function Dashboard() {
           {/* Economic projector — only shown when not training */}
           {!isTraining && (
             <div className="bg-[#0b0f17] rounded-2xl border border-white/[0.06] p-4 transition-all duration-300 shadow-[0_2px_16px_rgba(0,0,0,0.35)] animate-fadeIn">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between focus:outline-none group"
+              <div
+                className="w-full flex items-center justify-between group select-none cursor-pointer"
                 onClick={() => setIsEconomicCollapsed(!isEconomicCollapsed)}
               >
                 <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-300 uppercase tracking-widest">
                   <span className="w-1 h-3 rounded-full bg-[#8fb8ce]/60 inline-block" />
                   Economic Impact Projections
-                  <HelpPopover text="### Blended Fleet Economic Impact\nDynamic projector calculating environmental and economic savings:\n- **Fuel Saved**: Blended fleet idle fuel reductions ($0.7$ liters/hour rate).\n- **CO2 Avoided**: $2.31$ kg per liter reduction factor.\n- **Financial Gains**: Sum of time-value wages ($\mathbb{INR}\ 150$/hour) and fuel savings ($\mathbb{INR}\ 105$/liter)." position="right" />
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <HelpPopover text="### Blended Fleet Economic Impact\nDynamic projector calculating environmental and economic savings:\n- **Fuel Saved**: Blended fleet idle fuel reductions ($0.7$ liters/hour rate).\n- **CO2 Avoided**: $2.31$ kg per liter reduction factor.\n- **Financial Gains**: Sum of time-value wages ($\mathbb{INR}\ 150$/hour) and fuel savings ($\mathbb{INR}\ 105$/liter)." position="right" />
+                  </span>
                 </h3>
-                <span className="text-[10px] text-slate-600 font-mono select-none group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] text-slate-600 font-mono group-hover:text-slate-400 transition-colors">
                   {isEconomicCollapsed ? 'EXPAND ↓' : 'COLLAPSE ↑'}
                 </span>
-              </button>
+              </div>
 
               {!isEconomicCollapsed && (
                 <div className="mt-4 border-t border-white/[0.05] pt-3 animate-fadeIn">
