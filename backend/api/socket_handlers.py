@@ -56,6 +56,20 @@ def set_session_state(session_id: str, **kwargs) -> None:
     _session_states[session_id].update(kwargs)
 
 
+def _safe_int(v, default: int) -> int:
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
+def _safe_float(v, default: float) -> float:
+    try:
+        return float(v)
+    except Exception:
+        return default
+
+
 def get_runtime_snapshot(session_id: str) -> dict | None:
     """Return live runtime telemetry for a simulation session if available."""
     return _runtime_snapshots.get(session_id)
@@ -2231,6 +2245,13 @@ def _warmup_imports_and_models():
         }
         for key, (algo_name, loader) in algo_map.items():
             disk_path = f"models/{algo_name}/latest.zip"
+            if not os.path.exists(disk_path):
+                import glob
+                matches = glob.glob(f"models/{algo_name}/latest*.zip")
+                if matches:
+                    matches.sort()
+                    disk_path = matches[-1]
+
             if os.path.exists(disk_path):
                 try:
                     from backend.rl.device import cuda_lock
@@ -2272,12 +2293,26 @@ def _load_rl_policy(model_key: str):
         algo_map = {"rl1": "PPO", "rl2": "DQN", "rl3": "SAC", "rl4": "A2C", "custom": "PPO"}
         algo_name = algo_map.get(model_key, "PPO")
         disk_path = f"models/{algo_name}/latest.zip"
+        if not os.path.exists(disk_path):
+            import glob
+            matches = glob.glob(f"models/{algo_name}/latest*.zip")
+            if matches:
+                matches.sort()
+                disk_path = matches[-1]
+
         if os.path.exists(disk_path):
             model_path = disk_path
             _trained_model_paths[model_key] = disk_path
             loader_name = algo_name
         else:
             ppo_path = "models/PPO/latest.zip"
+            if not os.path.exists(ppo_path):
+                import glob
+                matches = glob.glob("models/PPO/latest*.zip")
+                if matches:
+                    matches.sort()
+                    ppo_path = matches[-1]
+
             if os.path.exists(ppo_path):
                 model_path = ppo_path
                 _trained_model_paths[model_key] = ppo_path
@@ -2416,17 +2451,7 @@ def _run_mock_sim(sio, session_id: str) -> None:
     session = store.get_session(session_id)
     state_cfg = (_session_states.get(session_id, {}) or {}).get("raw_sim_config", {}) or {}
 
-    def _safe_int(v, default: int) -> int:
-        try:
-            return int(v)
-        except Exception:
-            return default
 
-    def _safe_float(v, default: float) -> float:
-        try:
-            return float(v)
-        except Exception:
-            return default
 
     mix_keys = {
         "pct_car": "car",

@@ -163,10 +163,22 @@ def _load_pretrained_model(algo_key: str):
     }
     algo_name = algo_map.get(algo_key, "PPO")
     model_path = f"models/{algo_name}/latest.zip"
+    if not os.path.exists(model_path):
+        import glob
+        matches = glob.glob(f"models/{algo_name}/latest*.zip")
+        if matches:
+            matches.sort()
+            model_path = matches[-1]
     
     loader_name = algo_name
     if not os.path.exists(model_path):
         model_path = "models/PPO/latest.zip"
+        if not os.path.exists(model_path):
+            import glob
+            matches = glob.glob("models/PPO/latest*.zip")
+            if matches:
+                matches.sort()
+                model_path = matches[-1]
         loader_name = "PPO"
         if not os.path.exists(model_path):
             logger.warning("No pre-trained model weights found for %s or PPO fallback.", algo_key)
