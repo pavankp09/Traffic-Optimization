@@ -28,6 +28,14 @@ interface AnalyzerStatus {
   type_dist: Record<string, number>
 }
 
+interface PhaseMetricItem {
+  phase_id: number
+  vehicle_type: string
+  passed_count: number
+  duration_seconds?: number
+  simulation_id: string
+}
+
 interface ReportPayload {
   total_exited: number
   avg_wait_sec: number
@@ -36,6 +44,13 @@ interface ReportPayload {
   arm_avg_queue: Record<Arm, number>
   recommendations: string[]
   signal_waste_phases: Array<{ t: number; arm: string }>
+  phase_metrics?: PhaseMetricItem[]
+  phase_timeline?: Array<{
+    sim_time: number
+    phase_id: number
+    duration: number
+    vehicle_counts: Record<string, number>
+  }>
 }
 
 interface CalcPayload {
@@ -97,6 +112,15 @@ const DEMO_REPORT: ReportPayload = {
   signal_waste_phases: [
     { t: 42, arm: 'EW' },
     { t: 88, arm: 'NS' },
+  ],
+  phase_metrics: [
+    { phase_id: 0, vehicle_type: 'car', passed_count: 320, simulation_id: 'demo' },
+    { phase_id: 0, vehicle_type: 'two_wheeler', passed_count: 140, simulation_id: 'demo' },
+    { phase_id: 0, vehicle_type: 'truck', passed_count: 30, simulation_id: 'demo' },
+    { phase_id: 2, vehicle_type: 'car', passed_count: 280, simulation_id: 'demo' },
+    { phase_id: 2, vehicle_type: 'two_wheeler', passed_count: 190, simulation_id: 'demo' },
+    { phase_id: 2, vehicle_type: 'tsrtc_bus', passed_count: 50, simulation_id: 'demo' },
+    { phase_id: 4, vehicle_type: 'car', passed_count: 10, simulation_id: 'demo' }
   ],
 }
 
@@ -416,7 +440,7 @@ export default function Analyzer() {
             ))}
           </div>
 
-          <h4 className="text-xs uppercase tracking-wide text-gray-500 pt-2">Signal Waste Events</h4>
+          <h4 className="text-xs uppercase tracking-wide text-gray-500 pt-2 font-semibold">Signal Waste Events</h4>
           <div className="text-xs text-gray-400">
             {report.signal_waste_phases.length === 0 ? (
               <span>No major waste events detected.</span>
@@ -430,6 +454,139 @@ export default function Analyzer() {
               </div>
             )}
           </div>
+
+          <h4 className="text-xs uppercase tracking-wide text-gray-500 pt-2 font-semibold">Phase-wise Vehicle Crossings</h4>
+          {!report.phase_metrics || report.phase_metrics.length === 0 ? (
+            <div className="text-xs text-gray-500 italic py-1">No phase-wise crossing data recorded for this run.</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto border border-gray-700/60 rounded-xl bg-gray-900/50 mt-1 max-h-60 overflow-y-auto">
+                <table className="w-full text-left border-collapse text-[11px] font-mono">
+                  <thead>
+                    <tr className="border-b border-gray-700 bg-gray-950 text-gray-400 font-bold uppercase tracking-wider">
+                      <th className="px-4 py-2">Signal Phase</th>
+                      <th className="px-4 py-2">Vehicle Type</th>
+                      <th className="px-4 py-2 text-right">Time Active</th>
+                      <th className="px-4 py-2 text-right">Flow Rate</th>
+                      <th className="px-4 py-2 text-right">Count Passed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800 text-gray-300">
+                    {report.phase_metrics.map((pm, idx) => {
+                      const phaseNames: Record<number, string> = {
+                        0: 'Phase 0 (N-S Green)',
+                        1: 'Phase 1 (N-S Yellow)',
+                        2: 'Phase 2 (E-W Green)',
+                        3: 'Phase 3 (E-W Yellow)',
+                        4: 'Phase 4 (All Red)',
+                      }
+                      const phaseName = phaseNames[pm.phase_id] || `Phase ${pm.phase_id}`
+                      const typeLabels: Record<string, string> = {
+                        car: 'Car', two_wheeler: 'Bike', ev_scooter: 'EV Scooter',
+                        auto_rickshaw: 'Auto', e_rickshaw: 'E-Rick', cab: 'Cab',
+                        delivery_bike: 'Del. Bike', tsrtc_bus: 'Bus', school_bus: 'Sch. Bus', truck: 'Truck',
+                      }
+                      const vehName = typeLabels[pm.vehicle_type] || pm.vehicle_type
+                      const dur = pm.duration_seconds || 0
+                      const flowRate = dur > 0 ? (pm.passed_count / dur) * 60 : 0
+                      return (
+                        <tr key={idx} className="hover:bg-gray-800/40">
+                          <td className="px-4 py-1.5">{phaseName}</td>
+                          <td className="px-4 py-1.5">{vehName}</td>
+                          <td className="px-4 py-1.5 text-right text-gray-500">{dur > 0 ? `${Math.round(dur)}s` : '-'}</td>
+                          <td className="px-4 py-1.5 text-right text-slate-400">{dur > 0 ? `${flowRate.toFixed(1)}/min` : '-'}</td>
+                          <td className="px-4 py-1.5 text-right font-bold text-cyan-300">{pm.passed_count}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Final Overview Metrics Grid */}
+              {(() => {
+                const totalPassed = report.phase_metrics!.reduce((acc, curr) => acc + curr.passed_count, 0)
+                const uniquePhaseDurations: Record<number, number> = {}
+                report.phase_metrics!.forEach(pm => {
+                  if (pm.duration_seconds !== undefined) {
+                    uniquePhaseDurations[pm.phase_id] = pm.duration_seconds
+                  }
+                })
+                const totalDuration = Object.values(uniquePhaseDurations).reduce((acc, curr) => acc + curr, 0)
+                const activePhasesCount = Object.keys(uniquePhaseDurations).length
+                const avgPhaseDuration = activePhasesCount > 0 ? totalDuration / activePhasesCount : 0
+                const overallFlowRate = totalDuration > 0 ? (totalPassed / totalDuration) * 60 : 0
+                
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                    <div className="bg-gray-900/40 border border-gray-800/60 p-3 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Total Passed</span>
+                      <span className="text-[14px] font-bold text-slate-200 mt-1">{totalPassed} vehicles</span>
+                    </div>
+                    <div className="bg-gray-900/40 border border-gray-800/60 p-3 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Total Green Time</span>
+                      <span className="text-[14px] font-bold text-slate-200 mt-1">{Math.round(totalDuration)}s</span>
+                    </div>
+                    <div className="bg-gray-900/40 border border-gray-800/60 p-3 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Avg Phase Duration</span>
+                      <span className="text-[14px] font-bold text-slate-200 mt-1">{avgPhaseDuration.toFixed(1)}s</span>
+                    </div>
+                    <div className="bg-gray-900/40 border border-gray-800/60 p-3 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Overall Flow Rate</span>
+                      <span className="text-[14px] font-bold text-cyan-400 mt-1">{overallFlowRate.toFixed(1)} / min</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Detailed Phase Transition Timeline */}
+              <h4 className="text-xs uppercase tracking-wide text-gray-500 pt-4 font-semibold">Phase Transition Log (Timeline)</h4>
+              {!report.phase_timeline || report.phase_timeline.length === 0 ? (
+                <div className="text-xs text-gray-500 italic py-1">No transition log available for this run.</div>
+              ) : (
+                <div className="overflow-x-auto border border-gray-700/60 rounded-xl bg-gray-900/50 mt-1 max-h-60 overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-[11px] font-mono">
+                    <thead>
+                      <tr className="border-b border-gray-700 bg-gray-950 text-gray-400 font-bold uppercase tracking-wider">
+                        <th className="px-4 py-2">Sim Time</th>
+                        <th className="px-4 py-2">Signal Phase</th>
+                        <th className="px-4 py-2 text-right">Active Duration</th>
+                        <th className="px-4 py-2 text-right">Vehicles Crossed During Phase</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800 text-gray-300">
+                      {report.phase_timeline.map((evt, idx) => {
+                        const phaseNames: Record<number, string> = {
+                          0: 'Phase 0 (N-S Green)',
+                          1: 'Phase 1 (N-S Yellow)',
+                          2: 'Phase 2 (E-W Green)',
+                          3: 'Phase 3 (E-W Yellow)',
+                          4: 'Phase 4 (All Red)',
+                        }
+                        const phaseName = phaseNames[evt.phase_id] || `Phase ${evt.phase_id}`
+                        const typeLabels: Record<string, string> = {
+                          car: 'Car', two_wheeler: 'Bike', ev_scooter: 'EV Scooter',
+                          auto_rickshaw: 'Auto', e_rickshaw: 'E-Rick', cab: 'Cab',
+                          delivery_bike: 'Del. Bike', tsrtc_bus: 'Bus', school_bus: 'Sch. Bus', truck: 'Truck',
+                        }
+                        const crossings = Object.entries(evt.vehicle_counts || {})
+                          .map(([t, c]) => `${typeLabels[t] || t}: ${c}`)
+                          .join(', ') || 'None'
+                        return (
+                          <tr key={idx} className="hover:bg-gray-800/40">
+                            <td className="px-4 py-1.5 text-gray-500">{Math.round(evt.sim_time)}s</td>
+                            <td className="px-4 py-1.5 font-bold">{phaseName}</td>
+                            <td className="px-4 py-1.5 text-right text-slate-400">{Math.round(evt.duration)}s</td>
+                            <td className="px-4 py-1.5 text-right text-slate-300">{crossings}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="app-panel p-4 space-y-3">

@@ -2,7 +2,8 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from backend.db.models import Base, TrainingSession, Episode, MetricRecord, InsightCard, init_db
+from backend.db.models import Base, TrainingSession, Episode, MetricRecord, InsightCard, SimulationPhaseMetric, init_db
+
 
 
 @pytest.fixture
@@ -99,3 +100,24 @@ def test_init_db_creates_tables():
     assert "training_sessions" in table_names
     assert "episodes" in table_names
     assert "metric_records" in table_names
+    assert "simulation_phase_metrics" in table_names
+
+
+def test_simulation_phase_metric(db_session):
+    sess = TrainingSession(sim_config={}, adverse_config={}, baseline_type="fixed_time")
+    db_session.add(sess)
+    db_session.flush()
+
+    pm = SimulationPhaseMetric(
+        session_id=sess.id,
+        simulation_id="sim-test-123",
+        phase_id=0,
+        vehicle_type="car",
+        passed_count=15,
+    )
+    db_session.add(pm)
+    db_session.commit()
+
+    assert pm.id is not None
+    assert pm.passed_count == 15
+

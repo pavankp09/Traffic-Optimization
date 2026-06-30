@@ -545,15 +545,15 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
 
   // Duration Choice logic
   const durationSec = activeConfig.simulation_duration_s ?? 3600
-  const computedChoice = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
+  const computedChoice = durationSec === 600 ? '10' : durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
 
-  const [durationChoice, setDurationChoiceState] = useState<'30' | '60' | '90' | 'custom'>(computedChoice)
+  const [durationChoice, setDurationChoiceState] = useState<'10' | '30' | '60' | '90' | 'custom'>(computedChoice)
   const [customDurationMin, setCustomDurationMinState] = useState<number>(() => Math.round(durationSec / 60))
 
   useEffect(() => {
     if (durationChoice === 'custom') {
       if (durationSec !== customDurationMin * 60) {
-        const computed = durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
+        const computed = durationSec === 600 ? '10' : durationSec === 1800 ? '30' : durationSec === 3600 ? '60' : durationSec === 5400 ? '90' : 'custom'
         setDurationChoiceState(computed)
         setCustomDurationMinState(Math.round(durationSec / 60))
       }
@@ -563,10 +563,11 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
     }
   }, [durationSec])
 
-  const setDurationChoice = (choice: '30' | '60' | '90' | 'custom') => {
+  const setDurationChoice = (choice: '10' | '30' | '60' | '90' | 'custom') => {
     if (isSyncActive) return
     setDurationChoiceState(choice)
-    if (choice === '30') updateSimConfig({ simulation_duration_s: 1800 })
+    if (choice === '10') updateSimConfig({ simulation_duration_s: 600 })
+    else if (choice === '30') updateSimConfig({ simulation_duration_s: 1800 })
     else if (choice === '60') updateSimConfig({ simulation_duration_s: 3600 })
     else if (choice === '90') updateSimConfig({ simulation_duration_s: 5400 })
     else if (choice === 'custom') {
@@ -1034,6 +1035,7 @@ function SectionJ({ isBaseline }: { isBaseline: boolean }) {
           </div>
           <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5">
             {[
+              { id: '10', label: '10 min' },
               { id: '30', label: '30 min' },
               { id: '60', label: '60 min' },
               { id: '90', label: '90 min' },

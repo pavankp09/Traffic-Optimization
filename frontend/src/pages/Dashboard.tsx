@@ -269,12 +269,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Nav links */}
         <div className="flex items-center gap-1">
           {[
             { to: '/', label: 'Landing Page' },
             { to: '/simulations', label: 'Simulations', target: '_blank' },
-            { to: '/analyzer', label: 'Analyzer', target: '_blank' },
             { to: '/report', label: 'Report', target: '_blank' },
           ].map(({ to, label, target }) => (
             <Link

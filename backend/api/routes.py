@@ -1021,6 +1021,9 @@ def _build_report_payload(store, session_id: str, session_row: dict, runtime: di
         if ns == 0 or ew == 0:
             waste_events.append({"t": point.get("t"), "arm": "NS" if ew > ns else "EW"})
 
+    phase_metrics = store.get_latest_simulation_phase_metrics(session_id)
+    phase_timeline = store.get_latest_simulation_timeline(session_id)
+
     return {
         "session_id": session_id,
         "location": session_row.get("notes") or session_id,
@@ -1031,6 +1034,8 @@ def _build_report_payload(store, session_id: str, session_row: dict, runtime: di
         "arm_avg_queue": queue,
         "recommendations": recommendations,
         "signal_waste_phases": waste_events,
+        "phase_metrics": phase_metrics,
+        "phase_timeline": phase_timeline,
     }
 
 

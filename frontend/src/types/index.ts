@@ -43,6 +43,14 @@ export interface SimAggStats {
   instant_tput_vph: number
   tick_ms: number
   fps: number
+  phase_metrics?: Record<string, Record<string, number>>
+  phase_durations?: Record<string, number>
+  phase_timeline?: Array<{
+    sim_time: number
+    phase_id: number
+    duration: number
+    vehicle_counts: Record<string, number>
+  }>
 }
 
 export interface SimFrame {

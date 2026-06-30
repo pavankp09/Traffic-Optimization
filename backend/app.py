@@ -23,17 +23,8 @@ try:
 except ImportError:
     pass
 
-# Dynamic alias for numpy._core to core for SB3/Pickle compatibility
-# between environments running different NumPy versions (1.x vs 2.x).
-try:
-    import numpy as np
-    if not hasattr(np, "_core"):
-        import numpy.core as core
-        sys.modules['numpy._core'] = core
-        import numpy.core.numeric as numeric
-        sys.modules['numpy._core.numeric'] = numeric
-except ImportError:
-    pass
+# Import NumPy and Stable-Baselines3 compatibility patches
+import backend.rl.numpy_compat
 
 from flask import Flask
 from flask_socketio import SocketIO

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSimulationStore } from '../store/simulationStore'
 import { useConfigStore } from '../store/configStore'
 
@@ -153,11 +153,12 @@ function StatCell({ label, value, sub, color, align = 'left', bordered = false }
 export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
   const selectedModelSingle = useSimulationStore(s => s.selectedModelSingle)
   const activeModelKey = modelKey ?? selectedModelSingle
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'phases'>('telemetry')
 
   const viewMode = useSimulationStore(s => s.viewMode)
   const isRunning = useSimulationStore(s => viewMode === 'split' ? s.splitIsRunning : s.isRunning)
   const globalSimTimeS = useSimulationStore(s => viewMode === 'split' ? s.splitSimTimeS : s.simTimeS)
-  const lastMetrics = useSimulationStore(s => 
+  const lastMetrics = useSimulationStore(s =>
     viewMode === 'split' ? s.splitLastSimulationMetrics[activeModelKey] : s.lastSimulationMetrics[activeModelKey]
   )
   const { simConfig } = useConfigStore()
@@ -277,7 +278,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
             : null
 
   return (
-    <div className="w-[560px] h-[560px] bg-[#0b0f18] border border-white/[0.08] rounded-2xl flex flex-col gap-0 select-none overflow-hidden">
+    <div className="w-[560px] h-[570px] bg-[#0b0f18] border border-white/[0.08] rounded-2xl flex flex-col gap-0 select-none overflow-hidden">
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] bg-[#0d1220] flex-shrink-0">
@@ -311,7 +312,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
           </p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 h-full">
 
           {/* Completed run banner — subtle strip shown after sim ends */}
           {isCompleted && (
@@ -323,19 +324,22 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
             </div>
           )}
 
-          <div className="flex-1 flex gap-4 p-4 min-h-0 bg-[#0b0f18]">
+          <div className="flex-1 flex gap-4 p-4 min-h-0 bg-[#0b0f18] h-full">
 
             {/* Left Column: w-[230px] */}
-            <div className="w-[230px] flex flex-col gap-4 min-h-0">
+            <div className="w-[230px] flex flex-col gap-3 self-stretch h-full min-h-0">
               {/* Compass (Top) */}
-              <div className="h-[210px] flex items-center justify-center relative bg-white/[0.01] border border-white/[0.03] rounded-2xl flex-shrink-0">
-                <Compass queues={queues} phase={phase} total={total} stopped={stopped} size={185} />
+              <div className="h-[215px] flex items-center justify-center relative bg-white/[0.01] border border-white/[0.03] rounded-2xl flex-shrink-0">
+                <Compass queues={queues} phase={phase} total={total} stopped={stopped} size={165} />
               </div>
 
+              {/* Spacer to align Live Stats to the bottom */}
+              {/* <div className="flex-1" /> */}
+
               {/* Live Stats (Bottom) */}
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-shrink-0 flex flex-col">
                 <SecLabel>Live Stats</SecLabel>
-                <div className="grid grid-cols-2 gap-1.5 mt-1">
+                <div className="grid grid-cols-2 gap-1.5 mt-1 pb-1">
                   <StatCell label="Canvas" sub="on screen" value={onCanvas.toLocaleString()} bordered />
                   <StatCell label="Queue" sub="total" value={inQueue.toLocaleString()} bordered />
                   <StatCell label="Inst Wait" sub="5m window" value={fmtWait(instantWait)} color={waitCol(instantWait)} bordered />
@@ -352,119 +356,265 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
 
             {/* Right Column: flex-1 */}
             <div className="flex-1 flex flex-col gap-2.5 min-h-0">
-              {/* Queue depths */}
-              <div className="flex-shrink-0">
-                <SecLabel>Queue Depths</SecLabel>
-                <div className="space-y-1.5">
-                  {(['N', 'S', 'E', 'W'] as const).map(arm => {
-                    const c = queues[arm]
-                    const pct2 = (c / maxQ) * 100
-                    return (
-                      <div key={arm} className="flex items-center gap-2">
-                        <span className="w-3 text-[9px] font-bold font-mono text-right flex-shrink-0"
-                          style={{ color: ARM_HUE[arm] }}>{arm}</span>
-                        <div className="flex-1 h-1.5 bg-white/[0.07] rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${pct2}%`, backgroundColor: ARM_HUE[arm], opacity: c > 0 ? 1 : 0 }} />
+
+              {/* Tab Selector */}
+              <div className="flex bg-white/[0.03] border border-white/[0.06] p-0.5 rounded-lg flex-shrink-0">
+                <button
+                  onClick={() => setActiveTab('telemetry')}
+                  className={`flex-1 py-1 text-[9px] font-mono uppercase tracking-wider font-bold rounded-md transition-all ${activeTab === 'telemetry'
+                    ? 'bg-[#7ec8e3]/10 text-[#7ec8e3] border border-[#7ec8e3]/20'
+                    : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                    }`}
+                >
+                  Telemetry
+                </button>
+                <button
+                  onClick={() => setActiveTab('phases')}
+                  className={`flex-1 py-1 text-[9px] font-mono uppercase tracking-wider font-bold rounded-md transition-all ${activeTab === 'phases'
+                    ? 'bg-[#7ec8e3]/10 text-[#7ec8e3] border border-[#7ec8e3]/20'
+                    : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                    }`}
+                >
+                  Phase Metrics
+                </button>
+              </div>
+
+              {activeTab === 'telemetry' ? (
+                <>
+                  <div className="flex-1 flex flex-col gap-2.5 min-h-0 overflow-y-auto pr-1">
+                    {/* Queue depths */}
+                    <div className="flex-shrink-0">
+                      <SecLabel>Queue Depths</SecLabel>
+                      <div className="space-y-1.5">
+                        {(['N', 'S', 'E', 'W'] as const).map(arm => {
+                          const c = queues[arm]
+                          const pct2 = (c / maxQ) * 100
+                          return (
+                            <div key={arm} className="flex items-center gap-2">
+                              <span className="w-3 text-[9px] font-bold font-mono text-right flex-shrink-0"
+                                style={{ color: ARM_HUE[arm] }}>{arm}</span>
+                              <div className="flex-1 h-1.5 bg-white/[0.07] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${pct2}%`, backgroundColor: ARM_HUE[arm], opacity: c > 0 ? 1 : 0 }} />
+                              </div>
+                              <span className="w-5 text-right text-[10px] font-bold font-mono tabular-nums flex-shrink-0"
+                                style={{ color: c > 0 ? ARM_HUE[arm] : '#374151' }}>{c}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Wait by approach */}
+                    <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
+                      <SecLabel>Wait by Approach</SecLabel>
+                      <div className="space-y-1.5">
+                        {waitByArm.map(({ arm, avg, cnt }) => (
+                          <div key={arm} className="flex items-center gap-2">
+                            <span className="w-8 text-[9px] font-mono font-semibold flex-shrink-0"
+                              style={{ color: ARM_FULL[arm] ? ARM_HUE[arm] : '#94a3b8' }}>{ARM_FULL[arm]}</span>
+                            <div className="flex-1 h-1 bg-white/[0.07] rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-400"
+                                style={{ width: `${avg > 0 ? Math.min(100, (avg / 90) * 100) : 0}%`, backgroundColor: waitCol(avg), opacity: 0.9 }} />
+                            </div>
+                            <span className="w-10 text-right text-[9px] font-bold font-mono tabular-nums flex-shrink-0"
+                              style={{ color: waitCol(avg) }}>{fmtWait(avg)}</span>
+                            <span className="w-3 text-right text-[8px] font-mono text-slate-600 tabular-nums flex-shrink-0">{cnt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Wait / Vehicle Type */}
+                    <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
+                      <SecLabel>Wait / Vehicle Type</SecLabel>
+                      {waitByType.length === 0 ? (
+                        <p className="text-[9px] text-slate-700 font-mono py-1">No vehicles yet</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          {waitByType.map(e => (
+                            <div key={e.k} className="flex items-center justify-between gap-1">
+                              <span className="text-[8.5px] font-mono text-slate-400 truncate">{e.lbl}</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-[9px] font-bold font-mono tabular-nums"
+                                  style={{ color: waitCol(e.avg) }}>{fmtWait(e.avg)}</span>
+                                <span className="text-[7.5px] font-mono text-slate-600">·{e.cnt}</span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <span className="w-5 text-right text-[10px] font-bold font-mono tabular-nums flex-shrink-0"
-                          style={{ color: c > 0 ? ARM_HUE[arm] : '#374151' }}>{c}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Signal Phase (Bottom) */}
+                  <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
+                    <div className="flex flex-col">
+                      <SecLabel>Signal Phase</SecLabel>
+                      <div className="flex gap-4 items-center justify-between -mt-1.5">
+                        {/* Active Signal Stats Card */}
+                        <div className="flex-1 bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl flex items-center justify-between h-[52px]">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[7.5px] font-mono uppercase tracking-widest text-slate-400 font-semibold leading-none">Active Phase</span>
+                            <span className="text-[12px] font-bold text-slate-200 mt-1 leading-none">
+                              {phase === 0 ? 'N–S Green' : phase === 1 ? 'N–S Yellow' : phase === 2 ? 'E–W Green' : phase === 3 ? 'E–W Yellow' : 'All Red'}
+                            </span>
+                          </div>
+                          <div className="text-right flex flex-col gap-0.5">
+                            <span className="text-[7.5px] font-mono uppercase tracking-widest text-slate-400 leading-none">Remaining</span>
+                            <span className="text-[13px] font-bold font-mono text-[#facc15] mt-1 leading-none">
+                              {activeFrame?.signals?.[0]?.remaining_s?.toFixed(0) ?? '—'}s
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Signal Phase Actuator Dots */}
+                        <div className="grid grid-cols-4 gap-1 w-[120px] flex-shrink-0">
+                          {(['N', 'S', 'E', 'W'] as const).map(arm => {
+                            const state = sig(arm, phase)
+                            return (
+                              <div key={arm} className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-lg py-1 border border-white/[0.05]">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-offset-0"
+                                  style={{ backgroundColor: SIG_LIT[state], opacity: 0.9, outline: `1.5px solid ${SIG_LIT[state]}44`, outlineOffset: '1.5px' }} />
+                                <span className="text-[7.5px] font-mono font-bold mt-0.5 leading-none" style={{ color: ARM_HUE[arm] }}>{arm}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actuator Card */}
+                  <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
+                    <div className="bg-white/[0.02] border border-white/[0.04] py-1.5 px-3 rounded-lg flex items-center justify-between">
+                      <span className="text-[7.5px] font-mono uppercase tracking-wider text-slate-400 font-bold leading-none">Actuator</span>
+                      <div className="flex items-center gap-2.5 font-mono leading-none">
+                        <span className="text-[13px] font-extrabold text-slate-200">{fps.toFixed(1)} FPS</span>
+                        <span className="text-slate-700 text-[10px]">|</span>
+                        <span className="text-[11px] font-bold text-slate-400">tick: {tickMs.toFixed(0)}ms</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0 pr-1">
+                  <SecLabel>Vehicles Passed per Phase</SecLabel>
+                  {(() => {
+                    const pm = activeFrame?.stats?.phase_metrics || {}
+                    const pd = activeFrame?.stats?.phase_durations || {}
+                    const allPhases = [0, 1, 2, 3, 4]
+
+                    const phaseNames: Record<number, string> = {
+                      0: 'Phase 0 (N-S Green)',
+                      1: 'Phase 1 (N-S Yellow)',
+                      2: 'Phase 2 (E-W Green)',
+                      3: 'Phase 3 (E-W Yellow)',
+                      4: 'Phase 4 (All Red)',
+                    }
+
+                    const rows: { phaseId: number; type: string; count: number; duration: number }[] = []
+                    allPhases.forEach(p => {
+                      const counts = pm[String(p)] || pm[p] || {}
+                      const dur = pd[String(p)] || pd[p] || 0
+                      Object.entries(counts).forEach(([t, c]) => {
+                        rows.push({ phaseId: p, type: t, count: c, duration: dur })
+                      })
+                    })
+
+                    return (
+                      <div className="flex-1 flex flex-col gap-4 min-h-0">
+                        <div className="flex-shrink-0">
+                          <SecLabel>Cumulative Passed</SecLabel>
+                          {rows.length === 0 ? (
+                            <p className="text-[9px] text-slate-500 font-mono py-4 text-center italic border border-white/[0.05] rounded-xl bg-white/[0.01]">
+                              No vehicles have exited yet
+                            </p>
+                          ) : (
+                            <div className="border border-white/[0.05] rounded-xl bg-white/[0.01] overflow-hidden max-h-[140px] overflow-y-auto">
+                              <table className="w-full text-left border-collapse text-[9px] font-mono">
+                                <thead>
+                                  <tr className="border-b border-white/[0.06] bg-white/[0.02] text-slate-400 font-bold uppercase tracking-wider sticky top-0">
+                                    <th className="px-3 py-1.5 bg-[#0d1220]">Phase</th>
+                                    <th className="px-3 py-1.5 bg-[#0d1220]">Type</th>
+                                    <th className="px-3 py-1.5 bg-[#0d1220] text-right">Time</th>
+                                    <th className="px-3 py-1.5 bg-[#0d1220] text-right">Passed</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.03] text-slate-300">
+                                  {rows.map((row, idx) => {
+                                    const phaseLabel = phaseNames[row.phaseId] || `Phase ${row.phaseId}`
+                                    const typeLabel = TYPE_LABELS[row.type] || row.type
+                                    return (
+                                      <tr key={idx} className="hover:bg-white/[0.02]">
+                                        <td className="px-3 py-1">{phaseLabel}</td>
+                                        <td className="px-3 py-1 text-slate-400">{typeLabel}</td>
+                                        <td className="px-3 py-1 text-right text-slate-500">{Math.round(row.duration)}s</td>
+                                        <td className="px-3 py-1 text-right font-bold text-[#7ec8e3]">{row.count}</td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 flex flex-col min-h-0">
+                          <SecLabel>Phase Transition Log</SecLabel>
+                          {(() => {
+                            const timeline = activeFrame?.stats?.phase_timeline || []
+                            if (timeline.length === 0) {
+                              return (
+                                <p className="text-[9px] text-slate-500 font-mono py-3 text-center italic border border-white/[0.05] rounded-xl bg-white/[0.01]">
+                                  No transitions recorded yet
+                                </p>
+                              )
+                            }
+                            return (
+                              <div className="border border-white/[0.05] rounded-xl bg-white/[0.01] overflow-hidden flex-1 overflow-y-auto">
+                                <table className="w-full text-left border-collapse text-[9px] font-mono">
+                                  <thead>
+                                    <tr className="border-b border-white/[0.06] bg-white/[0.02] text-slate-400 font-bold uppercase tracking-wider sticky top-0">
+                                      <th className="px-2.5 py-1 bg-[#0d1220]">Sim Time</th>
+                                      <th className="px-2.5 py-1 bg-[#0d1220]">Phase</th>
+                                      <th className="px-2.5 py-1 bg-[#0d1220] text-right">Dur</th>
+                                      <th className="px-2.5 py-1 bg-[#0d1220] text-right">Crossings</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-white/[0.03] text-slate-300">
+                                    {[...timeline].reverse().map((evt, idx) => {
+                                      const phaseNamesShort: Record<number, string> = {
+                                        0: 'P0 (N-S Green)',
+                                        1: 'P1 (N-S Yel)',
+                                        2: 'P2 (E-W Green)',
+                                        3: 'P3 (E-W Yel)',
+                                        4: 'P4 (All Red)',
+                                      }
+                                      const phaseLabel = phaseNamesShort[evt.phase_id] || `P${evt.phase_id}`
+                                      const crossings = Object.entries(evt.vehicle_counts || {})
+                                        .map(([t, c]) => `${TYPE_LABELS[t] || t}: ${c}`)
+                                        .join(', ') || '-'
+                                      return (
+                                        <tr key={idx} className="hover:bg-white/[0.02]">
+                                          <td className="px-2.5 py-1 text-slate-500">{Math.round(evt.sim_time)}s</td>
+                                          <td className="px-2.5 py-1 font-bold">{phaseLabel}</td>
+                                          <td className="px-2.5 py-1 text-right text-slate-400">{Math.round(evt.duration)}s</td>
+                                          <td className="px-2.5 py-1 text-right text-slate-400 truncate max-w-[125px]" title={crossings}>{crossings}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )
+                          })()}
+                        </div>
                       </div>
                     )
-                  })}
+                  })()}
                 </div>
-              </div>
-
-              {/* Wait by approach */}
-              <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
-                <SecLabel>Wait by Approach</SecLabel>
-                <div className="space-y-1.5">
-                  {waitByArm.map(({ arm, avg, cnt }) => (
-                    <div key={arm} className="flex items-center gap-2">
-                      <span className="w-8 text-[9px] font-mono font-semibold flex-shrink-0"
-                        style={{ color: ARM_FULL[arm] ? ARM_HUE[arm] : '#94a3b8' }}>{ARM_FULL[arm]}</span>
-                      <div className="flex-1 h-1 bg-white/[0.07] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-400"
-                          style={{ width: `${avg > 0 ? Math.min(100, (avg / 90) * 100) : 0}%`, backgroundColor: waitCol(avg), opacity: 0.9 }} />
-                      </div>
-                      <span className="w-10 text-right text-[9px] font-bold font-mono tabular-nums flex-shrink-0"
-                        style={{ color: waitCol(avg) }}>{fmtWait(avg)}</span>
-                      <span className="w-3 text-right text-[8px] font-mono text-slate-600 tabular-nums flex-shrink-0">{cnt}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Wait / Vehicle Type */}
-              <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
-                <SecLabel>Wait / Vehicle Type</SecLabel>
-                {waitByType.length === 0 ? (
-                  <p className="text-[9px] text-slate-700 font-mono py-1">No vehicles yet</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                    {waitByType.map(e => (
-                      <div key={e.k} className="flex items-center justify-between gap-1">
-                        <span className="text-[8.5px] font-mono text-slate-400 truncate">{e.lbl}</span>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="text-[9px] font-bold font-mono tabular-nums"
-                            style={{ color: waitCol(e.avg) }}>{fmtWait(e.avg)}</span>
-                          <span className="text-[7.5px] font-mono text-slate-600">·{e.cnt}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Signal Phase (Bottom) */}
-              <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
-                <div className="flex flex-col">
-                  <SecLabel>Signal Phase</SecLabel>
-                  <div className="flex gap-4 items-center justify-between -mt-1.5">
-                    {/* Active Signal Stats Card */}
-                    <div className="flex-1 bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl flex items-center justify-between h-[52px]">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[7.5px] font-mono uppercase tracking-widest text-slate-400 font-semibold leading-none">Active Phase</span>
-                        <span className="text-[12px] font-bold text-slate-200 mt-1 leading-none">
-                          {phase === 0 ? 'N–S Green' : phase === 1 ? 'N–S Yellow' : phase === 2 ? 'E–W Green' : phase === 3 ? 'E–W Yellow' : 'All Red'}
-                        </span>
-                      </div>
-                      <div className="text-right flex flex-col gap-0.5">
-                        <span className="text-[7.5px] font-mono uppercase tracking-widest text-slate-400 leading-none">Remaining</span>
-                        <span className="text-[13px] font-bold font-mono text-[#facc15] mt-1 leading-none">
-                          {activeFrame?.signals?.[0]?.remaining_s?.toFixed(0) ?? '—'}s
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Signal Phase Actuator Dots */}
-                    <div className="grid grid-cols-4 gap-1 w-[120px] flex-shrink-0">
-                      {(['N', 'S', 'E', 'W'] as const).map(arm => {
-                        const state = sig(arm, phase)
-                        return (
-                          <div key={arm} className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-lg py-1 border border-white/[0.05]">
-                            <span className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-offset-0"
-                              style={{ backgroundColor: SIG_LIT[state], opacity: 0.9, outline: `1.5px solid ${SIG_LIT[state]}44`, outlineOffset: '1.5px' }} />
-                            <span className="text-[7.5px] font-mono font-bold mt-0.5 leading-none" style={{ color: ARM_HUE[arm] }}>{arm}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actuator Card */}
-              <div className="flex-shrink-0 border-t border-white/[0.06] pt-1.5">
-                <div className="bg-white/[0.02] border border-white/[0.04] py-1.5 px-3 rounded-lg flex items-center justify-between">
-                  <span className="text-[7.5px] font-mono uppercase tracking-wider text-slate-400 font-bold leading-none">Actuator</span>
-                  <div className="flex items-center gap-2.5 font-mono leading-none">
-                    <span className="text-[13px] font-extrabold text-slate-200">{fps.toFixed(1)} FPS</span>
-                    <span className="text-slate-700 text-[10px]">|</span>
-                    <span className="text-[11px] font-bold text-slate-400">tick: {tickMs.toFixed(0)}ms</span>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
           </div>

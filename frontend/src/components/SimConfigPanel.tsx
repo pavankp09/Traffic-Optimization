@@ -843,7 +843,7 @@ function ScenarioStudioModal({
     pct_school_bus: 0,
     pct_truck: 5,
   })
-  const [durationChoice, setDurationChoice] = useState<'15' | '30' | '60' | '90' | 'custom'>('15')
+  const [durationChoice, setDurationChoice] = useState<'10' | '15' | '30' | '60' | '90' | 'custom'>('15')
   const [customDurationMin, setCustomDurationMin] = useState<number>(15)
   const [drivingBehavior, setDrivingBehavior] = useState<'safe' | 'medium' | 'aggressive' | 'very_aggressive'>('medium')
   const [canvasSize, setCanvasSize] = useState<'regular' | 'large'>('large')
@@ -878,10 +878,11 @@ function ScenarioStudioModal({
       pct_truck: simConfig.pct_truck ?? 5,
     })
     setDurationChoice(
-      simConfig.simulation_duration_s === 900 ? '15' :
-        simConfig.simulation_duration_s === 1800 ? '30' :
-          simConfig.simulation_duration_s === 3600 ? '60' :
-            simConfig.simulation_duration_s === 5400 ? '90' : 'custom'
+      simConfig.simulation_duration_s === 600 ? '10' :
+        simConfig.simulation_duration_s === 900 ? '15' :
+          simConfig.simulation_duration_s === 1800 ? '30' :
+            simConfig.simulation_duration_s === 3600 ? '60' :
+              simConfig.simulation_duration_s === 5400 ? '90' : 'custom'
     )
     setCustomDurationMin(Math.round((simConfig.simulation_duration_s ?? 900) / 60))
     setDrivingBehavior((simConfig.driver_behavior as any) || 'medium')
@@ -1382,6 +1383,7 @@ function ScenarioStudioModal({
                   </div>
                   <div className="flex bg-black/35 rounded-xl p-1 border border-white/[0.06] gap-1.5">
                     {[
+                      { id: '10', label: '10m' },
                       { id: '15', label: '15m' },
                       { id: '30', label: '30m' },
                       { id: '60', label: '60m' },

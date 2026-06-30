@@ -137,6 +137,7 @@ class SimulationRun(Base):
     avg_wait_s = Column(Float, nullable=True)
     throughput = Column(Integer, nullable=True)
     green_util_pct = Column(Float, nullable=True)
+    phase_timeline = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("TrainingSession", back_populates="simulation_runs")
@@ -161,6 +162,21 @@ class VehicleCrossing(Base):
 
     session = relationship("TrainingSession", back_populates="vehicle_crossings")
     simulation_run = relationship("SimulationRun", back_populates="vehicle_crossings")
+
+
+class SimulationPhaseMetric(Base):
+    __tablename__ = "simulation_phase_metrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("training_sessions.id"), nullable=False)
+    simulation_id = Column(String(50), ForeignKey("simulation_runs.simulation_id"), nullable=True)
+    phase_id = Column(Integer, nullable=False)
+    vehicle_type = Column(String(30), nullable=False)
+    passed_count = Column(Integer, default=0)
+    duration_seconds = Column(Float, default=0.0)
+
+    session = relationship("TrainingSession", backref="phase_metrics")
+    simulation_run = relationship("SimulationRun", backref="phase_metrics")
 
 
 class CustomPreset(Base):
@@ -208,6 +224,24 @@ def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
                 cursor.close()
 
     Base.metadata.create_all(engine)
+
+    # Automatically run safe schema migration to add duration_seconds if it's missing
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE simulation_phase_metrics ADD COLUMN duration_seconds FLOAT DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
+
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN phase_timeline JSON"))
+            conn.commit()
+    except Exception:
+        pass
+
 
     # In-place dynamic column migration for existing databases
     from sqlalchemy import text

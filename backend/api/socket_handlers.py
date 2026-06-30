@@ -11,6 +11,10 @@ import random
 import threading
 import time
 import numpy as np
+
+# Import NumPy and Stable-Baselines3 compatibility patches
+import backend.rl.numpy_compat
+
 from collections import deque
 
 logger = logging.getLogger(__name__)
@@ -1508,6 +1512,16 @@ class _SimWorld:
         self.pedestrians: list = []
         self._ped_spawn_debt: float = 0.0
         self._ped_spawn_ratio: float = 1.0 / 8.0
+        from collections import defaultdict
+        self.phase_vehicle_counts = defaultdict(lambda: defaultdict(int))
+        self.phase_durations = defaultdict(float)
+        self.phase_events = []
+        self.current_phase_event = {
+            "sim_time": 0.0,
+            "phase_id": self.phase,
+            "duration": 0.0,
+            "vehicle_counts": {}
+        }
 
     def add(self, v: _MockVehicle) -> None:
         self.vehicles.append(v)
@@ -1524,6 +1538,20 @@ class _SimWorld:
         return n
 
     def _decide_next(self) -> None:
+        if self.current_phase_event:
+            self.current_phase_event["duration"] = self.phase_elapsed
+            self.phase_events.append(self.current_phase_event)
+        
+        self._original_decide_next()
+        
+        self.current_phase_event = {
+            "sim_time": self.sim_clock,
+            "phase_id": self.phase,
+            "duration": 0.0,
+            "vehicle_counts": {}
+        }
+
+    def _original_decide_next(self) -> None:
         if self.replay_decisions is not None:
             idx = getattr(self, "replay_idx", 0)
             if idx < len(self.replay_decisions):
@@ -1626,6 +1654,7 @@ class _SimWorld:
     def step(self, dt: float) -> None:
         self.sim_clock += dt
         self.phase_elapsed += dt
+        self.phase_durations[self.phase] += dt
         # Early termination: end a green once it has run its minimum and the
         # served approach has emptied while the cross street is waiting.
         if (not self.fixed_time and self.replay_decisions is None and self.phase in (0, 2)
@@ -2027,6 +2056,10 @@ class _SimWorld:
                 self.total_wait_time += v.wait_time
                 self.exited_history.append((self.sim_clock, 1))
                 self.wait_history.append((self.sim_clock, v.wait_time))
+                self.phase_vehicle_counts[self.phase][v.type_id] += 1
+                if self.current_phase_event:
+                    counts = self.current_phase_event["vehicle_counts"]
+                    counts[v.type_id] = counts.get(v.type_id, 0) + 1
                 if getattr(self, "session_store", None) and getattr(self, "session_id", None):
                     crossing_time = self.sim_clock - getattr(v, "spawn_time", 0.0)
                     
@@ -2205,6 +2238,13 @@ def _compute_agg_stats(world, tk, sim_clock, backlog, queue_wait_accum,
 
     fps = (1000.0 / tick_ms) if tick_ms and tick_ms > 0 else 0.0
 
+    phase_metrics = {str(p): dict(v) for p, v in world.phase_vehicle_counts.items()}
+    phase_durations = {str(p): float(d) for p, d in world.phase_durations.items()}
+    live_timeline = list(world.phase_events)
+    if world.current_phase_event:
+        current_event = dict(world.current_phase_event)
+        current_event["duration"] = world.phase_elapsed
+        live_timeline.append(current_event)
     return {
         "on_canvas":        on_canvas,
         "in_queue":         on_canvas + int(round(backlog)),
@@ -2215,6 +2255,9 @@ def _compute_agg_stats(world, tk, sim_clock, backlog, queue_wait_accum,
         "instant_tput_vph": int(round(instant_tput)),
         "tick_ms":          round(tick_ms, 1) if tick_ms else 0.0,
         "fps":              round(fps, 1),
+        "phase_metrics":    phase_metrics,
+        "phase_durations":  phase_durations,
+        "phase_timeline":   live_timeline,
     }
 
 
@@ -2848,12 +2891,32 @@ def _run_mock_sim(sio, session_id: str) -> None:
                         final_green_util = round(100.0 * green_times.get(primary_key, 0.0) / sim_clock, 1)
                     final_green_util = max(0.0, min(100.0, final_green_util))
                     
+                    primary_world = _WORLDS.get(primary_key)
+                    phase_events = []
+                    if primary_world:
+                        if primary_world.current_phase_event:
+                            primary_world.current_phase_event["duration"] = primary_world.phase_elapsed
+                            primary_world.phase_events.append(primary_world.current_phase_event)
+                            primary_world.current_phase_event = None
+                        phase_events = primary_world.phase_events
+
                     store.update_simulation_run_metrics(
                         simulation_id=simulation_id,
                         avg_wait_s=final_avg_wait,
                         throughput=final_throughput,
-                        green_util_pct=final_green_util
+                        green_util_pct=final_green_util,
+                        phase_timeline=phase_events
                     )
+                    
+                    if primary_world:
+                        phase_vehicle_counts = {int(p): dict(v) for p, v in primary_world.phase_vehicle_counts.items()}
+                        phase_durations = {int(p): float(d) for p, d in primary_world.phase_durations.items()}
+                        store.save_simulation_phase_metrics(
+                            simulation_id=simulation_id,
+                            session_id=session_id,
+                            phase_vehicle_counts=phase_vehicle_counts,
+                            phase_durations=phase_durations,
+                        )
         except Exception as db_err:
             logger.warning("Failed to update final simulation metrics in DB: %s", db_err)
 

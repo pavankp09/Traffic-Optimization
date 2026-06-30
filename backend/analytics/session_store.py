@@ -25,6 +25,7 @@ from backend.db.models import (
     InsightCard,
     VehicleCrossing,
     SimulationRun,
+    SimulationPhaseMetric,
 )
 
 logger = logging.getLogger(__name__)
@@ -433,6 +434,7 @@ class SessionStore:
         avg_wait_s: float,
         throughput: int,
         green_util_pct: float,
+        phase_timeline: list | None = None,
     ) -> None:
         """Updates the final results / metrics of a simulation run."""
         try:
@@ -444,6 +446,8 @@ class SessionStore:
                 row.avg_wait_s = avg_wait_s
                 row.throughput = throughput
                 row.green_util_pct = green_util_pct
+                if phase_timeline is not None:
+                    row.phase_timeline = phase_timeline
                 session.commit()
                 logger.info("Updated simulation run %s metrics: wait=%s, tput=%s, util=%s", 
                             simulation_id, avg_wait_s, throughput, green_util_pct)
@@ -515,4 +519,103 @@ class SessionStore:
                 logger.debug("Saved vehicle crossing to DB for %s", vehicle_id)
         except Exception:
             logger.exception("Failed to save vehicle crossing record to SQL database")
+
+    def save_simulation_phase_metrics(
+        self,
+        simulation_id: str,
+        session_id: str,
+        phase_vehicle_counts: dict,
+        phase_durations: dict | None = None,
+    ) -> None:
+        """Saves phase-wise vehicle crossing counts and durations to the database."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    logger.warning("save_simulation_phase_metrics: TrainingSession not found for %s", session_id)
+                    return
+
+                # Clean up any existing phase metrics for this simulation_id to prevent duplicates
+                session.query(SimulationPhaseMetric).filter(
+                    SimulationPhaseMetric.simulation_id == simulation_id
+                ).delete()
+
+                if phase_durations is None:
+                    phase_durations = {}
+
+                for phase_id, type_counts in phase_vehicle_counts.items():
+                    dur = float(phase_durations.get(int(phase_id), phase_durations.get(str(phase_id), 0.0)))
+                    for vehicle_type, count in type_counts.items():
+                        row = SimulationPhaseMetric(
+                            session_id=ts_row.id,
+                            simulation_id=simulation_id,
+                            phase_id=int(phase_id),
+                            vehicle_type=vehicle_type,
+                            passed_count=count,
+                            duration_seconds=dur,
+                        )
+                        session.add(row)
+                session.commit()
+                logger.info("Saved phase-wise metrics for simulation %s", simulation_id)
+        except Exception:
+            logger.exception("Failed to save simulation phase-wise metrics to database")
+            raise
+
+    def get_latest_simulation_phase_metrics(self, session_id: str) -> list[dict]:
+        """Retrieves phase-wise vehicle crossing metrics for the latest simulation run of a session."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                
+                # Find the latest simulation run for this session
+                latest_run = (
+                    session.query(SimulationRun)
+                    .filter(SimulationRun.session_id == ts_row.id)
+                    .order_by(SimulationRun.created_at.desc())
+                    .first()
+                )
+                if not latest_run:
+                    return []
+
+                rows = (
+                    session.query(SimulationPhaseMetric)
+                    .filter(SimulationPhaseMetric.simulation_id == latest_run.simulation_id)
+                    .all()
+                )
+                return [
+                    {
+                        "phase_id": r.phase_id,
+                        "vehicle_type": r.vehicle_type,
+                        "passed_count": r.passed_count,
+                        "duration_seconds": r.duration_seconds or 0.0,
+                        "simulation_id": r.simulation_id,
+                    }
+                    for r in rows
+                ]
+        except Exception:
+            logger.exception("Failed to get latest simulation phase metrics for session %s", session_id)
+            return []
+
+    def get_latest_simulation_timeline(self, session_id: str) -> list[dict]:
+        """Retrieves the phase timeline log for the latest simulation run of a session."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                
+                latest_run = (
+                    session.query(SimulationRun)
+                    .filter(SimulationRun.session_id == ts_row.id)
+                    .order_by(SimulationRun.created_at.desc())
+                    .first()
+                )
+                if not latest_run or not latest_run.phase_timeline:
+                    return []
+                return latest_run.phase_timeline
+        except Exception:
+            logger.exception("Failed to retrieve phase timeline from database")
+            return []
 
