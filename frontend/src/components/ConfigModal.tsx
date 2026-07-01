@@ -16,8 +16,10 @@ const ALL_NAV_GROUPS = [
     sections: [
       { id: 'J', label: 'Scenario Packs', hint: 'City presets & custom builder', icon: '🗺️' },
       { id: 'L', label: 'Road Layout', hint: 'Configure intersection geometry', icon: '🛣️' },
+      { id: 'R', label: 'Lane Routing', hint: 'Lane configuration & turn distributions', icon: '↩️' },
     ],
   },
+
   {
     id: 'control',
     label: 'Control Logic',
@@ -1139,7 +1141,7 @@ const LAYOUT_OPTIONS = [
     category: 'Indian Style / Specialized',
     items: [
       { id: 'four_way_arrow', name: '4-Way Arrow Signals', emoji: '🔀', desc: 'Indian style arrow signal lights (straight, left, right).' },
-      { id: 'four_way_protected_right', name: '4-Way Protected Right', emoji: '🛡️', desc: 'Indian style junction with dedicated protected right phases.' },
+      { id: 'four_way_protected_right', name: '4-Way Protected Right', emoji: '🛡️', desc: 'Indian style junction with dedicated protected right phases.', disabled: true },
     ]
   },
   {
@@ -1153,13 +1155,14 @@ const LAYOUT_OPTIONS = [
   {
     category: 'Advanced / Custom',
     items: [
-      { id: 'custom', name: 'Custom Config (JSON)', emoji: '🛠️', desc: 'Direct JSON geometry definition for advanced designs.' }
+      { id: 'custom', name: 'Custom Config (JSON)', emoji: '🛠️', desc: 'Direct JSON geometry definition for advanced designs.', disabled: true }
     ]
   }
 ]
 
 function SectionL({ isBaseline }: { isBaseline: boolean }) {
   const { simConfig, updateSimConfig, tabConfigs } = useConfigStore()
+
 
   const baselineConfig = tabConfigs.baseline || simConfig
   const isSyncActive = !isBaseline && !!simConfig.same_as_baseline
@@ -1185,6 +1188,153 @@ function SectionL({ isBaseline }: { isBaseline: boolean }) {
       // Keep silent
     }
   }
+
+  return (
+    <div className="space-y-6 pb-4 animate-fadeIn">
+      {/* Grid of visual cards categorized */}
+      <div className="space-y-5">
+        {LAYOUT_OPTIONS.map((cat) => (
+          <div key={cat.category} className="space-y-3">
+            <h5 className="text-[10.5px] font-bold text-slate-500 uppercase tracking-widest font-mono pl-1">
+              {cat.category}
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {cat.items.map((opt) => {
+                const isActive = activeConfig.intersection_type === opt.id
+                const isDisabled = !!(opt as any).disabled
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={isSyncActive || isDisabled}
+                    onClick={() => !isDisabled && updateSimConfig({ intersection_type: opt.id as any })}
+                    className={`group rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden flex items-start gap-3.5 ${
+                      isDisabled
+                        ? 'border-white/[0.03] bg-[#0c0e14]/20 opacity-40 cursor-not-allowed select-none'
+                        : isActive
+                          ? 'border-[#8fb8ce]/40 bg-[#8fb8ce]/[0.06] shadow-[0_0_20px_rgba(143,184,206,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]'
+                          : isSyncActive
+                            ? 'border-white/[0.02] bg-[#0c0e14]/20 opacity-40 cursor-not-allowed select-none'
+                            : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-[#8fb8ce]/20 hover:bg-[#0c0e14]/80'
+                    }`}
+                  >
+                    <div className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center border transition-all flex-shrink-0 ${
+                      isDisabled
+                        ? 'bg-black/20 border-white/[0.03] text-slate-600'
+                        : isActive
+                          ? 'bg-[#8fb8ce]/20 border-[#8fb8ce]/30 text-white'
+                          : 'bg-black/30 border-white/[0.04] text-slate-500'
+                    }`}>
+                      {opt.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[12.5px] font-bold ${
+                          isDisabled ? 'text-slate-600' : isActive ? 'text-slate-100' : 'text-slate-300'
+                        }`}>
+                          {opt.name}
+                        </span>
+                        {isDisabled && (
+                          <span className="text-[8px] font-mono font-bold text-slate-600 bg-slate-800/60 px-1.5 py-0.5 rounded-full border border-slate-700/40 flex-shrink-0">
+                            DISABLED
+                          </span>
+                        )}
+                        {isActive && !isDisabled && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#8fb8ce] animate-pulse" />
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed line-clamp-2 font-medium">
+                        {opt.desc}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Custom JSON TEXTAREA if custom is selected */}
+      {activeConfig.intersection_type === 'custom' && (
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-3 animate-fadeIn">
+          <label className="text-[11.5px] text-slate-400 font-semibold block font-mono">Custom JSON Config</label>
+          <textarea
+            className="w-full bg-[#050508] border border-white/[0.06] rounded-xl p-3.5 text-[11px] text-slate-350 focus:outline-none focus:border-[#8fb8ce]/40 font-mono leading-relaxed shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.5)]"
+            rows={5}
+            value={customJsonText}
+            onChange={(e) => handleJsonChange(e.target.value)}
+            disabled={isSyncActive}
+          />
+          <p className="text-[9.5px] text-slate-500 font-sans">
+            Specify customized links, lanes, phase signals, and coordinates in standard simulator-compatible format.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SectionR({ isBaseline }: { isBaseline: boolean }) {
+  const { simConfig, updateSimConfig, tabConfigs } = useConfigStore()
+
+  const baselineConfig = tabConfigs.baseline || simConfig
+  const isSyncActive = !isBaseline && !!simConfig.same_as_baseline
+  const activeConfig = isSyncActive ? baselineConfig : simConfig
+
+  const getLaneDefaults = (laneIdx: number, totalLanes: number) => {
+    if (totalLanes === 3) {
+      if (laneIdx === 0) return { straight: 50, left: 0, right: 40, uturn: 10 }
+      if (laneIdx === 1) return { straight: 80, left: 0, right: 20, uturn: 0 }
+      return { straight: 40, left: 60, right: 0, uturn: 0 }
+    }
+    if (totalLanes === 2) {
+      if (laneIdx === 0) return { straight: 60, left: 0, right: 30, uturn: 10 }
+      return { straight: 50, left: 50, right: 0, uturn: 0 }
+    }
+    if (totalLanes === 1) {
+      return { straight: 60, left: 20, right: 15, uturn: 5 }
+    }
+    if (totalLanes === 4) {
+      if (laneIdx === 0) return { straight: 40, left: 0, right: 45, uturn: 15 }
+      if (laneIdx === 1) return { straight: 80, left: 0, right: 20, uturn: 0 }
+      if (laneIdx === 2) return { straight: 90, left: 10, right: 0, uturn: 0 }
+      return { straight: 30, left: 70, right: 0, uturn: 0 }
+    }
+    if (laneIdx === 0) return { straight: 30, left: 0, right: 50, uturn: 20 }
+    if (laneIdx === totalLanes - 1) return { straight: 20, left: 80, right: 0, uturn: 0 }
+    return { straight: 80, left: 10, right: 10, uturn: 0 }
+  }
+
+  const handleRatioChange = (arm: 'N' | 'S' | 'E' | 'W', laneIdx: number, direction: string, val: number) => {
+    if (isSyncActive) return
+    const currentRatios = activeConfig.lane_turn_ratios ? JSON.parse(JSON.stringify(activeConfig.lane_turn_ratios)) : {}
+    if (!currentRatios[arm]) {
+      currentRatios[arm] = []
+    }
+    const laneConfig = activeConfig.lane_config ?? {}
+    const nLanes = laneConfig[arm] ?? activeConfig.n_lanes ?? 3
+    while (currentRatios[arm].length <= laneIdx) {
+      const idx = currentRatios[arm].length
+      currentRatios[arm].push(getLaneDefaults(idx, nLanes))
+    }
+    currentRatios[arm][laneIdx][direction] = val
+    updateSimConfig({ lane_turn_ratios: currentRatios })
+  }
+
+  const handleArmRatioChange = (arm: 'N' | 'S' | 'E' | 'W', direction: string, val: number) => {
+    if (isSyncActive) return
+    const currentRatios = activeConfig.arm_turn_ratios ? JSON.parse(JSON.stringify(activeConfig.arm_turn_ratios)) : {}
+    if (!currentRatios[arm]) {
+      currentRatios[arm] = { straight: 60, left: 15, right: 20, uturn: 5 }
+    }
+    currentRatios[arm][direction] = val
+    updateSimConfig({ arm_turn_ratios: currentRatios })
+  }
+
+  const distMode = activeConfig.turn_distribution_mode ?? 'arm'
+  const [isModeOpen, setIsModeOpen] = useState(false)
+
 
   return (
     <div className="space-y-6 pb-4 animate-fadeIn">
@@ -1250,75 +1400,193 @@ function SectionL({ isBaseline }: { isBaseline: boolean }) {
         </p>
       </div>
 
-      {/* Grid of visual cards categorized */}
-      <div className="space-y-5">
-        {LAYOUT_OPTIONS.map((cat) => (
-          <div key={cat.category} className="space-y-3">
-            <h5 className="text-[10.5px] font-bold text-slate-500 uppercase tracking-widest font-mono pl-1">
-              {cat.category}
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {cat.items.map((opt) => {
-                const isActive = activeConfig.intersection_type === opt.id
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={isSyncActive}
-                    onClick={() => updateSimConfig({ intersection_type: opt.id as any })}
-                    className={`group rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden flex items-start gap-3.5 ${isActive
-                        ? 'border-[#8fb8ce]/40 bg-[#8fb8ce]/[0.06] shadow-[0_0_20px_rgba(143,184,206,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]'
-                        : isSyncActive
-                          ? 'border-white/[0.02] bg-[#0c0e14]/20 opacity-40 cursor-not-allowed select-none'
-                          : 'border-white/[0.04] bg-[#0c0e14]/50 hover:border-[#8fb8ce]/20 hover:bg-[#0c0e14]/80'
-                      }`}
-                  >
-                    <div className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center border transition-all flex-shrink-0 ${isActive
-                        ? 'bg-[#8fb8ce]/20 border-[#8fb8ce]/30 text-white'
-                        : 'bg-black/30 border-white/[0.04] text-slate-500'
-                      }`}>
-                      {opt.emoji}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[12.5px] font-bold ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>
-                          {opt.name}
-                        </span>
-                        {isActive && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#8fb8ce] animate-pulse" />
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed line-clamp-2 font-medium">
-                        {opt.desc}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
+      {/* Turn Distribution Settings Card */}
+      <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
+          <div className="flex items-center gap-2">
+            <span className="w-0.5 h-4 rounded-full bg-[#8fb8ce]/50 flex-shrink-0" />
+            <div>
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">Turn Distributions</h4>
+              <p className="text-[9.5px] text-slate-500 mt-0.5 font-sans">Choose and configure routing weights (straight, left, right, uturn).</p>
             </div>
           </div>
-        ))}
-      </div>
+          
+          <div className="flex items-center gap-2 relative">
+            <label className="text-[9.5px] font-mono font-bold text-slate-500 uppercase select-none">Mode:</label>
+            
+            {/* Custom styled select trigger */}
+            <button
+              type="button"
+              disabled={isSyncActive}
+              onClick={() => setIsModeOpen(!isModeOpen)}
+              className="flex items-center gap-1.5 bg-black/45 border border-white/[0.08] rounded px-2.5 py-1 text-[10.5px] font-bold font-mono text-slate-200 outline-none cursor-pointer hover:border-[#8fb8ce]/40 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span>{distMode === 'lane' ? 'Lane-Specific' : 'Arm-Specific'}</span>
+              <svg className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isModeOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
 
-      {/* Custom JSON TEXTAREA if custom is selected */}
-      {activeConfig.intersection_type === 'custom' && (
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 shadow-lg shadow-black/10 backdrop-blur-sm space-y-3 animate-fadeIn">
-          <label className="text-[11.5px] text-slate-400 font-semibold block font-mono">Custom JSON Config</label>
-          <textarea
-            className="w-full bg-[#050508] border border-white/[0.06] rounded-xl p-3.5 text-[11px] text-slate-350 focus:outline-none focus:border-[#8fb8ce]/40 font-mono leading-relaxed shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.5)]"
-            rows={5}
-            value={customJsonText}
-            onChange={(e) => handleJsonChange(e.target.value)}
-            disabled={isSyncActive}
-          />
-          <p className="text-[9.5px] text-slate-500 font-sans">
-            Specify customized links, lanes, phase signals, and coordinates in standard simulator-compatible format.
-          </p>
+            {/* Backdrop click away hook */}
+            {isModeOpen && (
+              <div 
+                className="fixed inset-0 z-40 cursor-default bg-transparent"
+                onClick={() => setIsModeOpen(false)}
+              />
+            )}
+
+            {/* Custom dropdown menu */}
+            {isModeOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-36 bg-[#08080a] border border-white/[0.1] rounded-lg shadow-2xl py-1 z-50 animate-fadeIn flex flex-col overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSimConfig({ turn_distribution_mode: 'lane' })
+                    setIsModeOpen(false)
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-[10.5px] font-mono font-bold transition-all border-b border-white/[0.02] ${
+                    distMode === 'lane' 
+                      ? 'bg-[#8fb8ce]/15 text-[#8fb8ce]' 
+                      : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
+                  }`}
+                >
+                  Lane-Specific
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSimConfig({ turn_distribution_mode: 'arm' })
+                    setIsModeOpen(false)
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-[10.5px] font-mono font-bold transition-all ${
+                    distMode === 'arm' 
+                      ? 'bg-[#8fb8ce]/15 text-[#8fb8ce]' 
+                      : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
+                  }`}
+                >
+                  Arm-Specific
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
-      )}
+
+        {distMode === 'lane' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(['N', 'S', 'E', 'W'] as const).map((arm) => {
+              const laneConfig = activeConfig.lane_config ?? {}
+              const nLanes = laneConfig[arm] ?? activeConfig.n_lanes ?? 3
+              const ratios = activeConfig.lane_turn_ratios ?? {}
+              const armRatios = ratios[arm] ?? []
+
+              return (
+                <div key={arm} className="space-y-3.5 rounded-xl border border-white/[0.03] bg-black/30 p-3.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-white/[0.03] pb-2">
+                    <span className="text-[11px] font-bold font-mono text-[#8fb8ce] uppercase tracking-wider">Arm {arm} ({nLanes} Lane{nLanes === 1 ? '' : 's'})</span>
+                  </div>
+
+                  <div className="space-y-4 divide-y divide-white/[0.03]">
+                    {Array.from({ length: nLanes }).map((_, laneIdx) => {
+                      const laneData = armRatios[laneIdx] || getLaneDefaults(laneIdx, nLanes)
+                      const straightVal = laneData.straight ?? 0
+                      const leftVal = laneData.left ?? 0
+                      const rightVal = laneData.right ?? 0
+                      const uturnVal = laneData.uturn ?? 0
+                      const midUturnVal = laneData.mid_uturn ?? 0
+                      const total = (straightVal + leftVal + rightVal + uturnVal + midUturnVal) || 1
+
+                      return (
+                        <div key={laneIdx} className={`pt-3 first:pt-0 space-y-2.5`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9.5px] font-bold text-slate-400 font-mono uppercase tracking-wider">
+                              Lane {laneIdx + 1} <span className="text-[8.5px] text-slate-500 font-normal lowercase tracking-normal font-sans">({laneIdx === 0 ? 'innermost' : laneIdx === nLanes - 1 ? 'outermost' : 'middle'})</span>
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {(['straight', 'left', 'right', 'uturn', 'mid_uturn'] as const).map((dir) => {
+                              const val = laneData[dir] ?? 0
+                              const pct = Math.round((val / total) * 100)
+                              return (
+                                <div key={dir} className="flex items-center justify-between gap-3 bg-white/[0.01] px-2 py-1 rounded border border-white/[0.02]">
+                                  <span className="w-20 text-[9px] font-mono uppercase text-slate-400 font-semibold truncate" title={dir === 'mid_uturn' ? 'Mid U-Turn' : dir}>
+                                    {dir === 'straight' ? 'Straight' : dir === 'left' ? 'Left' : dir === 'right' ? 'Right' : dir === 'uturn' ? 'U-Turn' : 'Mid U-Turn'}
+                                  </span>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={val}
+                                    disabled={isSyncActive}
+                                    onChange={(e) => handleRatioChange(arm, laneIdx, dir, Number(e.target.value))}
+                                    className="flex-1 h-1 bg-white/[0.04] rounded-lg appearance-none cursor-pointer accent-[#8fb8ce]"
+                                  />
+                                  <span className="w-8 text-right text-[9.5px] font-mono font-bold text-[#c5e3f0]">{pct}%</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(['N', 'S', 'E', 'W'] as const).map((arm) => {
+              const ratios = activeConfig.arm_turn_ratios ?? {}
+              const armData = ratios[arm] ?? { straight: 60, left: 15, right: 20, uturn: 5, mid_uturn: 0 }
+              const straightVal = armData.straight ?? 0
+              const leftVal = armData.left ?? 0
+              const rightVal = armData.right ?? 0
+              const uturnVal = armData.uturn ?? 0
+              const midUturnVal = armData.mid_uturn ?? 0
+              const total = (straightVal + leftVal + rightVal + uturnVal + midUturnVal) || 1
+
+              return (
+                <div key={arm} className="space-y-3.5 rounded-xl border border-white/[0.03] bg-black/30 p-3.5 flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-white/[0.03] pb-2">
+                    <span className="text-[11px] font-bold font-mono text-[#8fb8ce] uppercase tracking-wider">Arm {arm} (Arm-Level)</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(['straight', 'left', 'right', 'uturn', 'mid_uturn'] as const).map((dir) => {
+                      const val = armData[dir] ?? 0
+                      const pct = Math.round((val / total) * 100)
+                      return (
+                        <div key={dir} className="flex items-center justify-between gap-3 bg-white/[0.01] px-2 py-1 rounded border border-white/[0.02]">
+                          <span className="w-20 text-[9px] font-mono uppercase text-slate-400 font-semibold truncate" title={dir === 'mid_uturn' ? 'Mid U-Turn' : dir}>
+                            {dir === 'straight' ? 'Straight' : dir === 'left' ? 'Left' : dir === 'right' ? 'Right' : dir === 'uturn' ? 'U-Turn' : 'Mid U-Turn'}
+                          </span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={val}
+                            disabled={isSyncActive}
+                            onChange={(e) => handleArmRatioChange(arm, dir, Number(e.target.value))}
+                            className="flex-1 h-1 bg-white/[0.04] rounded-lg appearance-none cursor-pointer accent-[#8fb8ce]"
+                          />
+                          <span className="w-8 text-right text-[9.5px] font-mono font-bold text-[#c5e3f0]">{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
+
 
 // ─── Main ConfigModal ─────────────────────────────────────────────────────────
 interface ConfigModalProps {
@@ -1579,6 +1847,8 @@ export default function ConfigModal({ open, mode = 'simulation', onClose, onAppl
               {activeSection === 'I' && <SectionI adverseConfig={adverseConfig} updateAdverseConfig={updateAdverseConfig} />}
               {activeSection === 'J' && <SectionJ isBaseline={isBaselineView} />}
               {activeSection === 'L' && <SectionL isBaseline={isBaselineView} />}
+              {activeSection === 'R' && <SectionR isBaseline={isBaselineView} />}
+
             </div>
           </div>
 

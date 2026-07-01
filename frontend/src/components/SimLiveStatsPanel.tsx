@@ -37,19 +37,39 @@ function fmtWait(s: number) {
 function waitCol(s: number) {
   return s > 60 ? '#ff5252' : s > 25 ? '#ffca28' : s > 0.5 ? '#4ade80' : '#4b5563'
 }
-function sig(arm: string, phase: number): 'green' | 'yellow' | 'red' {
+function sig(arm: string, phase: number, isArrowJunction = false): 'green' | 'yellow' | 'red' {
+  if (isArrowJunction) {
+    if (phase === 0 || phase === 2) {
+      return (arm === 'N' || arm === 'S') ? 'green' : 'red'
+    }
+    if (phase === 1 || phase === 3) {
+      return (arm === 'N' || arm === 'S') ? 'yellow' : 'red'
+    }
+    if (phase === 4 || phase === 6) {
+      return (arm === 'E' || arm === 'W') ? 'green' : 'red'
+    }
+    if (phase === 5 || phase === 7) {
+      return (arm === 'E' || arm === 'W') ? 'yellow' : 'red'
+    }
+    return 'red'
+  }
   return ((phase === 0 && (arm === 'N' || arm === 'S')) || (phase === 2 && (arm === 'E' || arm === 'W')))
     ? 'green' : (phase === 1 || phase === 3) ? 'yellow' : 'red'
 }
 
 // ─── Compass ─────────────────────────────────────────────────────────────────
-function Compass({ queues, phase, total, stopped, size = 130 }: {
-  queues: Record<string, number>; phase: number; total: number; stopped: number; size?: number
+function Compass({ queues, phase, total, stopped, size = 130, isArrowJunction = false }: {
+  queues: Record<string, number>; phase: number; total: number; stopped: number; size?: number; isArrowJunction?: boolean
 }) {
   const S = 240, C = 120, RH = 22, ARM = C - RH - 10
   const MAX_Q = 14
   const qpx = (n: number) => Math.min(ARM - 4, (n / MAX_Q) * ARM)
-  const st = { N: sig('N', phase), S: sig('S', phase), E: sig('E', phase), W: sig('W', phase) }
+  const st = {
+    N: sig('N', phase, isArrowJunction),
+    S: sig('S', phase, isArrowJunction),
+    E: sig('E', phase, isArrowJunction),
+    W: sig('W', phase, isArrowJunction)
+  }
   const cong = total > 0 ? stopped / total : 0
   const cc = cong > 0.7 ? '#ff5252' : cong > 0.4 ? '#ffca28' : '#00e676'
 
@@ -162,6 +182,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
     viewMode === 'split' ? s.splitLastSimulationMetrics[activeModelKey] : s.lastSimulationMetrics[activeModelKey]
   )
   const { simConfig } = useConfigStore()
+  const isArrowJunction = simConfig.intersection_type === 'four_way_protected_right' || simConfig.intersection_type === 'four_way_arrow' || simConfig.intersection_type === 'four_way' || simConfig.intersection_type === '4way_cross'
 
   const activeFrame = useSimulationStore(s => {
     if (viewMode === 'split') {
@@ -281,7 +302,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
     <div className="w-[560px] h-[570px] bg-[#0b0f18] border border-white/[0.08] rounded-2xl flex flex-col gap-0 select-none overflow-hidden">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] bg-[#0d1220] flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.07] bg-[#0d1220] flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot}`} />
           <span className="text-[12px] font-semibold text-white tracking-tight">Live Telemetry</span>
@@ -330,7 +351,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
             <div className="w-[230px] flex flex-col gap-3 self-stretch h-full min-h-0">
               {/* Compass (Top) */}
               <div className="h-[215px] flex items-center justify-center relative bg-white/[0.01] border border-white/[0.03] rounded-2xl flex-shrink-0">
-                <Compass queues={queues} phase={phase} total={total} stopped={stopped} size={165} />
+                <Compass queues={queues} phase={phase} total={total} stopped={stopped} size={165} isArrowJunction={isArrowJunction} />
               </div>
 
               {/* Spacer to align Live Stats to the bottom */}
@@ -457,7 +478,23 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
                           <div className="flex flex-col gap-0.5">
                             <span className="text-[7.5px] font-mono uppercase tracking-widest text-slate-400 font-semibold leading-none">Active Phase</span>
                             <span className="text-[12px] font-bold text-slate-200 mt-1 leading-none">
-                              {phase === 0 ? 'N–S Green' : phase === 1 ? 'N–S Yellow' : phase === 2 ? 'E–W Green' : phase === 3 ? 'E–W Yellow' : 'All Red'}
+                              {isArrowJunction ? (
+                                phase === 0 ? 'N–S Straight Green' :
+                                phase === 1 ? 'N–S Straight Yellow' :
+                                phase === 2 ? 'N–S Right Green' :
+                                phase === 3 ? 'N–S Right Yellow' :
+                                phase === 4 ? 'E–W Straight Green' :
+                                phase === 5 ? 'E–W Straight Yellow' :
+                                phase === 6 ? 'E–W Right Green' :
+                                phase === 7 ? 'E–W Right Yellow' :
+                                'All Red'
+                              ) : (
+                                phase === 0 ? 'N–S Green' :
+                                phase === 1 ? 'N–S Yellow' :
+                                phase === 2 ? 'E–W Green' :
+                                phase === 3 ? 'E–W Yellow' :
+                                'All Red'
+                              )}
                             </span>
                           </div>
                           <div className="text-right flex flex-col gap-0.5">
@@ -471,7 +508,7 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
                         {/* Signal Phase Actuator Dots */}
                         <div className="grid grid-cols-4 gap-1 w-[120px] flex-shrink-0">
                           {(['N', 'S', 'E', 'W'] as const).map(arm => {
-                            const state = sig(arm, phase)
+                            const state = sig(arm, phase, isArrowJunction)
                             return (
                               <div key={arm} className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-lg py-1 border border-white/[0.05]">
                                 <span className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-offset-0"
@@ -503,9 +540,19 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
                   {(() => {
                     const pm = activeFrame?.stats?.phase_metrics || {}
                     const pd = activeFrame?.stats?.phase_durations || {}
-                    const allPhases = [0, 1, 2, 3, 4]
+                    const allPhases = isArrowJunction ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : [0, 1, 2, 3, 4]
 
-                    const phaseNames: Record<number, string> = {
+                    const phaseNames: Record<number, string> = isArrowJunction ? {
+                      0: 'Phase 0 (N-S Str Green)',
+                      1: 'Phase 1 (N-S Str Yellow)',
+                      2: 'Phase 2 (N-S Rgt Green)',
+                      3: 'Phase 3 (N-S Rgt Yellow)',
+                      4: 'Phase 4 (E-W Str Green)',
+                      5: 'Phase 5 (E-W Str Yellow)',
+                      6: 'Phase 6 (E-W Rgt Green)',
+                      7: 'Phase 7 (E-W Rgt Yellow)',
+                      8: 'Phase 8 (All Red)',
+                    } : {
                       0: 'Phase 0 (N-S Green)',
                       1: 'Phase 1 (N-S Yellow)',
                       2: 'Phase 2 (E-W Green)',
@@ -584,10 +631,20 @@ export default function SimLiveStatsPanel({ modelKey }: { modelKey?: string }) {
                                   </thead>
                                   <tbody className="divide-y divide-white/[0.03] text-slate-300">
                                     {[...timeline].reverse().map((evt, idx) => {
-                                      const phaseNamesShort: Record<number, string> = {
-                                        0: 'P0 (N-S Green)',
+                                      const phaseNamesShort: Record<number, string> = isArrowJunction ? {
+                                        0: 'P0 (N-S Str)',
+                                        1: 'P1 (N-S Str Y)',
+                                        2: 'P2 (N-S Rgt)',
+                                        3: 'P3 (N-S Rgt Y)',
+                                        4: 'P4 (E-W Str)',
+                                        5: 'P5 (E-W Str Y)',
+                                        6: 'P6 (E-W Rgt)',
+                                        7: 'P7 (E-W Rgt Y)',
+                                        8: 'P8 (All Red)',
+                                      } : {
+                                        0: 'P0 (N-S Grn)',
                                         1: 'P1 (N-S Yel)',
-                                        2: 'P2 (E-W Green)',
+                                        2: 'P2 (E-W Grn)',
                                         3: 'P3 (E-W Yel)',
                                         4: 'P4 (All Red)',
                                       }

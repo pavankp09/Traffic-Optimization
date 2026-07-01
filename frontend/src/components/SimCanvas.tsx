@@ -269,6 +269,9 @@ export default function SimCanvas({
   const nLanes = simConfigOverride?.n_lanes ?? simConfigOverride?.lanes_per_arm ?? storeNLanes
   const laneConfig = simConfigOverride?.lane_config ?? storeLaneConfig
   const uTurnPhase = (simConfigOverride as any)?.u_turn_phase ?? storeUTurnPhase ?? false
+  // Custom lane markings from Road Optimizer custom_design scenarios
+  const laneDirections = (simConfigOverride as any)?.lane_directions ?? undefined
+  const laneSignals = (simConfigOverride as any)?.lane_signals ?? undefined
 
   const frame = frameOverride !== undefined ? frameOverride : currentFrame
 
@@ -396,13 +399,13 @@ export default function SimCanvas({
 
     clearCanvas(ctx, cfg)
     drawGrid(ctx, cfg)
-    drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig, u_turn_phase: uTurnPhase })
+    drawIntersection(ctx, cfg, intersectionType, { n_lanes: nLanes, lane_config: laneConfig, u_turn_phase: uTurnPhase, lane_directions: laneDirections, lane_signals: laneSignals })
 
     const f = displayFrame ?? frame
     if (f) {
       const vehiclesToDraw = f.vehicles
 
-      drawTrafficSignals(ctx, f.signals, cfg, vehiclesToDraw, intersectionType, { n_lanes: nLanes, lane_config: laneConfig })
+      drawTrafficSignals(ctx, f.signals, cfg, vehiclesToDraw, intersectionType, { n_lanes: nLanes, lane_config: laneConfig, lane_directions: laneDirections, lane_signals: laneSignals })
       vehiclesToDraw.forEach((v) => drawVehicle(ctx, v, cfg))
 
       // Highlight selected vehicle on canvas (at interpolated position)

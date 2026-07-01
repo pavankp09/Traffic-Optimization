@@ -222,7 +222,7 @@ PRESETS_A: dict[str, Preset] = {
 PRESETS_B: dict[str, Preset] = {
     "hyd_hitec_city": Preset(
         id="hyd_hitec_city",
-        name="HITEC City IT Corridor",
+        name="HITEC City IT Corridor Test",
         group="B_location",
         description="HITEC City tech hub — high EV and cab ratio, sharp peaks at 9-11 AM and 6-9 PM",
         sim_config={
@@ -242,13 +242,19 @@ PRESETS_B: dict[str, Preset] = {
             "vehicle_mix": "custom",
             "osm_lat": 17.4474,
             "osm_lon": 78.3762,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["hitec", "it_corridor", "ev", "cabs", "hyderabad"],
     ),
     "hyd_old_city": Preset(
         id="hyd_old_city",
-        name="Old City — Charminar Area",
+        name="Old City — Charminar Area Test",
         group="B_location",
         description="Charminar heritage area — very high auto-rickshaw and two-wheeler density, frequent pedestrian conflicts",
         sim_config={
@@ -268,6 +274,12 @@ PRESETS_B: dict[str, Preset] = {
             "pedestrian_crossings": "all_arms",
             "osm_lat": 17.3616,
             "osm_lon": 78.4747,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.30, "left": 0.0, "right": 0.55, "uturn": 0.15}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.30, "left": 0.0, "right": 0.55, "uturn": 0.15}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.30, "left": 0.0, "right": 0.55, "uturn": 0.15}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.30, "left": 0.0, "right": 0.55, "uturn": 0.15}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={
             **BASE_ADV,
@@ -279,7 +291,7 @@ PRESETS_B: dict[str, Preset] = {
     ),
     "hyd_sr_nagar": Preset(
         id="hyd_sr_nagar",
-        name="SR Nagar — Residential School Zone",
+        name="SR Nagar — Residential School Zone Test",
         group="B_location",
         description="SR Nagar residential area — school zone morning and evening spikes, moderate volume",
         sim_config={
@@ -299,6 +311,12 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "morning_peak",
             "osm_lat": 17.4436,
             "osm_lon": 78.4428,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.50, "left": 0.0, "right": 0.40, "uturn": 0.10}, {"straight": 0.90, "left": 0.0, "right": 0.10, "uturn": 0.0}, {"straight": 0.50, "left": 0.50, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.50, "left": 0.0, "right": 0.40, "uturn": 0.10}, {"straight": 0.90, "left": 0.0, "right": 0.10, "uturn": 0.0}, {"straight": 0.50, "left": 0.50, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.50, "left": 0.0, "right": 0.40, "uturn": 0.10}, {"straight": 0.90, "left": 0.0, "right": 0.10, "uturn": 0.0}, {"straight": 0.50, "left": 0.50, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.50, "left": 0.0, "right": 0.40, "uturn": 0.10}, {"straight": 0.90, "left": 0.0, "right": 0.10, "uturn": 0.0}, {"straight": 0.50, "left": 0.50, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={
             **BASE_ADV,
@@ -309,7 +327,7 @@ PRESETS_B: dict[str, Preset] = {
     ),
     "hyd_lb_nagar": Preset(
         id="hyd_lb_nagar",
-        name="LB Nagar — Outer Ring Road",
+        name="LB Nagar — Outer Ring Road Test",
         group="B_location",
         description="LB Nagar ORR junction — heavy trucks, high speeds, arterial road characteristics",
         sim_config={
@@ -331,6 +349,12 @@ PRESETS_B: dict[str, Preset] = {
             "overloaded_vehicles": "5pct",
             "osm_lat": 17.3470,
             "osm_lon": 78.5561,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.75, "left": 0.0, "right": 0.20, "uturn": 0.05}, {"straight": 0.95, "left": 0.0, "right": 0.05, "uturn": 0.0}, {"straight": 0.80, "left": 0.20, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.75, "left": 0.0, "right": 0.20, "uturn": 0.05}, {"straight": 0.95, "left": 0.0, "right": 0.05, "uturn": 0.0}, {"straight": 0.80, "left": 0.20, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.75, "left": 0.0, "right": 0.20, "uturn": 0.05}, {"straight": 0.95, "left": 0.0, "right": 0.05, "uturn": 0.0}, {"straight": 0.80, "left": 0.20, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.75, "left": 0.0, "right": 0.20, "uturn": 0.05}, {"straight": 0.95, "left": 0.0, "right": 0.05, "uturn": 0.0}, {"straight": 0.80, "left": 0.20, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={
             **BASE_ADV,
@@ -341,7 +365,7 @@ PRESETS_B: dict[str, Preset] = {
     ),
     "hyd_secunderabad": Preset(
         id="hyd_secunderabad",
-        name="Secunderabad — Rail Commuter Hub",
+        name="Secunderabad — Rail Commuter Hub Test",
         group="B_location",
         description="Secunderabad station area — bus-dominated, strong peak at 8-9 AM with commuter surge",
         sim_config={
@@ -362,6 +386,12 @@ PRESETS_B: dict[str, Preset] = {
             "bus_lanes": True,
             "osm_lat": 17.4399,
             "osm_lon": 78.4983,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.70, "left": 0.0, "right": 0.30, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={
             **BASE_ADV,
@@ -372,7 +402,7 @@ PRESETS_B: dict[str, Preset] = {
     ),
     "hyd_gachibowli": Preset(
         id="hyd_gachibowli",
-        name="Gachibowli — IT Area",
+        name="Gachibowli — IT Area Test",
         group="B_location",
         description="Gachibowli IT corridor — similar to HITEC City but with more residential mix and gated communities",
         sim_config={
@@ -392,13 +422,19 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "morning_peak",
             "osm_lat": 17.4401,
             "osm_lon": 78.3489,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["gachibowli", "it_area", "residential_mix", "hyderabad"],
     ),
     "hyd_madhapur": Preset(
         id="hyd_madhapur",
-        name="Madhapur Tech Zone",
+        name="Madhapur Tech Zone Test",
         group="B_location",
         description="Madhapur IT zone — high vehicle volume, intense mix of IT cabs and delivery bikes",
         sim_config={
@@ -418,13 +454,19 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "evening_peak",
             "osm_lat": 17.4483,
             "osm_lon": 78.3915,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["madhapur", "it_corridor", "delivery", "hyderabad"],
     ),
     "hyd_kondapur": Preset(
         id="hyd_kondapur",
-        name="Kondapur Junction",
+        name="Kondapur Junction Test",
         group="B_location",
         description="Kondapur commercial road — moderate mixed traffic with high two-wheeler density",
         sim_config={
@@ -444,13 +486,19 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "morning_peak",
             "osm_lat": 17.4622,
             "osm_lon": 78.3568,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.45, "left": 0.55, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.45, "left": 0.55, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.45, "left": 0.55, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.45, "left": 0.55, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["kondapur", "residential_mix", "two_wheelers", "hyderabad"],
     ),
     "hyd_financial_district": Preset(
         id="hyd_financial_district",
-        name="Financial District — Tech Park",
+        name="Financial District — Tech Park Test",
         group="B_location",
         description="Financial District financial park — high private car and corporate cab share",
         sim_config={
@@ -470,13 +518,19 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "morning_peak",
             "osm_lat": 17.4176,
             "osm_lon": 78.3403,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.40, "left": 0.0, "right": 0.50, "uturn": 0.10}, {"straight": 0.85, "left": 0.0, "right": 0.15, "uturn": 0.0}, {"straight": 0.35, "left": 0.65, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["financial_district", "cabs", "corporate", "hyderabad"],
     ),
     "hyd_raidurg": Preset(
         id="hyd_raidurg",
-        name="Raidurg — Mindspace Circle",
+        name="Raidurg — Mindspace Circle Test",
         group="B_location",
         description="Raidurg Mindspace tech park entrance — high volume tech-park traffic, peak PM hours",
         sim_config={
@@ -496,13 +550,19 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "evening_peak",
             "osm_lat": 17.4428,
             "osm_lon": 78.3813,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.75, "left": 0.0, "right": 0.25, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.75, "left": 0.0, "right": 0.25, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.75, "left": 0.0, "right": 0.25, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.35, "left": 0.0, "right": 0.55, "uturn": 0.10}, {"straight": 0.75, "left": 0.0, "right": 0.25, "uturn": 0.0}, {"straight": 0.30, "left": 0.70, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["raidurg", "mindspace", "peak_pm", "hyderabad"],
     ),
     "hyd_nanakramguda": Preset(
         id="hyd_nanakramguda",
-        name="Nanakramguda Circle",
+        name="Nanakramguda Circle Test",
         group="B_location",
         description="Nanakramguda IT corridor junction — moderate volume, bidirectional pattern",
         sim_config={
@@ -522,6 +582,12 @@ PRESETS_B: dict[str, Preset] = {
             "traffic_pattern": "bidirectional",
             "osm_lat": 17.4081,
             "osm_lon": 78.3458,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={**BASE_ADV},
         tags=["nanakramguda", "it_corridor", "bidirectional", "hyderabad"],
@@ -535,7 +601,7 @@ PRESETS_B: dict[str, Preset] = {
             "osm_lat": 17.3850,
             "osm_lon": 78.4867,
             "traffic_volume_vph": 15000,
-            "simulation_duration_s": 3600,
+            "simulation_duration_s": 600,
             "canvas_size": "large",
             "canvas_width": 1600,
             "canvas_height": 1000,
@@ -559,6 +625,12 @@ PRESETS_B: dict[str, Preset] = {
             "baseline_throughput": 1950,
             "baseline_green_util": 95,
             "baseline_coordination": 45,
+            "lane_turn_ratios": {
+                "N": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "S": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "E": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+                "W": [{"straight": 0.45, "left": 0.0, "right": 0.45, "uturn": 0.10}, {"straight": 0.80, "left": 0.0, "right": 0.20, "uturn": 0.0}, {"straight": 0.40, "left": 0.60, "right": 0.0, "uturn": 0.0}],
+            },
         },
         adverse_config={},
         tags=["test_location", "hyderabad"],

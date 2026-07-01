@@ -577,52 +577,69 @@ export function drawIntersection(
   // ── Lane markings ─────────────────────────────────────────────────────────
   const u_turn_phase = laneRenderConfig?.u_turn_phase ?? false
 
+  const drawMedianLine = (
+    axis: 'V' | 'H',
+    coord: number,
+    direction: 1 | -1
+  ) => {
+    const center = axis === 'V' ? cy : cx
+    const crossMin = rh + 2
+    const crossMax = rh + 27
+    const uturnMin = 110
+    const uturnMax = 130
+
+    ctx.beginPath()
+    if (direction === -1) {
+      // N or W arm: line goes from 0 to center - crossMax
+      if (u_turn_phase) {
+        ctx.moveTo(axis === 'V' ? coord : 0, axis === 'V' ? 0 : coord)
+        ctx.lineTo(axis === 'V' ? coord : center - uturnMax, axis === 'V' ? center - uturnMax : coord)
+
+        ctx.moveTo(axis === 'V' ? coord : center - uturnMin, axis === 'V' ? center - uturnMin : coord)
+        ctx.lineTo(axis === 'V' ? coord : center - crossMax, axis === 'V' ? center - crossMax : coord)
+      } else {
+        ctx.moveTo(axis === 'V' ? coord : 0, axis === 'V' ? 0 : coord)
+        ctx.lineTo(axis === 'V' ? coord : center - crossMax, axis === 'V' ? center - crossMax : coord)
+      }
+    } else {
+      // S or E arm: line goes from center + crossMax to limit (height or width)
+      const limit = axis === 'V' ? cfg.height : cfg.width
+
+      if (u_turn_phase) {
+        ctx.moveTo(axis === 'V' ? coord : center + crossMax, axis === 'V' ? center + crossMax : coord)
+        ctx.lineTo(axis === 'V' ? coord : center + uturnMin, axis === 'V' ? center + uturnMin : coord)
+
+        ctx.moveTo(axis === 'V' ? coord : center + uturnMax, axis === 'V' ? center + uturnMax : coord)
+        ctx.lineTo(axis === 'V' ? coord : limit, axis === 'V' ? limit : coord)
+      } else {
+        ctx.moveTo(axis === 'V' ? coord : center + crossMax, axis === 'V' ? center + crossMax : coord)
+        ctx.lineTo(axis === 'V' ? coord : limit, axis === 'V' ? limit : coord)
+      }
+    }
+    ctx.stroke()
+  }
+
   // Centre median — double yellow solid lines (N/S road)
   ctx.setLineDash([])
   ctx.strokeStyle = 'rgba(250,204,21,0.65)'
   ctx.lineWidth = 1.5
   for (const sign of [-1, 1]) {
-    ctx.beginPath()
-    if (u_turn_phase) {
-      const gapStart = cy - 130
-      const gapEnd = cy - 110
-      ctx.moveTo(cx + sign * MEDIAN_PX, 0); ctx.lineTo(cx + sign * MEDIAN_PX, gapStart)
-      ctx.moveTo(cx + sign * MEDIAN_PX, gapEnd); ctx.lineTo(cx + sign * MEDIAN_PX, cy - rh)
-    } else {
-      ctx.moveTo(cx + sign * MEDIAN_PX, 0); ctx.lineTo(cx + sign * MEDIAN_PX, cy - rh)
-    }
+    // N arm
+    drawMedianLine('V', cx + sign * MEDIAN_PX, -1)
+
+    // S arm
     if (!isTJunction) {
-      if (u_turn_phase) {
-        const gapStart = cy + 110
-        const gapEnd = cy + 130
-        ctx.moveTo(cx + sign * MEDIAN_PX, cy + rh); ctx.lineTo(cx + sign * MEDIAN_PX, gapStart)
-        ctx.moveTo(cx + sign * MEDIAN_PX, gapEnd); ctx.lineTo(cx + sign * MEDIAN_PX, cfg.height)
-      } else {
-        ctx.moveTo(cx + sign * MEDIAN_PX, cy + rh); ctx.lineTo(cx + sign * MEDIAN_PX, cfg.height)
-      }
+      drawMedianLine('V', cx + sign * MEDIAN_PX, 1)
     }
-    ctx.stroke()
   }
+
   // Centre median — E/W road
   for (const sign of [-1, 1]) {
-    ctx.beginPath()
-    if (u_turn_phase) {
-      const gapStart = cx - 130
-      const gapEnd = cx - 110
-      ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(gapStart, cy + sign * MEDIAN_PX)
-      ctx.moveTo(gapEnd, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
-    } else {
-      ctx.moveTo(0, cy + sign * MEDIAN_PX); ctx.lineTo(cx - rh, cy + sign * MEDIAN_PX)
-    }
-    if (u_turn_phase) {
-      const gapStart = cx + 110
-      const gapEnd = cx + 130
-      ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(gapStart, cy + sign * MEDIAN_PX)
-      ctx.moveTo(gapEnd, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
-    } else {
-      ctx.moveTo(cx + rh, cy + sign * MEDIAN_PX); ctx.lineTo(cfg.width, cy + sign * MEDIAN_PX)
-    }
-    ctx.stroke()
+    // W arm
+    drawMedianLine('H', cy + sign * MEDIAN_PX, -1)
+
+    // E arm
+    drawMedianLine('H', cy + sign * MEDIAN_PX, 1)
   }
 
   // Lane dividers
@@ -1156,7 +1173,7 @@ function drawArrowInBulb(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
-  direction: 'straight' | 'right' | 'left',
+  direction: 'up' | 'down' | 'left' | 'right',
   color: string,
   size = 3.5
 ): void {
@@ -1167,8 +1184,8 @@ function drawArrowInBulb(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
 
-  if (direction === 'straight') {
-    // Vertical shaft
+  if (direction === 'up') {
+    // Vertical shaft pointing UP
     ctx.beginPath()
     ctx.moveTo(cx, cy + size)
     ctx.lineTo(cx, cy - size + 3)
@@ -1179,6 +1196,20 @@ function drawArrowInBulb(
     ctx.moveTo(cx - 2.5, cy - size + 3)
     ctx.lineTo(cx, cy - size)
     ctx.lineTo(cx + 2.5, cy - size + 3)
+    ctx.closePath()
+    ctx.fill()
+  } else if (direction === 'down') {
+    // Vertical shaft pointing DOWN
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - size)
+    ctx.lineTo(cx, cy + size - 3)
+    ctx.stroke()
+
+    // Filled triangular arrowhead
+    ctx.beginPath()
+    ctx.moveTo(cx - 2.5, cy + size - 3)
+    ctx.lineTo(cx, cy + size)
+    ctx.lineTo(cx + 2.5, cy + size - 3)
     ctx.closePath()
     ctx.fill()
   } else if (direction === 'right') {
@@ -1213,13 +1244,41 @@ function drawArrowInBulb(
   ctx.restore()
 }
 
+// Map local driver-relative turn direction and entry arm to absolute canvas direction
+function getAbsoluteDirection(
+  arm: 'N' | 'S' | 'E' | 'W',
+  localDir: 'straight' | 'left' | 'right'
+): 'up' | 'down' | 'left' | 'right' {
+  if (arm === 'N') {
+    if (localDir === 'straight') return 'down'
+    if (localDir === 'left') return 'right'
+    return 'left'
+  }
+  if (arm === 'S') {
+    if (localDir === 'straight') return 'up'
+    if (localDir === 'left') return 'left'
+    return 'right'
+  }
+  if (arm === 'E') {
+    if (localDir === 'straight') return 'left'
+    if (localDir === 'left') return 'down'
+    return 'up'
+  }
+  // arm === 'W'
+  if (localDir === 'straight') return 'right'
+  if (localDir === 'left') return 'up'
+  return 'down'
+}
+
+
 function _signalHead(
   ctx: CanvasRenderingContext2D,
   px: number, py: number,
   mainState: string,
   rightState: string,
-  elapsed = 0,
-  isArrow = false
+  remaining = 0,
+  isArrow = false,
+  arm: 'N' | 'S' | 'E' | 'W' = 'N'
 ): void {
   if (!isArrow) {
     const hw = 9, hh = 28, br = 5
@@ -1258,7 +1317,8 @@ function _signalHead(
         }
       })
 
-    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+    const remainingNum = typeof remaining === 'number' && !isNaN(remaining) ? remaining : 0
+    const isActive = mainState !== 'red' || rightState !== 'red'
 
     ctx.fillStyle = 'rgba(8,12,18,0.9)'
     rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
@@ -1271,7 +1331,8 @@ function _signalHead(
     ctx.fillStyle = textColor
     ctx.font = 'bold 8px monospace'
     ctx.textAlign = 'center'
-    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+    // Only show countdown when this signal has an active (green/yellow) movement
+    ctx.fillText(isActive ? `${Math.round(remainingNum)}s` : '—', px, py + hh + 11)
   } else {
     // Indian 5-bulb vertical arrow signal head
     const hw = 9, hh = 44, br = 4.5
@@ -1286,11 +1347,11 @@ function _signalHead(
     const DARK: Record<string, string> = { red: '#2a1414', yellow: '#2a2410', green: '#13251a' }
 
     const bulbs = [
-      { dy: -33, type: 'circle', color: 'red', lit: mainState === 'red' && rightState === 'red' },
+      { dy: -33, type: 'circle', color: 'red', lit: mainState === 'red' },
       { dy: -16, type: 'circle', color: 'yellow', lit: mainState === 'yellow' || rightState === 'yellow' },
-      { dy: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' },
-      { dy: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' },
-      { dy: 33, type: 'right', color: 'green', lit: rightState === 'green_right' },
+      { dy: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' || mainState === 'green' },
+      { dy: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' || mainState === 'green' },
+      { dy: 33, type: 'right', color: 'green', lit: rightState === 'green_right' || rightState === 'green' },
     ]
 
     bulbs.forEach(({ dy, type, color, lit }) => {
@@ -1301,7 +1362,8 @@ function _signalHead(
         ctx.fillStyle = '#0a0d14'
         ctx.fill()
         const arrowColor = lit ? LIT[color] : DARK[color]
-        drawArrowInBulb(ctx, px, py + dy, type as 'straight' | 'left' | 'right', arrowColor, 3.2)
+        const absDir = getAbsoluteDirection(arm, type as 'straight' | 'left' | 'right')
+        drawArrowInBulb(ctx, px, py + dy, absDir, arrowColor, 3.2)
       } else {
         ctx.fillStyle = lit ? LIT[color] : DARK[color]
         ctx.fill()
@@ -1318,7 +1380,10 @@ function _signalHead(
       }
     })
 
-    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+
+    const remainingNum = typeof remaining === 'number' && !isNaN(remaining) ? remaining : 0
+    const isActive = mainState !== 'red' || rightState !== 'red'
+
     ctx.fillStyle = 'rgba(8,12,18,0.9)'
     rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
     ctx.fill()
@@ -1330,7 +1395,8 @@ function _signalHead(
     ctx.fillStyle = textColor
     ctx.font = 'bold 8px monospace'
     ctx.textAlign = 'center'
-    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+    // Only show countdown when this signal has an active (green/yellow) movement
+    ctx.fillText(isActive ? `${Math.round(remainingNum)}s` : '—', px, py + hh + 11)
   }
 }
 
@@ -1339,8 +1405,9 @@ function _signalHeadH(
   px: number, py: number,
   mainState: string,
   rightState: string,
-  elapsed = 0,
-  isArrow = false
+  remaining = 0,
+  isArrow = false,
+  arm: 'N' | 'S' | 'E' | 'W' = 'E'
 ): void {
   if (!isArrow) {
     const hh = 9, hw = 28, br = 5
@@ -1377,7 +1444,8 @@ function _signalHeadH(
         }
       })
 
-    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+    const remainingNum = typeof remaining === 'number' && !isNaN(remaining) ? remaining : 0
+    const isActive = mainState !== 'red'
 
     ctx.fillStyle = 'rgba(8,12,18,0.9)'
     rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
@@ -1390,7 +1458,7 @@ function _signalHeadH(
     ctx.fillStyle = textColor
     ctx.font = 'bold 8px monospace'
     ctx.textAlign = 'center'
-    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+    ctx.fillText(isActive ? `${Math.round(remainingNum)}s` : '—', px, py + hh + 11)
   } else {
     // Indian 5-bulb horizontal arrow signal head
     const hh = 9, hw = 44, br = 4.5
@@ -1406,11 +1474,11 @@ function _signalHeadH(
 
     // Left to right order: Red, Yellow, Green Straight, Green Left, Green Right
     const bulbs = [
-      { dx: -33, type: 'circle', color: 'red', lit: mainState === 'red' && rightState === 'red' },
+      { dx: -33, type: 'circle', color: 'red', lit: mainState === 'red' },
       { dx: -16, type: 'circle', color: 'yellow', lit: mainState === 'yellow' || rightState === 'yellow' },
-      { dx: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' },
-      { dx: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' },
-      { dx: 33, type: 'right', color: 'green', lit: rightState === 'green_right' },
+      { dx: 0, type: 'straight', color: 'green', lit: mainState === 'green_straight_left' || mainState === 'green' },
+      { dx: 16, type: 'left', color: 'green', lit: mainState === 'green_straight_left' || mainState === 'green' },
+      { dx: 33, type: 'right', color: 'green', lit: rightState === 'green_right' || rightState === 'green' },
     ]
 
     bulbs.forEach(({ dx, type, color, lit }) => {
@@ -1421,7 +1489,8 @@ function _signalHeadH(
         ctx.fillStyle = '#0a0d14'
         ctx.fill()
         const arrowColor = lit ? LIT[color] : DARK[color]
-        drawArrowInBulb(ctx, px + dx, py, type as 'straight' | 'left' | 'right', arrowColor, 3.2)
+        const absDir = getAbsoluteDirection(arm, type as 'straight' | 'left' | 'right')
+        drawArrowInBulb(ctx, px + dx, py, absDir, arrowColor, 3.2)
       } else {
         ctx.fillStyle = lit ? LIT[color] : DARK[color]
         ctx.fill()
@@ -1438,7 +1507,8 @@ function _signalHeadH(
       }
     })
 
-    const elapsedNum = typeof elapsed === 'number' && !isNaN(elapsed) ? elapsed : 0
+    const remainingNum = typeof remaining === 'number' && !isNaN(remaining) ? remaining : 0
+    const isActive = mainState !== 'red' || rightState !== 'red'
 
     ctx.fillStyle = 'rgba(8,12,18,0.9)'
     rr(ctx, px - hw, py + hh + 2, hw * 2, 12, 2)
@@ -1451,7 +1521,7 @@ function _signalHeadH(
     ctx.fillStyle = textColor
     ctx.font = 'bold 8px monospace'
     ctx.textAlign = 'center'
-    ctx.fillText(`${Math.round(elapsedNum)}s`, px, py + hh + 11)
+    ctx.fillText(isActive ? `${Math.round(remainingNum)}s` : '—', px, py + hh + 11)
   }
 }
 
@@ -1496,7 +1566,7 @@ export function drawTrafficSignals(
 ): void {
   if (!signals.length) return
   const phase = signals[0].phase
-  const elapsed = signals[0].elapsed_s ?? 0
+  const remaining = signals[0].remaining_s ?? 0
   const cx = cfg.offsetX, cy = cfg.offsetY
 
   const lanes = resolveLaneCounts(laneRenderConfig)
@@ -1507,7 +1577,7 @@ export function drawTrafficSignals(
 
   const off = 10  // gap between road edge and signal post
   const isTJunction = intersectionType === 't_junction' || intersectionType === 't_junction_free_left'
-  const isArrow = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow'
+  const isArrow = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow' || intersectionType === 'four_way' || intersectionType === '4way_cross'
 
   const nCount = vehicles ? vehicles.filter(v => v.arm === 'N').length : 0
   const sCount = vehicles ? vehicles.filter(v => v.arm === 'S').length : 0
@@ -1534,11 +1604,33 @@ export function drawTrafficSignals(
     if (arrowState.S) { sMain = arrowState.S.main; sRight = arrowState.S.right }
     if (arrowState.E) { eMain = arrowState.E.main; eRight = arrowState.E.right }
     if (arrowState.W) { wMain = arrowState.W.main; wRight = arrowState.W.right }
+  } else if (isArrow) {
+    if (phase === 0) {
+      nMain = 'green_straight_left'; sMain = 'green_straight_left'
+    } else if (phase === 1) {
+      nMain = 'yellow'; sMain = 'yellow'
+    } else if (phase === 2) {
+      nRight = 'green_right'; sRight = 'green_right'
+    } else if (phase === 3) {
+      nRight = 'yellow'; sRight = 'yellow'
+    } else if (phase === 4) {
+      eMain = 'green_straight_left'; wMain = 'green_straight_left'
+    } else if (phase === 5) {
+      eMain = 'yellow'; wMain = 'yellow'
+    } else if (phase === 6) {
+      eRight = 'green_right'; wRight = 'green_right'
+    } else if (phase === 7) {
+      eRight = 'yellow'; wRight = 'yellow'
+    }
   } else {
     nMain = _armSignalState('N', phase)
     sMain = _armSignalState('S', phase)
     eMain = _armSignalState('E', phase)
     wMain = _armSignalState('W', phase)
+    nRight = nMain
+    sRight = sMain
+    eRight = eMain
+    wRight = wMain
   }
 
   const getArmColorState = (main: string, right: string) => {
@@ -1561,10 +1653,10 @@ export function drawTrafficSignals(
     c.strokeStyle = 'rgba(255,255,255,0.15)'
     c.lineWidth = 0.8
     c.stroke()
-    
+
     c.fillStyle = color
     c.beginPath(); c.arc(lx, ly, 3.5, 0, Math.PI * 2); c.fill()
-    
+
     c.strokeStyle = color
     c.globalAlpha = 0.35
     c.lineWidth = 1.2
@@ -1597,7 +1689,7 @@ export function drawTrafficSignals(
     const nPx = cx + nEdge + off + 9
     const nPy = cy - STOP_PX - nHH
     drawPole(cx + nEdge, cy - STOP_PX, nPx, nPy + nHH)
-    _signalHead(ctx, nPx, nPy, nMain, nRight, elapsed, isArrow)
+    _signalHead(ctx, nPx, nPy, sMain, sRight, remaining, isArrow, 'S')
   }
   _drawArmInfo(ctx, 'NORTH', nCount, cx, 22, getArmColorState(nMain, nRight))
 
@@ -1625,7 +1717,7 @@ export function drawTrafficSignals(
       const sPx = cx - sEdge - off - 9
       const sPy = cy + STOP_PX + sHH
       drawPole(cx - sEdge, cy + STOP_PX, sPx, sPy - sHH)
-      _signalHead(ctx, sPx, sPy, sMain, sRight, elapsed, isArrow)
+      _signalHead(ctx, sPx, sPy, nMain, nRight, remaining, isArrow, 'N')
     }
     _drawArmInfo(ctx, 'SOUTH', sCount, cx, cfg.height - 16, getArmColorState(sMain, sRight))
   }
@@ -1653,7 +1745,7 @@ export function drawTrafficSignals(
     const ePx = cx + STOP_PX + eHW
     const ePy = cy + eEdge + off + 9
     drawPole(cx + STOP_PX, cy + eEdge, ePx - eHW, ePy)
-    _signalHeadH(ctx, ePx, ePy, eMain, eRight, elapsed, isArrow)
+    _signalHeadH(ctx, ePx, ePy, wMain, wRight, remaining, isArrow, 'W')
   }
   _drawArmInfo(ctx, 'EAST', eCount, cfg.width - 58, cy, getArmColorState(eMain, eRight))
 
@@ -1680,7 +1772,7 @@ export function drawTrafficSignals(
     const wPx = cx - STOP_PX - wHW
     const wPy = cy - wEdge - off - 9
     drawPole(cx - STOP_PX, cy - wEdge, wPx + wHW, wPy)
-    _signalHeadH(ctx, wPx, wPy, wMain, wRight, elapsed, isArrow)
+    _signalHeadH(ctx, wPx, wPy, eMain, eRight, remaining, isArrow, 'E')
   }
   _drawArmInfo(ctx, 'WEST', wCount, 58, cy, getArmColorState(wMain, wRight))
 }
@@ -1794,9 +1886,9 @@ export function drawSignalIndicator(
   cfg: RenderConfig,
   intersectionType: string = "four_way"
 ): void {
-  const isArrowJunction = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow'
+  const isArrowJunction = intersectionType === 'four_way_protected_right' || intersectionType === 'four_way_arrow' || intersectionType === 'four_way' || intersectionType === '4way_cross'
   const color = isArrowJunction
-    ? (signal.phase % 2 === 0 ? '#10b981' : '#f59e0b')
+    ? (signal.phase === 8 ? '#ef4444' : (signal.phase % 2 === 0 ? '#10b981' : '#f59e0b'))
     : (PHASE_COLORS[signal.phase] ?? '#fff')
 
   let name = `Phase ${signal.phase}`
@@ -1809,7 +1901,8 @@ export function drawSignalIndicator(
       'E-W Straight/Left Green',
       'E-W Straight/Left Yellow',
       'E-W Right Green',
-      'E-W Right Yellow'
+      'E-W Right Yellow',
+      'All Red'
     ]
     name = arrowNames[signal.phase] ?? name
   } else {
@@ -1818,8 +1911,8 @@ export function drawSignalIndicator(
   }
 
   const elapsedVal = typeof signal.elapsed_s === 'number' && !isNaN(signal.elapsed_s) ? signal.elapsed_s : 0
-  const remainingStr = typeof signal.remaining_s === 'number' && !isNaN(signal.remaining_s) ? `${signal.remaining_s.toFixed(0)}s` : '?'
-  const timingText = `${elapsedVal.toFixed(1)}s  ·  ${remainingStr} left`
+  const remainingVal = typeof signal.remaining_s === 'number' && !isNaN(signal.remaining_s) ? signal.remaining_s : 0
+  const timingText = `${remainingVal.toFixed(0)}s left  (elapsed ${elapsedVal.toFixed(1)}s)`
 
   // Measure text to size box dynamically
   ctx.save()

@@ -1496,7 +1496,7 @@ const LAYOUT_OPTIONS = [
     category: 'Indian Style / Specialized',
     items: [
       { id: 'four_way_arrow', name: '4-Way Arrow Signals', emoji: '🔀', desc: 'Indian style arrow signal lights (straight, left, right).' },
-      { id: 'four_way_protected_right', name: '4-Way Protected Right', emoji: '🛡️', desc: 'Indian style junction with dedicated protected right phases.' },
+      { id: 'four_way_protected_right', name: '4-Way Protected Right', emoji: '🛡️', desc: 'Indian style junction with dedicated protected right phases.', disabled: true },
     ]
   },
   {
@@ -1510,7 +1510,7 @@ const LAYOUT_OPTIONS = [
   {
     category: 'Advanced / Custom',
     items: [
-      { id: 'custom', name: 'Custom Config (JSON)', emoji: '🛠️', desc: 'Direct JSON geometry definition for advanced designs.' }
+      { id: 'custom', name: 'Custom Config (JSON)', emoji: '🛠️', desc: 'Direct JSON geometry definition for advanced designs.', disabled: true }
     ]
   }
 ]
@@ -1605,28 +1605,43 @@ function SectionL({
           <div className="space-y-1.5">
             {cat.items.map((opt) => {
               const isActive = simConfig.intersection_type === opt.id
+              const isDisabled = !!(opt as any).disabled
               return (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => updateSimConfig({ intersection_type: opt.id as any })}
-                  className={`w-full rounded-xl border p-3 text-left transition-all duration-200 relative overflow-hidden flex items-center gap-3 ${isActive
-                      ? 'border-[#8fb8ce]/40 bg-[#8fb8ce]/[0.06] shadow-[0_0_12px_rgba(143,184,206,0.12)]'
-                      : 'border-white/[0.04] bg-[#0c0e14]/40 hover:border-white/[0.12] hover:bg-[#0c0e14]/70'
-                    }`}
+                  disabled={isDisabled}
+                  onClick={() => !isDisabled && updateSimConfig({ intersection_type: opt.id as any })}
+                  className={`w-full rounded-xl border p-3 text-left transition-all duration-200 relative overflow-hidden flex items-center gap-3 ${
+                    isDisabled
+                      ? 'border-white/[0.03] bg-[#0c0e14]/20 opacity-40 cursor-not-allowed'
+                      : isActive
+                        ? 'border-[#8fb8ce]/40 bg-[#8fb8ce]/[0.06] shadow-[0_0_12px_rgba(143,184,206,0.12)]'
+                        : 'border-white/[0.04] bg-[#0c0e14]/40 hover:border-white/[0.12] hover:bg-[#0c0e14]/70'
+                  }`}
                 >
-                  <div className={`text-lg w-8 h-8 rounded-lg flex items-center justify-center border transition-all flex-shrink-0 ${isActive
-                      ? 'bg-[#8fb8ce]/20 border-[#8fb8ce]/30 text-white'
-                      : 'bg-black/30 border-white/[0.04] text-slate-500'
-                    }`}>
+                  <div className={`text-lg w-8 h-8 rounded-lg flex items-center justify-center border transition-all flex-shrink-0 ${
+                    isDisabled
+                      ? 'bg-black/20 border-white/[0.03] text-slate-600'
+                      : isActive
+                        ? 'bg-[#8fb8ce]/20 border-[#8fb8ce]/30 text-white'
+                        : 'bg-black/30 border-white/[0.04] text-slate-500'
+                  }`}>
                     {opt.emoji}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className={`text-[11.5px] font-bold truncate ${isActive ? 'text-slate-100' : 'text-slate-355'}`}>
+                      <span className={`text-[11.5px] font-bold truncate ${
+                        isDisabled ? 'text-slate-600' : isActive ? 'text-slate-100' : 'text-slate-355'
+                      }`}>
                         {opt.name}
                       </span>
-                      {isActive && (
+                      {isDisabled && (
+                        <span className="text-[8px] font-mono font-bold text-slate-600 bg-slate-800/60 px-1.5 py-0.5 rounded-full border border-slate-700/40 ml-1 flex-shrink-0">
+                          DISABLED
+                        </span>
+                      )}
+                      {isActive && !isDisabled && (
                         <span className="w-1.5 h-1.5 rounded-full bg-[#8fb8ce] animate-pulse" />
                       )}
                     </div>

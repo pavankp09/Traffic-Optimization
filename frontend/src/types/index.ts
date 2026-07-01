@@ -174,10 +174,17 @@ export interface EconomicSummary {
 // ---- Config types ----
 
 export interface SimConfig {
-  intersection_type: 'four_way' | 't_junction' | 'y_junction' | 'six_arm' | 'roundabout' | 'four_way_free_left' | 't_junction_free_left' | 'roundabout_free_left' | 'four_way_arrow' | 'four_way_protected_right' | 'custom'
+  intersection_type: 'four_way' | 't_junction' | 'y_junction' | 'six_arm' | 'roundabout' | 'four_way_free_left' | 't_junction_free_left' | 'roundabout_free_left' | 'four_way_arrow' | 'four_way_protected_right' | '4way_cross' | 'custom'
   n_lanes: number
   lane_config?: Partial<Record<'N' | 'S' | 'E' | 'W', number>>
+  u_turn_phase?: boolean
+  turn_distribution_mode?: 'lane' | 'arm'
+  lane_turn_ratios?: Record<string, Array<Record<string, number>>>
+  arm_turn_ratios?: Record<string, Record<string, number>>
   total_vph: number
+
+
+
   traffic_pattern: 'uniform' | 'morning_peak' | 'evening_peak' | 'bidirectional' | 'random'
   arrival_distribution: 'poisson' | 'weibull' | 'uniform'
   pct_car: number

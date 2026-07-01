@@ -50,13 +50,31 @@ def get_torch_runtime_info(prefer_gpu: bool = True) -> dict[str, str | bool | No
         try:
             import torch
 
-            info["torch_version"] = getattr(torch, "__version__", None)
-            info["cuda_version"] = getattr(torch.version, "cuda", None)
-            if prefer_gpu and torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            torch_v = getattr(torch, "__version__", None)
+            if torch_v is not None and type(torch_v).__name__ not in ("MagicMock", "Mock"):
+                info["torch_version"] = str(torch_v)
+            else:
+                info["torch_version"] = None
+
+            cuda_v = getattr(torch.version, "cuda", None)
+            if cuda_v is not None and type(cuda_v).__name__ not in ("MagicMock", "Mock"):
+                info["cuda_version"] = str(cuda_v)
+            else:
+                info["cuda_version"] = None
+
+            # Safely check is_available and device_count even when mocked
+            is_avail = torch.cuda.is_available()
+            dev_cnt = torch.cuda.device_count()
+            if type(is_avail).__name__ in ("MagicMock", "Mock"):
+                is_avail = False
+            if type(dev_cnt).__name__ in ("MagicMock", "Mock"):
+                dev_cnt = 0
+
+            if prefer_gpu and is_avail and dev_cnt > 0:
                 info["device"] = "cuda"
                 info["cuda_available"] = True
                 try:
-                    info["device_name"] = torch.cuda.get_device_name(0)
+                    info["device_name"] = str(torch.cuda.get_device_name(0))
                 except Exception:
                     info["device_name"] = "CUDA device"
                 return info

@@ -54,8 +54,15 @@ class SimulationConfig:
     lanes_per_arm: int = 3
     n_lanes: int = 3
     lane_config: Optional[dict] = None
+    turn_distribution_mode: str = "arm"         # lane|arm
+
+    lane_turn_ratios: Optional[dict] = None
+    arm_turn_ratios: Optional[dict] = None
     dedicated_turn_lanes: str = "right_only"    # off|left_only|right_only|both
-    u_turn_phase: bool = True
+
+
+    u_turn_phase: bool = False
+
     pedestrian_crossings: str = "major_arms"    # disabled|major_arms|all_arms
     bus_lanes: bool = False
     network_source: str = "builtin"             # builtin|osm|upload

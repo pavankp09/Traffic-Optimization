@@ -6,7 +6,40 @@ import type { SimConfig, AdverseConfig, Preset } from '../types'
 const DEFAULT_SIM_CONFIG: SimConfig = {
   intersection_type: 'four_way',
   n_lanes: 3,
+  u_turn_phase: false,
+  turn_distribution_mode: 'arm',
+
+  arm_turn_ratios: {
+    N: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+    S: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+    E: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+    W: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 }
+  },
+  lane_turn_ratios: {
+    N: [
+      { straight: 0.4, left: 0.0, right: 0.4, uturn: 0.1, mid_uturn: 0.1 },
+      { straight: 0.8, left: 0.0, right: 0.2, uturn: 0.0, mid_uturn: 0.0 },
+      { straight: 0.4, left: 0.6, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+    ],
+    S: [
+      { straight: 0.4, left: 0.0, right: 0.4, uturn: 0.1, mid_uturn: 0.1 },
+      { straight: 0.8, left: 0.0, right: 0.2, uturn: 0.0, mid_uturn: 0.0 },
+      { straight: 0.4, left: 0.6, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+    ],
+    E: [
+      { straight: 0.4, left: 0.0, right: 0.4, uturn: 0.1, mid_uturn: 0.1 },
+      { straight: 0.8, left: 0.0, right: 0.2, uturn: 0.0, mid_uturn: 0.0 },
+      { straight: 0.4, left: 0.6, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+    ],
+    W: [
+      { straight: 0.4, left: 0.0, right: 0.4, uturn: 0.1, mid_uturn: 0.1 },
+      { straight: 0.8, left: 0.0, right: 0.2, uturn: 0.0, mid_uturn: 0.0 },
+      { straight: 0.4, left: 0.6, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+    ]
+  },
+
   total_vph: 3000,
+
   traffic_pattern: 'uniform',
   arrival_distribution: 'poisson',
   pct_car: 40,
@@ -63,7 +96,40 @@ const HYD_TEST_LOCATION_PRESET: Preset = {
   sim_config: {
     osm_lat: 17.3850,
     osm_lon: 78.4867,
+    u_turn_phase: false,
+    turn_distribution_mode: 'arm',
+
+    arm_turn_ratios: {
+      N: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+      S: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+      E: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 },
+      W: { straight: 55, left: 15, right: 20, uturn: 5, mid_uturn: 5 }
+    },
+    lane_turn_ratios: {
+      N: [
+        { straight: 0.35, left: 0.0, right: 0.45, uturn: 0.10, mid_uturn: 0.10 },
+        { straight: 0.80, left: 0.0, right: 0.20, uturn: 0.0, mid_uturn: 0.0 },
+        { straight: 0.40, left: 0.60, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+      ],
+      S: [
+        { straight: 0.35, left: 0.0, right: 0.45, uturn: 0.10, mid_uturn: 0.10 },
+        { straight: 0.80, left: 0.0, right: 0.20, uturn: 0.0, mid_uturn: 0.0 },
+        { straight: 0.40, left: 0.60, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+      ],
+      E: [
+        { straight: 0.35, left: 0.0, right: 0.45, uturn: 0.10, mid_uturn: 0.10 },
+        { straight: 0.80, left: 0.0, right: 0.20, uturn: 0.0, mid_uturn: 0.0 },
+        { straight: 0.40, left: 0.60, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+      ],
+      W: [
+        { straight: 0.35, left: 0.0, right: 0.45, uturn: 0.10, mid_uturn: 0.10 },
+        { straight: 0.80, left: 0.0, right: 0.20, uturn: 0.0, mid_uturn: 0.0 },
+        { straight: 0.40, left: 0.60, right: 0.0, uturn: 0.0, mid_uturn: 0.0 }
+      ]
+    },
+
     total_vph: 15000,
+
     simulation_duration_s: 3600,
     canvas_size: 'large',
     canvas_width: 1600,
@@ -97,7 +163,7 @@ const HYD_TEST_LOCATION_SIM_CONFIG: SimConfig = {
   osm_lat: 17.3850,
   osm_lon: 78.4867,
   total_vph: 15000,
-  simulation_duration_s: 3600,
+  simulation_duration_s: 600,
   canvas_size: 'large',
   canvas_width: 1600,
   canvas_height: 1000,
