@@ -192,7 +192,7 @@ class CustomPreset(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
-def init_db(database_url: str = "sqlite:///backend/db/tso.db"):
+def init_db(database_url: str = "sqlite:///backend/db/data/tso.db"):
     """Create all tables. Safe to call multiple times."""
     import os
     if database_url.startswith("sqlite:///"):

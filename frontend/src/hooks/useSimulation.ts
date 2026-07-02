@@ -3,7 +3,7 @@ import { useSocket } from './useSocket'
 import { useSimulationStore } from '../store/simulationStore'
 import { useSessionStore } from '../store/sessionStore'
 import { useConfigStore } from '../store/configStore'
-import type { TrainingMode } from '../components/TrainingModeSelector'
+import type { TrainingMode } from '../components/config/TrainingModeSelector'
 
 export function useSimulation() {
   const { emit } = useSocket()

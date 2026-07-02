@@ -44,15 +44,15 @@ def _get_store():
     if _store is None:
         with _store_lock:
             if _store is None:
-                from backend.analytics.session_store import SessionStore
+                from backend.services.analytics.session_store import SessionStore
                 from backend.db.models import Base
                 try:
                     db_url = current_app.config.get(
-                        "SQLALCHEMY_DATABASE_URI", "sqlite:///backend/db/traffic.db"
+                        "SQLALCHEMY_DATABASE_URI", "sqlite:///backend/db/data/traffic.db"
                     )
                 except RuntimeError:
                     # No active app context (e.g. background thread before first request)
-                    db_url = "sqlite:///backend/db/traffic.db"
+                    db_url = "sqlite:///backend/db/data/traffic.db"
                 store = SessionStore(db_url=db_url)
                 # For in-memory SQLite the store's own engine must hold the
                 # schema, since init_db() creates a separate (empty) engine.
@@ -265,19 +265,15 @@ def save_custom_preset():
 
 @api_bp.route("/sessions", methods=["POST"])
 def create_session():
-    from backend.config import SimulationConfig, AdverseConfig
+    from backend.services.simulation.input_config import parse_simulation_config, parse_adverse_config
     body = request.get_json(silent=True) or {}
     session_id = body.get("session_id") or str(uuid.uuid4())
 
     sim_dict = body.get("sim_config", {})
     adverse_dict = body.get("adverse_config", {})
 
-    # Build dataclass instances tolerantly (ignore unknown keys)
-    sim_fields = {f.name for f in dataclasses.fields(SimulationConfig)}
-    adverse_fields = {f.name for f in dataclasses.fields(AdverseConfig)}
-
-    sim_cfg = SimulationConfig(**{k: v for k, v in sim_dict.items() if k in sim_fields})
-    adverse_cfg = AdverseConfig(**{k: v for k, v in adverse_dict.items() if k in adverse_fields})
+    sim_cfg = parse_simulation_config(sim_dict)
+    adverse_cfg = parse_adverse_config(adverse_dict)
 
     store = _get_store()
     try:
@@ -330,20 +326,14 @@ def _run_training(session_id, sim_config_dict, adverse_config_dict, total_timest
     """Background training thread."""
     with app.app_context():
         try:
-            from backend.config import SimulationConfig, AdverseConfig
-            from backend.rl.trainer import PPOTrainer
-            from backend.analytics.session_store import SessionStore
+            from backend.services.simulation.input_config import parse_simulation_config, parse_adverse_config
+            from backend.services.rl.agents.trainer import PPOTrainer
+            from backend.services.analytics.session_store import SessionStore
 
             store = SessionStore()
 
-            sim_fields = {f.name for f in dataclasses.fields(SimulationConfig)}
-            adverse_fields = {f.name for f in dataclasses.fields(AdverseConfig)}
-            sim_cfg = SimulationConfig(
-                **{k: v for k, v in sim_config_dict.items() if k in sim_fields}
-            )
-            adverse_cfg = AdverseConfig(
-                **{k: v for k, v in adverse_config_dict.items() if k in adverse_fields}
-            )
+            sim_cfg = parse_simulation_config(sim_config_dict)
+            adverse_cfg = parse_adverse_config(adverse_config_dict)
 
             stop_event = _stop_flags.get(session_id)
 
@@ -358,7 +348,7 @@ def _run_training(session_id, sim_config_dict, adverse_config_dict, total_timest
         except Exception as exc:
             logger.exception("Training failed for session %s: %s", session_id, exc)
             try:
-                from backend.analytics.session_store import SessionStore
+                from backend.services.analytics.session_store import SessionStore
                 SessionStore().update_session_status(session_id, "error")
             except Exception:
                 pass
@@ -541,7 +531,7 @@ def get_economic(session_id):
 @api_bp.route("/models")
 def list_models():
     try:
-        from backend.rl.model_manager import ModelManager
+        from backend.services.rl.utils.model_manager import ModelManager
         mm = ModelManager()
         models = mm.list_models()
     except Exception as exc:
@@ -555,7 +545,7 @@ def export_model(session_id):
     output_path = body.get("output_path")
 
     try:
-        from backend.rl.model_manager import ModelManager
+        from backend.services.rl.utils.model_manager import ModelManager
         mm = ModelManager()
         # Try to find the model by session_id name
         if output_path:
@@ -580,7 +570,7 @@ def export_model(session_id):
 @api_bp.route("/zoo")
 def list_zoo():
     try:
-        from backend.rl.model_zoo import list_zoo_models
+        from backend.services.rl.utils.model_zoo import list_zoo_models
         zoo_models = list_zoo_models()
     except ImportError:
         zoo_models = []
@@ -595,7 +585,7 @@ def list_zoo():
 
 def _make_placeholder_episode_metrics(session_id: str, e: dict):
     """Build a minimal EpisodeMetrics from a stored episode dict."""
-    from backend.analytics.metrics import EpisodeMetrics
+    from backend.services.analytics.metrics import EpisodeMetrics
     return EpisodeMetrics(
         episode_id=str(e.get("id", "0")),
         session_id=session_id,
@@ -619,7 +609,7 @@ def _make_placeholder_episode_metrics(session_id: str, e: dict):
 
 def _make_placeholder_economic_summary(session_id: str):
     """Return a zeroed EconomicSummary for sessions without computed economics."""
-    from backend.analytics.economic import EconomicSummary
+    from backend.services.analytics.economic import EconomicSummary
     return EconomicSummary(
         session_id=session_id,
         baseline_avg_wait_s=0.0,
@@ -661,7 +651,7 @@ def report_html(session_id):
         return Response(html, content_type="text/html")
 
     try:
-        from backend.analytics.report_generator import ReportGenerator
+        from backend.services.analytics.report_generator import ReportGenerator
 
         rg = ReportGenerator()
         rl_metrics = [_make_placeholder_episode_metrics(session_id, e) for e in episodes]
@@ -698,7 +688,7 @@ def report_pdf(session_id):
         return err("No episodes recorded yet — cannot generate PDF", 422)
 
     try:
-        from backend.analytics.report_generator import ReportGenerator
+        from backend.services.analytics.report_generator import ReportGenerator
 
         rg = ReportGenerator()
         rl_metrics = [_make_placeholder_episode_metrics(session_id, e) for e in episodes]
@@ -867,7 +857,7 @@ def compare_sessions():
         return err("Both session_a and session_b query params are required", 400)
 
     try:
-        from backend.analytics.comparator import SessionComparator
+        from backend.services.analytics.comparator import SessionComparator
         comparator = SessionComparator(session_store=_get_store())
         result = comparator.compare(session_a, session_b)
     except Exception as exc:
@@ -1212,15 +1202,14 @@ def analyzer_calculate(session_id):
 @api_bp.route("/decisions/<session_id>", methods=["GET"])
 def get_decision_episodes(session_id: str):
     """Return episode summary list for the Decision Replay page."""
-    from backend.rl.decision_store import STORE
+    from backend.services.rl.utils.decision_store import STORE
     episodes = STORE.get_episodes(session_id)
     return jsonify(episodes), 200
 
 
 @api_bp.route("/decisions/<session_id>/<int:ep_num>", methods=["GET"])
 def get_decision_episode(session_id: str, ep_num: int):
-    """Return full decision data for one episode."""
-    from backend.rl.decision_store import STORE
+    from backend.services.rl.utils.decision_store import STORE
     episode = STORE.get_episode(session_id, ep_num)
     if episode is None:
         return jsonify({"error": "Episode not found"}), 404

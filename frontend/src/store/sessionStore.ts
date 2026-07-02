@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { SessionInfo, TrainingEpisodePayload, InsightCard, EpisodeMetrics, EconomicSummary } from '../types'
-import type { TrainingMode } from '../components/TrainingModeSelector'
+import type { TrainingMode } from '../components/config/TrainingModeSelector'
 
 export interface TrainedModelData {
   episodes: TrainingEpisodePayload[]

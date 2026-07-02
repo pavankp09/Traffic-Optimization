@@ -10,8 +10,8 @@ import React, { useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useDecisionStore } from '../store/decisionStore'
 import type { Decision } from '../types'
-import { DecisionDetailModal } from '../components/DecisionDetailModal'
-import { EpisodeTimeline } from '../components/EpisodeTimeline'
+import { DecisionDetailModal } from '../components/training/DecisionDetailModal'
+import { EpisodeTimeline } from '../components/training/EpisodeTimeline'
 
 const PHASE_COLORS: Record<number, string> = {
   0: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',

@@ -1,0 +1,621 @@
+"""
+Session Store for Traffic Signal Optimization.
+
+Persists training sessions, episodes, metrics, and insight cards to SQLite
+via SQLAlchemy ORM.
+"""
+from __future__ import annotations
+
+import dataclasses
+import json
+import logging
+from typing import Optional
+
+from sqlalchemy import create_engine, desc
+from sqlalchemy.orm import Session
+
+from backend.config import SimulationConfig, AdverseConfig
+from backend.services.analytics.metrics import EpisodeMetrics
+from backend.services.analytics.economic import EconomicSummary
+from backend.db.models import (
+    init_db,
+    TrainingSession,
+    Episode,
+    MetricRecord,
+    InsightCard,
+    VehicleCrossing,
+    SimulationRun,
+    SimulationPhaseMetric,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _orm_to_dict(obj) -> dict:
+    """Convert an ORM row to a plain dict using table column metadata."""
+    return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
+
+class SessionStore:
+    """
+    Persists training sessions, episodes, and metrics to SQLite via SQLAlchemy.
+    """
+
+    def __init__(self, db_url: str = "sqlite:///backend/db/data/traffic.db"):
+        import os
+        if db_url.startswith("sqlite:///"):
+            path = db_url[10:]
+            if path and not path.startswith(":") and not os.path.isabs(path):
+                backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                if path.startswith("backend/"):
+                    path = path[8:]
+                elif path.startswith("backend\\"):
+                    path = path[8:]
+                abs_path = os.path.abspath(os.path.join(backend_dir, path))
+                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                db_url = f"sqlite:///{abs_path}"
+
+        self._engine = create_engine(db_url, echo=False)
+        init_db(db_url)  # ensure all tables exist
+        import threading
+        self._csv_lock = threading.Lock()
+        
+        csv_path = "backend/db/data/vehicle_crossings.csv"
+        if not os.isabs(csv_path) if hasattr(os, "isabs") else not os.path.isabs(csv_path):
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if csv_path.startswith("backend/"):
+                csv_path = csv_path[8:]
+            elif csv_path.startswith("backend\\"):
+                csv_path = csv_path[8:]
+            self._csv_path = os.path.abspath(os.path.join(backend_dir, csv_path))
+        else:
+            self._csv_path = csv_path
+        os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
+
+    def _get_session_row(self, session: Session, session_id: str) -> Optional[TrainingSession]:
+        row = None
+        if "-" in session_id:
+            parts = session_id.split("-")
+            if parts[-1].isdigit():
+                db_id = int(parts[-1])
+                row = session.query(TrainingSession).filter(TrainingSession.id == db_id).first()
+        if row is None and session_id.isdigit():
+            row = session.query(TrainingSession).filter(TrainingSession.id == int(session_id)).first()
+        if row is None:
+            row = (
+                session.query(TrainingSession)
+                .filter(TrainingSession.notes == session_id)
+                .first()
+            )
+        return row
+
+    # ------------------------------------------------------------------
+    # Session management
+    # ------------------------------------------------------------------
+
+    def create_session(
+        self,
+        session_id: str,
+        sim_config: SimulationConfig,
+        adverse_config: AdverseConfig,
+    ) -> str:
+        """
+        Creates a TrainingSession row in the DB.
+
+        The session_id is stored in the ``notes`` field (used as a string
+        identifier) and the numeric primary key is managed by the ORM.
+        Sim and adverse configs are stored as JSON.
+
+        Returns the session_id passed in.
+        """
+        sim_json = json.dumps(dataclasses.asdict(sim_config), default=str)
+        adverse_json = json.dumps(dataclasses.asdict(adverse_config), default=str)
+
+        try:
+            with Session(self._engine) as session:
+                row = TrainingSession(
+                    sim_config=json.loads(sim_json),
+                    adverse_config=json.loads(adverse_json),
+                    status="running",
+                    total_episodes=0,
+                    baseline_type=getattr(sim_config, "baseline_controller", "fixed_time"),
+                    notes=session_id,  # store string session_id here
+                )
+                session.add(row)
+                session.commit()
+                logger.info("Created session %s (pk=%s)", session_id, row.id)
+        except Exception:
+            logger.exception("Failed to create session %s", session_id)
+            raise
+
+        return session_id
+
+    def save_or_update_session(
+        self,
+        session_id: str,
+        sim_config: SimulationConfig,
+        adverse_config: AdverseConfig,
+    ) -> str:
+        """
+        Creates or updates a TrainingSession row in the DB with new configurations.
+        """
+        sim_json = json.dumps(dataclasses.asdict(sim_config), default=str)
+        adverse_json = json.dumps(dataclasses.asdict(adverse_config), default=str)
+
+        try:
+            with Session(self._engine) as session:
+                row = self._get_session_row(session, session_id)
+                if row is None:
+                    row = TrainingSession(
+                        sim_config=json.loads(sim_json),
+                        adverse_config=json.loads(adverse_json),
+                        status="running",
+                        total_episodes=0,
+                        baseline_type=getattr(sim_config, "baseline_controller", "fixed_time"),
+                        notes=session_id,
+                    )
+                    session.add(row)
+                else:
+                    row.sim_config = json.loads(sim_json)
+                    row.adverse_config = json.loads(adverse_json)
+                    row.baseline_type = getattr(sim_config, "baseline_controller", "fixed_time")
+                session.commit()
+                logger.info("Saved/Updated session %s (pk=%s)", session_id, row.id)
+        except Exception:
+            logger.exception("Failed to save or update session %s", session_id)
+            raise
+
+        return session_id
+
+    def update_session_status(
+        self,
+        session_id: str,
+        status: str,
+        total_episodes: int = None,
+        best_reward: float = None,
+    ) -> None:
+        """Updates TrainingSession status and optional aggregated fields."""
+        try:
+            with Session(self._engine) as session:
+                row = self._get_session_row(session, session_id)
+                if row is None:
+                    logger.warning(
+                        "update_session_status: session %s not found", session_id
+                    )
+                    return
+                row.status = status
+                if total_episodes is not None:
+                    row.total_episodes = total_episodes
+                if best_reward is not None:
+                    row.best_reward = best_reward
+                session.commit()
+        except Exception:
+            logger.exception(
+                "Failed to update status for session %s", session_id
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Episode / metric persistence
+    # ------------------------------------------------------------------
+
+    def save_episode(
+        self,
+        session_id: str,
+        episode_num: int,
+        metrics: EpisodeMetrics,
+        reward: float,
+        economic_summary: Optional[EconomicSummary] = None,
+    ) -> str:
+        """
+        Saves an Episode row and a MetricRecord row atomically.
+
+        Returns the Episode DB id as a string.
+        """
+        try:
+            with Session(self._engine) as session:
+                # Resolve integer FK
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    raise ValueError(
+                        f"save_episode: TrainingSession not found for {session_id}"
+                    )
+                ts_pk = ts_row.id
+
+                # Episode row
+                episode_row = Episode(
+                    session_id=ts_pk,
+                    episode_number=episode_num,
+                    total_reward=reward,
+                    avg_wait_time_s=metrics.avg_wait_s,
+                    throughput=int(metrics.throughput_vph),
+                    green_utilisation_pct=metrics.green_utilisation * 100.0,
+                    collision_count=metrics.collision_count,
+                    violation_count=metrics.violation_count,
+                    convergence_pct=metrics.signal_efficiency * 100.0,
+                    fuel_index_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
+                )
+                session.add(episode_row)
+                session.flush()  # get episode_row.id before committing
+
+                # MetricRecord row — store full EpisodeMetrics as JSON
+                eco = economic_summary
+                metric_row = MetricRecord(
+                    session_id=ts_pk,
+                    episode_number=episode_num,
+                    avg_wait_rl_s=metrics.avg_wait_s,
+                    throughput_rl=int(metrics.throughput_vph),
+                    green_utilisation_pct=metrics.green_utilisation * 100.0,
+                    signal_efficiency_pct=metrics.signal_efficiency * 100.0,
+                    collision_count=metrics.collision_count,
+                    fuel_saved_l=(eco.total_fuel_saved_l if eco else None),
+                    co2_avoided_kg=(eco.total_co2_avoided_kg if eco else None),
+                    fuel_cost_saved_inr=(eco.total_fuel_cost_saved_inr if eco else None),
+                    time_value_saved_inr=(eco.total_time_value_saved_inr if eco else None),
+                    total_economic_inr_per_hr=(eco.total_saving_inr if eco else None),
+                    fuel_index_rl_ml_veh=getattr(metrics, "fuel_index_ml_veh", 0.0),
+                    carbon_index_rl_g_veh=getattr(metrics, "carbon_index_g_veh", 0.0),
+                )
+                session.add(metric_row)
+                session.commit()
+
+                episode_id = str(episode_row.id)
+                logger.debug(
+                    "Saved episode %s/%s (db id=%s)", session_id, episode_num, episode_id
+                )
+                return episode_id
+        except Exception:
+            logger.exception(
+                "Failed to save episode %s for session %s", episode_num, session_id
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Insight persistence
+    # ------------------------------------------------------------------
+
+    def save_insight(self, insight: dict) -> str:
+        """Saves an InsightCard dict to the DB. Returns the insight DB id."""
+        try:
+            with Session(self._engine) as session:
+                # Resolve integer FK
+                ts_row = self._get_session_row(session, insight["session_id"])
+                if ts_row is None:
+                    raise ValueError(
+                        f"save_insight: TrainingSession not found for "
+                        f"{insight['session_id']}"
+                    )
+                row = InsightCard(
+                    session_id=ts_row.id,
+                    episode_number=insight["episode_number"],
+                    icon=insight["icon"],
+                    message=insight["message"],
+                    card_type=insight["card_type"],
+                )
+                session.add(row)
+                session.commit()
+                logger.debug("Saved insight card id=%s", row.id)
+                return str(row.id)
+        except Exception:
+            logger.exception("Failed to save insight card")
+            raise
+
+    # ------------------------------------------------------------------
+    # Retrieval
+    # ------------------------------------------------------------------
+
+    def get_session(self, session_id: str) -> Optional[dict]:
+        """Returns TrainingSession as dict, or None if not found."""
+        try:
+            with Session(self._engine) as session:
+                row = self._get_session_row(session, session_id)
+                if row is None:
+                    return None
+                return _orm_to_dict(row)
+        except Exception:
+            logger.exception("Failed to get session %s", session_id)
+            raise
+
+    def get_episodes(self, session_id: str, limit: int = 100) -> list[dict]:
+        """Returns list of Episode dicts ordered by episode_number, limited."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                rows = (
+                    session.query(Episode)
+                    .filter(Episode.session_id == ts_row.id)
+                    .order_by(Episode.episode_number)
+                    .limit(limit)
+                    .all()
+                )
+                return [_orm_to_dict(r) for r in rows]
+        except Exception:
+            logger.exception("Failed to get episodes for session %s", session_id)
+            raise
+
+    def get_insights(self, session_id: str) -> list[dict]:
+        """Returns all InsightCard dicts for session ordered by episode_number."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                rows = (
+                    session.query(InsightCard)
+                    .filter(InsightCard.session_id == ts_row.id)
+                    .order_by(InsightCard.episode_number)
+                    .all()
+                )
+                return [_orm_to_dict(r) for r in rows]
+        except Exception:
+            logger.exception("Failed to get insights for session %s", session_id)
+            raise
+
+    def list_sessions(self, limit: int = 20) -> list[dict]:
+        """Returns most recent sessions as list of dicts, ordered by created_at desc."""
+        try:
+            with Session(self._engine) as session:
+                rows = (
+                    session.query(TrainingSession)
+                    .order_by(desc(TrainingSession.created_at))
+                    .limit(limit)
+                    .all()
+                )
+                return [_orm_to_dict(r) for r in rows]
+        except Exception:
+            logger.exception("Failed to list sessions")
+            raise
+
+    def delete_session(self, session_id: str) -> bool:
+        """
+        Deletes a session and all related records (cascaded by ORM).
+        Returns True if the session was found and deleted, False otherwise.
+        """
+        try:
+            with Session(self._engine) as session:
+                row = self._get_session_row(session, session_id)
+                if row is None:
+                    return False
+                session.delete(row)
+                session.commit()
+                logger.info("Deleted session %s", session_id)
+                return True
+        except Exception:
+            logger.exception("Failed to delete session %s", session_id)
+            raise
+
+    def create_simulation_run(
+        self,
+        simulation_id: str,
+        session_id: str,
+        sim_config: SimulationConfig,
+        adverse_config: AdverseConfig,
+        preset_name: Optional[str] = None,
+        run_type: Optional[str] = None,
+        model_name: Optional[str] = None,
+    ) -> None:
+        """Creates a SimulationRun row in the DB snapshotting configurations."""
+        import dataclasses
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    logger.warning("create_simulation_run: TrainingSession not found for %s", session_id)
+                    return
+                
+                # Check if it already exists
+                existing = session.query(SimulationRun).filter(SimulationRun.simulation_id == simulation_id).first()
+                if existing:
+                    return
+
+                row = SimulationRun(
+                    simulation_id=simulation_id,
+                    session_id=ts_row.id,
+                    sim_config=dataclasses.asdict(sim_config),
+                    adverse_config=dataclasses.asdict(adverse_config),
+                    preset_name=preset_name,
+                    run_type=run_type,
+                    model_name=model_name,
+                )
+                session.add(row)
+                session.commit()
+                logger.info("Saved simulation run %s for session %s (preset=%s, run_type=%s, model=%s)", 
+                            simulation_id, session_id, preset_name, run_type, model_name)
+        except Exception:
+            logger.exception("Failed to save simulation run to database")
+            raise
+
+    def update_simulation_run_metrics(
+        self,
+        simulation_id: str,
+        avg_wait_s: float,
+        throughput: int,
+        green_util_pct: float,
+        phase_timeline: list | None = None,
+    ) -> None:
+        """Updates the final results / metrics of a simulation run."""
+        try:
+            with Session(self._engine) as session:
+                row = session.query(SimulationRun).filter(SimulationRun.simulation_id == simulation_id).first()
+                if row is None:
+                    logger.warning("update_simulation_run_metrics: SimulationRun not found for %s", simulation_id)
+                    return
+                row.avg_wait_s = avg_wait_s
+                row.throughput = throughput
+                row.green_util_pct = green_util_pct
+                if phase_timeline is not None:
+                    row.phase_timeline = phase_timeline
+                session.commit()
+                logger.info("Updated simulation run %s metrics: wait=%s, tput=%s, util=%s", 
+                            simulation_id, avg_wait_s, throughput, green_util_pct)
+        except Exception:
+            logger.exception("Failed to update simulation run metrics in database")
+            raise
+
+    def save_vehicle_crossing(
+        self,
+        session_id: str,
+        simulation_id: str,
+        vehicle_id: str,
+        vehicle_type: str,
+        number_plate: str,
+        entry_time: float,
+        exit_time: float,
+        crossing_duration: float,
+        run_type: str = "unknown",
+        algorithm: str = "unknown",
+    ) -> None:
+        """Saves a VehicleCrossing record to both a flat CSV file and the SQL database."""
+        import csv
+        import os
+        from datetime import datetime
+
+        # 1. Save to flat CSV file
+        try:
+            os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
+            with self._csv_lock:
+                file_exists = os.path.exists(self._csv_path)
+                with open(self._csv_path, mode="a", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    if not file_exists:
+                        writer.writerow([
+                            "session_id", "simulation_id", "vehicle_id", "vehicle_type", "number_plate",
+                            "entry_time", "exit_time", "crossing_duration", "run_type", "algorithm", "created_at"
+                        ])
+                    writer.writerow([
+                        session_id, simulation_id, vehicle_id, vehicle_type, number_plate,
+                        round(entry_time, 2), round(exit_time, 2), round(crossing_duration, 2),
+                        run_type, algorithm, datetime.utcnow().isoformat()
+                    ])
+                logger.debug("Logged vehicle crossing to flat CSV for %s", vehicle_id)
+        except Exception:
+            logger.exception("Failed to save vehicle crossing to flat CSV file")
+
+        # 2. Save to SQL database
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    logger.warning("save_vehicle_crossing: TrainingSession not found for %s", session_id)
+                    return
+                
+                row = VehicleCrossing(
+                    session_id=ts_row.id,
+                    simulation_id=simulation_id,
+                    vehicle_id=vehicle_id,
+                    vehicle_type=vehicle_type,
+                    number_plate=number_plate,
+                    entry_time=entry_time,
+                    exit_time=exit_time,
+                    crossing_duration=crossing_duration,
+                    run_type=run_type,
+                    algorithm=algorithm,
+                )
+                session.add(row)
+                session.commit()
+                logger.debug("Saved vehicle crossing to DB for %s", vehicle_id)
+        except Exception:
+            logger.exception("Failed to save vehicle crossing record to SQL database")
+
+    def save_simulation_phase_metrics(
+        self,
+        simulation_id: str,
+        session_id: str,
+        phase_vehicle_counts: dict,
+        phase_durations: dict | None = None,
+    ) -> None:
+        """Saves phase-wise vehicle crossing counts and durations to the database."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    logger.warning("save_simulation_phase_metrics: TrainingSession not found for %s", session_id)
+                    return
+
+                # Clean up any existing phase metrics for this simulation_id to prevent duplicates
+                session.query(SimulationPhaseMetric).filter(
+                    SimulationPhaseMetric.simulation_id == simulation_id
+                ).delete()
+
+                if phase_durations is None:
+                    phase_durations = {}
+
+                for phase_id, type_counts in phase_vehicle_counts.items():
+                    dur = float(phase_durations.get(int(phase_id), phase_durations.get(str(phase_id), 0.0)))
+                    for vehicle_type, count in type_counts.items():
+                        row = SimulationPhaseMetric(
+                            session_id=ts_row.id,
+                            simulation_id=simulation_id,
+                            phase_id=int(phase_id),
+                            vehicle_type=vehicle_type,
+                            passed_count=count,
+                            duration_seconds=dur,
+                        )
+                        session.add(row)
+                session.commit()
+                logger.info("Saved phase-wise metrics for simulation %s", simulation_id)
+        except Exception:
+            logger.exception("Failed to save simulation phase-wise metrics to database")
+            raise
+
+    def get_latest_simulation_phase_metrics(self, session_id: str) -> list[dict]:
+        """Retrieves phase-wise vehicle crossing metrics for the latest simulation run of a session."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                
+                # Find the latest simulation run for this session
+                latest_run = (
+                    session.query(SimulationRun)
+                    .filter(SimulationRun.session_id == ts_row.id)
+                    .order_by(SimulationRun.created_at.desc())
+                    .first()
+                )
+                if not latest_run:
+                    return []
+
+                rows = (
+                    session.query(SimulationPhaseMetric)
+                    .filter(SimulationPhaseMetric.simulation_id == latest_run.simulation_id)
+                    .all()
+                )
+                return [
+                    {
+                        "phase_id": r.phase_id,
+                        "vehicle_type": r.vehicle_type,
+                        "passed_count": r.passed_count,
+                        "duration_seconds": r.duration_seconds or 0.0,
+                        "simulation_id": r.simulation_id,
+                    }
+                    for r in rows
+                ]
+        except Exception:
+            logger.exception("Failed to get latest simulation phase metrics for session %s", session_id)
+            return []
+
+    def get_latest_simulation_timeline(self, session_id: str) -> list[dict]:
+        """Retrieves the phase timeline log for the latest simulation run of a session."""
+        try:
+            with Session(self._engine) as session:
+                ts_row = self._get_session_row(session, session_id)
+                if ts_row is None:
+                    return []
+                
+                latest_run = (
+                    session.query(SimulationRun)
+                    .filter(SimulationRun.session_id == ts_row.id)
+                    .order_by(SimulationRun.created_at.desc())
+                    .first()
+                )
+                if not latest_run or not latest_run.phase_timeline:
+                    return []
+                return latest_run.phase_timeline
+        except Exception:
+            logger.exception("Failed to retrieve phase timeline from database")
+            return []
+

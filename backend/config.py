@@ -226,7 +226,7 @@ class AppConfig:
     port: int = field(default_factory=lambda: _env_int("BACKEND_PORT", 8004))
     debug: bool = field(default_factory=lambda: _env_bool("FLASK_DEBUG", True))
     secret_key: str = "tso-dev-secret-2026"
-    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///backend/db/tso.db"))
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///backend/db/data/tso.db"))
     cors_origins: list = field(default_factory=_default_cors_origins)
 
     # Hyderabad economic reference values

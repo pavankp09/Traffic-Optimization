@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Traffic Signal Optimization Pilot Report</title>
+    <style>
+        /* Dark professional theme */
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; margin: 40px; }
+        h1 { color: #00d4ff; font-size: 28px; border-bottom: 2px solid #00d4ff; padding-bottom: 10px; }
+        h2 { color: #7b68ee; font-size: 20px; margin-top: 30px; }
+        h3 { color: #98ff98; font-size: 16px; }
+        .metric-card { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 15px; margin: 10px 0; display: inline-block; min-width: 200px; }
+        .metric-value { font-size: 32px; font-weight: bold; color: #00d4ff; }
+        .metric-label { font-size: 12px; color: #888; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th { background: #0f3460; color: #00d4ff; padding: 10px; text-align: left; }
+        td { border-bottom: 1px solid #333; padding: 8px 10px; }
+        .achievement { color: #98ff98; font-weight: bold; }
+        .positive { color: #00ff88; }
+        .negative { color: #ff4444; }
+        .recommendation { background: #0f3460; border-left: 4px solid #7b68ee; padding: 10px; margin: 8px 0; }
+        @page { margin: 20mm; size: A4; }
+        .page-break { page-break-before: always; }
+    </style>
+</head>
+<body>
+
+<!-- Cover -->
+<h1>Traffic Signal Optimization Pilot Report</h1>
+<p><strong>Location:</strong> {{ data.location }}</p>
+<p><strong>Generated:</strong> {{ data.generated_at }}</p>
+<p><strong>Session ID:</strong> {{ data.session_id }}</p>
+
+<!-- Section 1: Executive Summary -->
+<h2>1. Executive Summary</h2>
+<div class="metric-card">
+    <div class="metric-value">{{ data.headline_metric }}</div>
+    <div class="metric-label">Primary Achievement</div>
+</div>
+<h3>Key Achievements</h3>
+<ul>
+{% for achievement in data.key_achievements %}
+    <li class="achievement">{{ achievement }}</li>
+{% endfor %}
+</ul>
+
+<!-- Section 2: Methodology -->
+<h2>2. Methodology</h2>
+<p><strong>RL Approach:</strong> {{ data.rl_approach }}</p>
+<p><strong>State Space:</strong> {{ data.state_space_description }}</p>
+<p><strong>Action Space:</strong> {{ data.action_space_description }}</p>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    {% for k, v in data.sim_config_summary.items() %}
+    <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    {% endfor %}
+</table>
+
+<!-- Section 3: Results -->
+<h2 class="page-break">3. Results</h2>
+<table>
+    <tr><th>Metric</th><th>Baseline</th><th>RL Agent</th><th>Improvement</th></tr>
+    <tr>
+        <td>Average Wait Time</td>
+        <td>{{ "%.1f"|format(data.baseline_metrics.avg_wait_s) }}s</td>
+        <td>{{ "%.1f"|format(data.rl_best_metrics.avg_wait_s) }}s</td>
+        <td class="positive">-{{ "%.1f"|format(data.delta.wait_reduction_s) }}s</td>
+    </tr>
+    <tr>
+        <td>Throughput</td>
+        <td>{{ "%.0f"|format(data.baseline_metrics.throughput_vph) }} vph</td>
+        <td>{{ "%.0f"|format(data.rl_best_metrics.throughput_vph) }} vph</td>
+        <td class="positive">+{{ "%.0f"|format(data.delta.throughput_gain_vph) }} vph</td>
+    </tr>
+    <tr>
+        <td>Green Utilisation</td>
+        <td>{{ "%.1f"|format(data.baseline_metrics.green_utilisation * 100) }}%</td>
+        <td>{{ "%.1f"|format(data.rl_best_metrics.green_utilisation * 100) }}%</td>
+        <td class="positive">+{{ "%.1f"|format(data.delta.green_util_improvement * 100) }}%</td>
+    </tr>
+    <tr>
+        <td>Collision Count</td>
+        <td>{{ data.baseline_metrics.collision_count }}</td>
+        <td>{{ data.rl_best_metrics.collision_count }}</td>
+        <td class="positive">-{{ data.delta.collision_reduction }}</td>
+    </tr>
+</table>
+
+<!-- Section 4: Economic Impact -->
+<h2>4. Economic Impact</h2>
+<div class="metric-card">
+    <div class="metric-value">&#8377;{{ "{:,.0f}".format(data.economic.total_saving_inr) }}</div>
+    <div class="metric-label">Total Saving Per Episode</div>
+</div>
+<div class="metric-card">
+    <div class="metric-value">{{ "%.1f"|format(data.economic.total_co2_avoided_kg) }} kg</div>
+    <div class="metric-label">CO&#8322; Avoided</div>
+</div>
+<div class="metric-card">
+    <div class="metric-value">{{ "%.2f"|format(data.economic.fuel_saved_l_per_veh) }} L</div>
+    <div class="metric-label">Fuel Saved Per Vehicle</div>
+</div>
+
+<!-- Section 5: City-Wide Projection -->
+<h2 class="page-break">5. City-Wide Projection</h2>
+<p>Projected across <strong>{{ data.city_intersections }}</strong> Hyderabad (GHMC) signalized intersections:</p>
+<div class="metric-card">
+    <div class="metric-value">&#8377;{{ "{:,.0f}".format(data.city_annual_saving_inr) }}</div>
+    <div class="metric-label">Annual City-Wide Saving</div>
+</div>
+<div class="metric-card">
+    <div class="metric-value">{{ "{:,.0f}".format(data.city_annual_co2_tonne) }} t</div>
+    <div class="metric-label">Annual CO&#8322; Avoided (tonnes)</div>
+</div>
+
+<!-- Section 6: Recommendations -->
+<h2>6. Recommendations</h2>
+{% for rec in data.recommendations %}
+<div class="recommendation">{{ rec }}</div>
+{% endfor %}
+
+<!-- Section 7: Technical Appendix -->
+<h2 class="page-break">7. Technical Appendix</h2>
+<h3>PPO Hyperparameters</h3>
+<table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    {% for k, v in data.hyperparameters.items() %}
+    <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    {% endfor %}
+</table>
+<h3>Training Details</h3>
+<p>Total Episodes: {{ data.total_episodes }}</p>
+<p>Training Duration: {{ "%.1f"|format(data.training_duration_s / 60) }} minutes</p>
+
+</body>
+</html>

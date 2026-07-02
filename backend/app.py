@@ -24,7 +24,7 @@ except ImportError:
     pass
 
 # Import NumPy and Stable-Baselines3 compatibility patches
-import backend.rl.numpy_compat
+import backend.services.rl.utils.numpy_compat
 
 from flask import Flask
 from flask_socketio import SocketIO
@@ -86,7 +86,7 @@ def create_app(config=None) -> Flask:
     app.register_blueprint(api_bp, url_prefix="/api")
 
     # Road Optimizer blueprint
-    from backend.optimizer.optimizer_routes import optimizer_bp
+    from backend.services.optimizer.optimizer_routes import optimizer_bp
     app.register_blueprint(optimizer_bp)
 
     # Socket.IO

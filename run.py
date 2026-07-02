@@ -42,7 +42,7 @@ except ImportError:
 
 # Import NumPy and Stable-Baselines3 compatibility patches
 try:
-    import backend.rl.numpy_compat
+    import backend.services.rl.utils.numpy_compat
 except ImportError:
     pass
 
@@ -285,7 +285,7 @@ def start_backend() -> None:
         pass
 
     from backend.app import create_app, socketio
-    from backend.rl.device import get_torch_runtime_info
+    from backend.services.rl.utils.device import get_torch_runtime_info
 
     app = create_app()
     print("[OK] Backend running at http://localhost:8004")
